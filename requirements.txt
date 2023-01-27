@@ -1,0 +1,15 @@
+scipy
+numpy
+matplotlib
+vpython
+https://github.com/crossbario/autobahn-python/archive/master.zip
+pybullet
+# casadi
+# slycot  
+control
+pyyaml
+mujoco
+mujoco-python-viewer
+gym
+tqdm
+seaborn
