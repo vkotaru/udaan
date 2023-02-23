@@ -13,6 +13,10 @@ class BaseModel(object):
 
         self._n_state = 0
         self._n_action = 0
+
+        self.t = 0.
+
+        self._verbose = False
         return
     
     def _parse_args(self, **kwargs):
@@ -26,10 +30,10 @@ class BaseModel(object):
                 utils.printc_warn("Key {} not found in environment".format(key))
 
 
-    def _reset(self):
+    def reset(self):
         raise NotImplementedError
 
-    def _step(self, action):
+    def step(self, action):
         raise NotImplementedError
 
     def simulate(self, **kwargs):
