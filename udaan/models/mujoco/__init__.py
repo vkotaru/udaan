@@ -17,7 +17,7 @@ DEFAULT_SIZE = 480
 class MujocoModel(object):
     def __init__(self, model_path, render=False):
       
-        self.fullpath = os.path.join(_FOLDER_PATH, "floating_models",
+        self.fullpath = os.path.join(_FOLDER_PATH, "udaan", "models",
                                              "assets", "mjcf", model_path)
         if not os.path.exists(self.fullpath):
             raise OSError(f"File {self.fullpath} does not exist")
@@ -49,11 +49,15 @@ class MujocoModel(object):
             self.viewer = mujoco_viewer.MujocoViewer(self.model, self.data)
         return
 
-    def _step_mujoco_simulation(self, ctrl, n_frames=1):
-        self.data.ctrl[:] = ctrl
+    def _step_mujoco_simulation(self, n_frames=1):
         mujoco.mj_step(self.model, self.data, n_frames)
         if self.render:
             self.viewer.render()
+            self.viewer.add_marker(pos=[0, 0, 0], 
+                                    size=[0.025, 0.025, 0.025], 
+                                    rgba=[0, 0, 0.1, 0.8], 
+                                    type=mujoco.mjtGeom.mjGEOM_SPHERE, 
+                                    label="origin")
             # try:
             #     self.viewer.render()
             # except Exception as e:

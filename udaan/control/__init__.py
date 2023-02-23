@@ -34,7 +34,7 @@ class PDController(Controller):
         if "setpoint" in kwargs.keys():
             self.setpoint = kwargs["setpoint"]
         else:
-            self.setpoint = lambda t: (np.zeros(3), np.zeros(3), np.zeros(3))
+            self.setpoint = lambda t: (np.array([0., 0., 1.]), np.zeros(3), np.zeros(3))
         return
 
     def compute(self, *args):
