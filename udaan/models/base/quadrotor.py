@@ -1,5 +1,6 @@
 import numpy as np
 from ..base import BaseModel
+from ... import control
 from ... import utils
 from scipy.linalg import expm
 import time
@@ -9,8 +10,9 @@ import enum
 
 class Quadrotor(BaseModel):
     class INPUT_TYPE(enum.Enum):
-        CMD_WRENCH = 0      # thrust [N] (scalar), torque [Nm] (3x1)
+        CMD_WRENCH = 0      # thrust [N] (scalar), torque [Nm] (3x1) : (4x1)
         CMD_PROP_FORCES = 1 # propeller forces [N] (4x1)
+        CMD_ACCEL = 2       # acceleration [m/s^2] (3x1)
         
 
     class State(object):
@@ -33,7 +35,7 @@ class Quadrotor(BaseModel):
         self.state = Quadrotor.State()
 
         # system parameters
-        self.mass = 0.9 # kg
+        self._mass = 0.9 # kg
         self._inertia =np.array([[0.0023, 0., 0.], [0., 0.0023, 0.],
                                     [0., 0., 0.004]]) # kg m^2
         self._inertia_inv = np.linalg.inv(self._inertia)
@@ -43,21 +45,43 @@ class Quadrotor(BaseModel):
         self._max_torque = np.array([5., 5., 2.])
 
         self._render = False
-        self._input_type = Quadrotor.INPUT_TYPE.CMD_WRENCH
+        self._input_type = Quadrotor.INPUT_TYPE.CMD_ACCEL
+        self._n_action = 4  
+        self._step_freq = 500.
+        self._step_iter = max(1, int(1. / self._step_freq / self._timestep))
+
+        self._att_controller = control.QuadAttGeoPD(inertia=self.inertia)
+        self._pos_controller = control.QuadPosPD(mass=self.mass)
 
         self._parse_args(**kwargs)
-        if "timestep" in kwargs.keys():
-            self._timestep = kwargs["timestep"]
+        if "sim_timestep" in kwargs.keys():
+            self._timestep = kwargs["sim_timestep"]
         if "render" in kwargs.keys():
             self._render = kwargs["render"]
         if "input" in kwargs.keys():
             if kwargs["input"] == "prop_forces":
                 self._input_type = Quadrotor.INPUT_TYPE.CMD_PROP_FORCES
+                self._n_action = 4
+                self._step_freq = 500.
+                self._step_iter = max(1, int(1. / self._step_freq / self._timestep))
+            elif kwargs["input"] == "accel":
+                self._input_type = Quadrotor.INPUT_TYPE.CMD_ACCEL
+                self._n_action = 3
+                self._step_freq = 100.
+                self._step_iter = max(1, int(1. / self._step_freq / self._timestep))
             else:
-                self._input_type = Quadrotor.INPUT_TYPE.CMD_WRENCH        
-        
-
+                self._input_type = Quadrotor.INPUT_TYPE.CMD_WRENCH
+                self._n_action = 4  
+                self._step_freq = 500.
+                self._step_iter = max(1, int(1. / self._step_freq / self._timestep))
         return
+    
+    @property
+    def mass(self):
+          return self._mass
+    @mass.setter
+    def mass(self, mass):
+        self._mass = mass
     
     @property
     def inertia(self):
@@ -115,24 +139,58 @@ class Quadrotor(BaseModel):
         # TODO another level of abstraction for 1st order motor dynamics
         return f
 
+    def _propforces_to_wrench(self, prop_forces):
+        """prop_forces is 4x1, (f1, f2, f3, f4)"""
+        wrench = self._allocation_matrix@prop_forces
+        return wrench
+
+
     def _parse_input(self, input):
-          return thrust, torque
+        if self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
+            thrust, torque  = self._att_controller.compute(self.t, (self.state.orientation, self.state.angular_velocity), input)
+        elif self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
+            wrench = self._propforces_to_wrench(input)
+            thrust, torque = wrench[0], wrench[1:]
+        else:
+            thrust, torque = input[0], input[1:]
+        
+        thrust = np.clip(thrust, self._min_thrust, self._max_thrust)
+        torque = np.clip(torque, -self._max_torque, self._max_torque)
+        return thrust, torque
 
-    def _step(self, input):
-          # integrate dynamics
-          thrust, torque = self._parse_input(input)
-          self._zoh(thrust, torque)
-          self.t += self._timestep
+    def step(self, input:np.ndarray):
+        """Zero-order hold on the system equations of motion
+        
+        :param input: input to the quadrotor
+        :type input: np.ndarray
 
-    def simulate(self, x0, tf):
-        self.reset(x0)
+        :return: None
+        """
+        for _ in range(self._step_iter):
+            # integrate dynamics
+            thrust, torque = self._parse_input(input)
+            self._zoh(thrust, torque)
+            self.t += self._timestep
+
+    def reset(self, **kwargs):
+        self.t = 0.
+        self.state.reset()
+
+        k = ["position", "velocity", "orientation", "angular_velocity"]
+        for key in k:
+            if key in kwargs:
+                setattr(self.state, key, kwargs[key])
+        return
+
+    def simulate(self, tf, **kwargs):
+        self.reset(**kwargs)
 
         start_t = time.time_ns()
         while self.t < tf:
-            input = self._controller.compute_input()
-            self._step(input)
+            u = self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
+            self.step(u)
         
         end_t = time.time_ns()
-        time_taken += (end_t - start_t)*1e-9
+        time_taken = (end_t - start_t)*1e-9
         print("Took (%.4f)s for simulating (%.4f)s" % (time_taken, self.t))
         return

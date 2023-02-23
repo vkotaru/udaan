@@ -19,3 +19,6 @@ def printc_warn(text):
 def printc_fail(text):
     printc(text, bcolors.FAIL)
 
+def printc_ok(text):
+    printc(text, bcolors.OKGREEN)
+
