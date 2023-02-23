@@ -14,7 +14,6 @@ class Quadrotor(BaseModel):
         CMD_PROP_FORCES = 1 # propeller forces [N] (4x1)
         CMD_ACCEL = 2       # acceleration [m/s^2] (3x1)
         
-
     class State(object):
         def __init__(self):
             self.position = np.zeros(3)
@@ -31,7 +30,7 @@ class Quadrotor(BaseModel):
             return
 
     def __init__(self, **kwargs):
-        super().__init__()
+        super().__init__(**kwargs)
         self.state = Quadrotor.State()
 
         # system parameters
@@ -39,41 +38,47 @@ class Quadrotor(BaseModel):
         self._inertia =np.array([[0.0023, 0., 0.], [0., 0.0023, 0.],
                                     [0., 0., 0.004]]) # kg m^2
         self._inertia_inv = np.linalg.inv(self._inertia)
-        self._min_thrust = 0.0
+        self._min_thrust = 0.5
         self._max_thrust = 20.0
         self._min_torque = np.array([-5., -5., -2.])
         self._max_torque = np.array([5., 5., 2.])
+        self._prop_min_force = 0.0
+        self._prop_max_force = 10.0
+        self._wrench_min = np.concatenate([np.array([self._min_thrust]), self._min_torque])
+        self._wrench_max = np.concatenate([np.array([self._max_thrust]), self._max_torque])
 
-        self._render = False
         self._input_type = Quadrotor.INPUT_TYPE.CMD_ACCEL
         self._n_action = 4  
         self._step_freq = 500.
-        self._step_iter = max(1, int(1. / self._step_freq / self._timestep))
-
-        self._att_controller = control.QuadAttGeoPD(inertia=self.inertia)
-        self._pos_controller = control.QuadPosPD(mass=self.mass)
-
+        self._step_iter = max(1, int(1. / self._step_freq / self.sim_timestep))
+        
         self._parse_args(**kwargs)
         if "sim_timestep" in kwargs.keys():
-            self._timestep = kwargs["sim_timestep"]
-        if "render" in kwargs.keys():
-            self._render = kwargs["render"]
+            self.sim_timestep = kwargs["sim_timestep"]
         if "input" in kwargs.keys():
             if kwargs["input"] == "prop_forces":
                 self._input_type = Quadrotor.INPUT_TYPE.CMD_PROP_FORCES
                 self._n_action = 4
                 self._step_freq = 500.
-                self._step_iter = max(1, int(1. / self._step_freq / self._timestep))
+                self._step_iter = max(1, int(1. / self._step_freq / self.sim_timestep))
             elif kwargs["input"] == "accel":
                 self._input_type = Quadrotor.INPUT_TYPE.CMD_ACCEL
                 self._n_action = 3
                 self._step_freq = 100.
-                self._step_iter = max(1, int(1. / self._step_freq / self._timestep))
+                self._step_iter = max(1, int(1. / self._step_freq / self.sim_timestep))
             else:
                 self._input_type = Quadrotor.INPUT_TYPE.CMD_WRENCH
                 self._n_action = 4  
                 self._step_freq = 500.
-                self._step_iter = max(1, int(1. / self._step_freq / self._timestep))
+                self._step_iter = max(1, int(1. / self._step_freq / self.sim_timestep))
+                
+        self._compute_allocation_matrix()
+        self._init_default_controllers()
+        return
+      
+    def _init_default_controllers(self):
+        self._att_controller = control.QuadAttGeoPD(inertia=self.inertia)
+        self._pos_controller = control.QuadPosPD(mass=self.mass)
         return
     
     @property
@@ -88,17 +93,19 @@ class Quadrotor(BaseModel):
         return self._inertia
     @inertia.setter
     def inertia(self, inertia):
+        if inertia.ndim == 1:
+            inertia = np.diag(inertia)
         self._inertia = inertia
         self._inertia_inv = np.linalg.inv(inertia)
         return
 
     def _zoh(self, thrust, torque):
         accel = -self._ge3 + thrust * self.state.orientation@self._e3
-        self.state.position += self.state.velocity * self._timestep + 0.5 * accel * self._timestep**2
-        self.state.velocity += accel * self._timestep
-        self.state.orientation = self.state.orientation @ expm(utils.hat(torque) * self._timestep)
+        self.state.position += self.state.velocity * self.sim_timestep + 0.5 * accel * self.sim_timestep**2
+        self.state.velocity += accel * self.sim_timestep
+        self.state.orientation = self.state.orientation @ expm(utils.hat(torque) * self.sim_timestep)
         ang_vel_dot = self._inertia_inv @ (torque - np.cross(self.state.angular_velocity, self._inertia @ self.state.angular_velocity))
-        self.state.angular_velocity += ang_vel_dot * self._timestep
+        self.state.angular_velocity += ang_vel_dot * self.sim_timestep
         return
 
     def _actuation_params(self):
@@ -115,7 +122,7 @@ class Quadrotor(BaseModel):
               /   \                 |
         (2)CCW     CW(3)           z.------> x
         """
-        l = 0.175  # arm length
+        l = 0.2 # 0.175  # arm length
         ang = [np.pi/4.0, 3*np.pi/4.0, 5*np.pi/4.0, 7*np.pi/4.0]
         d = [-1., 1., -1., 1.]
 
@@ -149,6 +156,7 @@ class Quadrotor(BaseModel):
         if self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
             thrust, torque  = self._att_controller.compute(self.t, (self.state.orientation, self.state.angular_velocity), input)
         elif self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
+            utils.printc_warn("TODO: Incorrect implementation verify")
             wrench = self._propforces_to_wrench(input)
             thrust, torque = wrench[0], wrench[1:]
         else:
@@ -169,8 +177,14 @@ class Quadrotor(BaseModel):
         for _ in range(self._step_iter):
             # integrate dynamics
             thrust, torque = self._parse_input(input)
+            # physical input limits
+            thrust = np.clip(thrust, self._min_thrust, self._max_thrust)
+            torque = np.clip(torque, self._min_torque, self._max_torque)
+            # dynamics zero-order hold integration (Euler integration)
             self._zoh(thrust, torque)
-            self.t += self._timestep
+            # update time
+            self.t += self.sim_timestep
+        return
 
     def reset(self, **kwargs):
         self.t = 0.

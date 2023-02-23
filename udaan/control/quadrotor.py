@@ -8,6 +8,9 @@ class QuadPosPD(PDController):
         self.mass = 1.
         if "mass" in kwargs.keys():
             self.mass = kwargs["mass"]
+            
+        self._gains.kp = np.array([4.1, 4.1, 8.1])
+        self._gains.kd = 1.5*np.array([2., 2., 6.])
         return
 
     def compute(self, *args):
@@ -17,6 +20,7 @@ class QuadPosPD(PDController):
         e = s - sd
         de = ds - dsd
         u = -self._gains.kp * e - self._gains.kd * de + d2sd + self._ge3
+        # scale acceleration to force
         u = self.mass * u
         return u
     
