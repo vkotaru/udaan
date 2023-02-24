@@ -88,9 +88,9 @@ class MujocoModel(object):
             self.viewer.add_marker(pos=p, size=[0.05, 0.05, 0.05], rgba=[1, 0, 0, 0.75], type=mujoco.mjtGeom.mjGEOM_BOX, label=label)
         return
 
-    def add_arrow_at(self, p, R, s, label=""):
+    def add_arrow_at(self, p, R, s, label="", color=[1, 0, 0, 0.75]):
         if self.render:
-            self.viewer.add_marker(pos=p, mat=R, size=s, rgba=[1, 0, 0, 0.75], type=mujoco.mjtGeom.mjGEOM_ARROW, label=label)
+            self.viewer.add_marker(pos=p, mat=R, size=s, rgba=color, type=mujoco.mjtGeom.mjGEOM_ARROW, label=label)
         return
     
 from .quadrotor import Quadrotor
