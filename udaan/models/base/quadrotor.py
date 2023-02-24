@@ -1,11 +1,11 @@
 import numpy as np
-from ..base import BaseModel
-from ... import control
-from ... import utils
 from scipy.linalg import expm
 import time
 import enum
 
+from ..base import BaseModel
+from ... import control
+from ... import utils
 
 
 class Quadrotor(BaseModel):
@@ -204,7 +204,10 @@ class Quadrotor(BaseModel):
         start_t = time.time_ns()
         while self.t < tf:
             if self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
-                u = self._prop_controller.compute(self.t, (self.state.position, self.state.velocity, self.state.orientation, self.state.angular_velocity))
+                u = self._prop_controller.compute(self.t, (self.state.position, 
+                                                           self.state.velocity,
+                                                           self.state.orientation, 
+                                                           self.state.angular_velocity))
             else:
                 u = self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
             self.step(u)
