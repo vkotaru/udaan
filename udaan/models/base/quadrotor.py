@@ -38,6 +38,7 @@ class Quadrotor(BaseModel):
         self._inertia =np.array([[0.0023, 0., 0.], [0., 0.0023, 0.],
                                     [0., 0., 0.004]]) # kg m^2
         self._inertia_inv = np.linalg.inv(self._inertia)
+        
         self._min_thrust = 0.5
         self._max_thrust = 20.0
         self._min_torque = np.array([-5., -5., -2.])
@@ -79,6 +80,7 @@ class Quadrotor(BaseModel):
     def _init_default_controllers(self):
         self._att_controller = control.QuadAttGeoPD(inertia=self.inertia)
         self._pos_controller = control.QuadPosPD(mass=self.mass)
+        self._prop_controller = control.QuadPropForceController(mass=self.mass, inertia=self.inertia)
         return
     
     @property
@@ -201,7 +203,10 @@ class Quadrotor(BaseModel):
 
         start_t = time.time_ns()
         while self.t < tf:
-            u = self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
+            if self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
+                u = self._prop_controller.compute(self.t, (self.state.position, self.state.velocity, self.state.orientation, self.state.angular_velocity))
+            else:
+                u = self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
             self.step(u)
         
         end_t = time.time_ns()

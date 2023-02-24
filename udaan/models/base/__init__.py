@@ -47,3 +47,4 @@ class BaseModel(object):
         return self._n_state
 
 from .quadrotor import Quadrotor
+from .quadrotor_cspayload import QuadrotorCSPayload

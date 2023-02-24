@@ -96,11 +96,9 @@ class Quadrotor(base.Quadrotor):
                     for i in range(4):
                         self._mjMdl.add_arrow_at(self._mjMdl.data.site_xpos[i], 
                                                       self._mjMdl.data.site_xmat[i],
-                                                      s= [0.005, 0.005, 0.25*u_clamped[i]],
+                                                      s= [0.005, 0.005, 0.25*float(u_clamped[i])],
                                                       label="f%d"%i, 
                                                       color=[1., 1., 0., 1.])
-
-
         return
       
     def _query_latest_state(self):
