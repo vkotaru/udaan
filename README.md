@@ -32,7 +32,7 @@ This package contains mathematical models for quadrotor(s) with suspended payloa
     <td>Quadrotor with Cable-Suspended Payload</td>
     <td>
       <p float="left">
-        <img src=".media/quadrotor_mj.gif" width="400" />
+        <img src=".media/quadrotor_cspayload_mj.gif" width="400" />
       </p>
     </td>
     <td>
