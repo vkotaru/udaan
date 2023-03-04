@@ -10,15 +10,18 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+
 def printc(text, color):
     print(color + text + bcolors.ENDC)
+
 
 def printc_warn(text):
     printc(text, bcolors.WARNING)
 
+
 def printc_fail(text):
     printc(text, bcolors.FAIL)
 
+
 def printc_ok(text):
     printc(text, bcolors.OKGREEN)
-

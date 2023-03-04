@@ -2,6 +2,7 @@ from . import *
 
 
 class QuadrotorVFX(VFXHandler):
+
     def __init__(self, rate=200, retain=100):
         super().__init__(title='Quadrotor', rate=rate)
         super().create_env()
@@ -20,37 +21,54 @@ class QuadrotorVFX(VFXHandler):
         self.arm_l = 0.1  # length of quadrotor boom
         self.prop_r = 0.125  # radius of propeller prop
 
-        self._arm0 = [np.array([self.arm_l, 0., 0.05]),
-                      np.array([self.arm_l, 0., 0.0]),
-                      np.array([-self.arm_l, 0., 0.0]),
-                      np.array([-self.arm_l, 0.0, 0.05])]
+        self._arm0 = [
+            np.array([self.arm_l, 0., 0.05]),
+            np.array([self.arm_l, 0., 0.0]),
+            np.array([-self.arm_l, 0., 0.0]),
+            np.array([-self.arm_l, 0.0, 0.05])
+        ]
 
-        self._arm1 = [np.array([0., self.arm_l, 0.05]),
-                      np.array([0., self.arm_l, 0.0]),
-                      np.array([0., -self.arm_l, 0.0]),
-                      np.array([0., -self.arm_l, 0.05])]
+        self._arm1 = [
+            np.array([0., self.arm_l, 0.05]),
+            np.array([0., self.arm_l, 0.0]),
+            np.array([0., -self.arm_l, 0.0]),
+            np.array([0., -self.arm_l, 0.05])
+        ]
 
-        self._props = [np.array([self.arm_l, 0., 0.05]),
-                       np.array([0., self.arm_l, 0.05]),
-                       np.array([0., -self.arm_l, 0.05]),
-                       np.array([-self.arm_l, 0., 0.05])]
+        self._props = [
+            np.array([self.arm_l, 0., 0.05]),
+            np.array([0., self.arm_l, 0.05]),
+            np.array([0., -self.arm_l, 0.05]),
+            np.array([-self.arm_l, 0., 0.05])
+        ]
 
-        self.curve1 = vp.curve(color=vp.color.red,
-                               radius=0.01)
-        self.curve2 = vp.curve(color=vp.color.blue,
-                               radius=0.01)
+        self.curve1 = vp.curve(color=vp.color.red, radius=0.01)
+        self.curve2 = vp.curve(color=vp.color.blue, radius=0.01)
 
-        self.props = [vp.ellipsoid(length=self.prop_r, height=0.1*self.prop_r, width=self.prop_r,
-                                   color=vp.color.cyan, opacity=0.5),
-                      vp.ellipsoid(length=self.prop_r, height=0.1*self.prop_r, width=self.prop_r,
-                                   color=vp.color.black, opacity=0.5),
-                      vp.ellipsoid(length=self.prop_r, height=0.1*self.prop_r, width=self.prop_r,
-                                   color=vp.color.black, opacity=0.5),
-                      vp.ellipsoid(length=self.prop_r, height=0.1*self.prop_r, width=self.prop_r,
-                                   color=vp.color.black, opacity=0.5)]
+        self.props = [
+            vp.ellipsoid(length=self.prop_r,
+                         height=0.1 * self.prop_r,
+                         width=self.prop_r,
+                         color=vp.color.cyan,
+                         opacity=0.5),
+            vp.ellipsoid(length=self.prop_r,
+                         height=0.1 * self.prop_r,
+                         width=self.prop_r,
+                         color=vp.color.black,
+                         opacity=0.5),
+            vp.ellipsoid(length=self.prop_r,
+                         height=0.1 * self.prop_r,
+                         width=self.prop_r,
+                         color=vp.color.black,
+                         opacity=0.5),
+            vp.ellipsoid(length=self.prop_r,
+                         height=0.1 * self.prop_r,
+                         width=self.prop_r,
+                         color=vp.color.black,
+                         opacity=0.5)
+        ]
 
-        self._traj = vp.curve(color=vp.color.black,
-                              radius=0.025)
+        self._traj = vp.curve(color=vp.color.black, radius=0.025)
         self.update()
 
     def reset(self, x=np.zeros(3), R=np.eye(3)):
@@ -63,16 +81,16 @@ class QuadrotorVFX(VFXHandler):
         self.point.pos = vp.vector(x[0], x[1], x[2])
 
         for _ in self._arm0:
-            p = x + R@_
+            p = x + R @ _
             self.curve1.append(vp.vector(p[0], p[1], p[2]))
 
         for _ in self._arm1:
-            p = x + R@_
+            p = x + R @ _
             self.curve2.append(vp.vector(p[0], p[1], p[2]))
 
         for i in range(4):
-            p = x + R@self._props[i]
-            ax = R@np.array([0., 0., 1.])
+            p = x + R @ self._props[i]
+            ax = R @ np.array([0., 0., 1.])
             self.props[i].pos = vp.vector(p[0], p[1], p[2])
             self.props[i].up = vp.vector(ax[0], ax[1], ax[2])
 

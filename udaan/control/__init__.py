@@ -1,13 +1,17 @@
 import numpy as np
 
+
 class Gains(object):
+
     def __init__(self, kp=np.zeros(3), kd=np.zeros(3), ki=np.zeros(3)):
         self.kp = kp
         self.kd = kd
         self.ki = ki
         return
 
+
 class Controller(object):
+
     def __init__(self):
         self.freq = 500.
         self._g = 9.81
@@ -21,7 +25,9 @@ class Controller(object):
     def compute(self, *args):
         raise NotImplementedError
 
+
 class PDController(Controller):
+
     def __init__(self, **kwargs):
         super().__init__()
         self._gains = Gains()
@@ -34,7 +40,8 @@ class PDController(Controller):
         if "setpoint" in kwargs.keys():
             self.setpoint = kwargs["setpoint"]
         else:
-            self.setpoint = lambda t: (np.array([0., 0., 1.]), np.zeros(3), np.zeros(3))
+            self.setpoint = lambda t: (np.array([0., 0., 1.]), np.zeros(3),
+                                       np.zeros(3))
         return
 
     def compute(self, *args):
@@ -45,6 +52,7 @@ class PDController(Controller):
         de = ds - dsd
         u = -self._gains.kp * e - self._gains.kd * de + d2sd
         return u
-    
+
+
 from .quadrotor import *
 from .quadrotor_cspayload import *

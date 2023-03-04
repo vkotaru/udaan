@@ -1,14 +1,16 @@
 import numpy as np
-import os
-from ..mujoco import MujocoModel
-from .. import base
 import time
 import copy
-from ... import utils
 import enum
 from scipy.spatial.transform import Rotation as sp_rot
 
+from ..mujoco import MujocoModel
+from .. import base
+from ... import utils
+
+
 class Quadrotor(base.Quadrotor):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -21,9 +23,9 @@ class Quadrotor(base.Quadrotor):
         self._attitude_zoh = False
         if "attitude_zoh" in kwargs:
             self._attitude_zoh = kwargs["attitude_zoh"]
-            
-        self._mjDt = 1./500.
-        self._step_iter = int(self.sim_timestep/self._mjDt)
+
+        self._mjDt = 1. / 500.
+        self._step_iter = int(self.sim_timestep / self._mjDt)
         self._nFrames = 1
         if self._attitude_zoh:
             self._step_iter, self._nFrames = self._nFrames, self._step_iter
@@ -35,14 +37,16 @@ class Quadrotor(base.Quadrotor):
             self._ctrl_index = 0
         else:
             self._ctrl_index = 4
-            
+
         # read inertial parameters from mujoco model
-        self.mass = copy.deepcopy(self._mjMdl.model.body_mass[self._mj_quad_body_index])
-        self.inertia = copy.deepcopy(self._mjMdl.model.body_inertia[self._mj_quad_body_index])
+        self.mass = copy.deepcopy(
+            self._mjMdl.model.body_mass[self._mj_quad_body_index])
+        self.inertia = copy.deepcopy(
+            self._mjMdl.model.body_inertia[self._mj_quad_body_index])
 
         # reinitialize controllers after loading mujoco model & params
         self._init_default_controllers()
-        
+
         if self.verbose:
             utils.printc_ok("Mujoco model loaded")
         return
@@ -52,15 +56,14 @@ class Quadrotor(base.Quadrotor):
         super(Quadrotor, self.__class__).mass.fset(self, m)
         self._mjMdl.model.body_mass[self._mj_quad_body_index] = m
         return
-    
+
     @base.Quadrotor.inertia.setter
     def inertia(self, I):
         super(Quadrotor, self.__class__).inertia.fset(self, I)
-        if (I.ndim==2):
+        if (I.ndim == 2):
             I = np.diag(I)
         self._mjMdl.model.body_inertia[self._mj_quad_body_index] = I
         return
-    
 
     def reset(self, **kwargs):
         self.t = 0.
@@ -75,16 +78,18 @@ class Quadrotor(base.Quadrotor):
 
         self._query_latest_state()
         return
-    
+
     def step(self, u):
         for _ in range(self._step_iter):
             if self._input_type == base.Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
-                u_clamped = np.clip(u, self._prop_min_force, self._prop_max_force)
+                u_clamped = np.clip(u, self._prop_min_force,
+                                    self._prop_max_force)
             else:
                 thrust, torque = self._parse_input(u)
                 u_clamped = np.append(thrust, torque)
             # set control
-            self._mjMdl.data.ctrl[self._ctrl_index:self._ctrl_index+4] = u_clamped
+            self._mjMdl.data.ctrl[self._ctrl_index:self._ctrl_index +
+                                  4] = u_clamped
             # mujoco simulation
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state
@@ -94,13 +99,14 @@ class Quadrotor(base.Quadrotor):
                 # self.add_reference_marker(self.xQd)
                 if self._input_type == base.Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
                     for i in range(4):
-                        self._mjMdl.add_arrow_at(self._mjMdl.data.site_xpos[i], 
-                                                      self._mjMdl.data.site_xmat[i],
-                                                      s= [0.005, 0.005, 0.25*float(u_clamped[i])],
-                                                      label="f%d"%i, 
-                                                      color=[1., 1., 0., 1.])
+                        self._mjMdl.add_arrow_at(
+                            self._mjMdl.data.site_xpos[i],
+                            self._mjMdl.data.site_xmat[i],
+                            s=[0.005, 0.005, 0.25 * float(u_clamped[i])],
+                            label="f%d" % i,
+                            color=[1., 1., 0., 1.])
         return
-      
+
     def _query_latest_state(self):
         self.t = copy.deepcopy(self._mjMdl.data.time)
         pos = copy.deepcopy(self._mjMdl.data.qpos[:3])
@@ -113,7 +119,7 @@ class Quadrotor(base.Quadrotor):
         self.state.orientation = self._mjMdl._quat2rot(q)
         self.state.angular_velocity = np.array(ang_vel)
         return
-    
+
     def add_reference_marker(self, x):
         self._mjMdl.add_marker_at(x, label="xQd")
         return
