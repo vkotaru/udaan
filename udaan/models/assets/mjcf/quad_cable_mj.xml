@@ -1,0 +1,127 @@
+<?xml version="1.0"?>
+<mujoco model="QuadPayload">
+  <include file="scene.xml" />
+
+  <extension>
+    <required plugin="mujoco.elasticity.cable" />
+  </extension>
+
+  <statistic center="0 0 .3" extent="1" />
+  <visual>
+    <global elevation="-30" />
+  </visual>
+
+  <compiler angle="degree" coordinate="local" inertiafromgeom="true" autolimits="true" />
+  <size nconmax="100" njmax="300" nstack="500000" />
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="1.0 1.0 1.0" rgb2="0.6 0.8 1.0" width="256"
+      height="256" />
+  </asset>
+  <worldbody>
+    <!-- <geom name="ground" type="plane" size="5.0 5.0 0.02" friction="1.0" pos="0.0 0.0 0.0"
+    rgba="0.8 0.9 0.8 1.0"/> -->
+    <body name="quadrotor" pos="0.0 0.0 0.10" quat="1 0 0 0">
+      <inertial pos="0. 0. 0." mass="0.806" diaginertia="0.000821 0.000821 0.00164" />
+      <geom name="geom" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.08 0.04 0.025"
+        mass="0.75" density="1000" rgba="0.3 0.3 0.8 1.0" />
+      <joint name="root_joint" type="free" />
+      <geom name="rotor_arm_geom_0" type="box" pos="0.0 0.0 0.0" quat="0.92388 0 0 0.382683"
+        size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.5 1.0" />
+      <geom name="rotor_prop_geom_0" type="cylinder" size="0.1 0.005"
+        pos="0.1414213562373095 0.14142135623730953 0.0" mass="0.05" density="1000"
+        rgba="0.5 0.1 0.1 1.0" />
+      <geom name="rotor_arm_geom_1" type="box" pos="0.0 0.0 0.0" quat="0.382683 0 0 0.92388"
+        size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.5 1.0" />
+      <geom name="rotor_prop_geom_1" type="cylinder" size="0.1 0.005"
+        pos="-0.1414213562373095 0.14142135623730953 0.0" mass="0.05" density="1000"
+        rgba="0.5 0.1 0.1 1.0" />
+      <geom name="rotor_arm_geom_2" type="box" pos="0.0 0.0 0.0" quat="-0.382683 0 0 0.92388"
+        size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.5 1.0" />
+      <geom name="rotor_prop_geom_2" type="cylinder" size="0.1 0.005"
+        pos="-0.1414213562373095 -0.1414213562373095 0.0" mass="0.05" density="1000"
+        rgba="0.5 0.1 0.1 1.0" />
+      <geom name="rotor_arm_geom_3" type="box" pos="0.0 0.0 0.0" quat="-0.92388 0 0 0.382683"
+        size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.5 1.0" />
+      <geom name="rotor_prop_geom_3" type="cylinder" size="0.1 0.005"
+        pos="0.14142135623730948 -0.14142135623730956 0.0" mass="0.05" density="1000"
+        rgba="0.5 0.1 0.1 1.0" />
+      <site name="quadrotor_end1" type="sphere" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.01"
+        rgba="0.1 0.1 0.5 1.0" />
+      <site name="site0" type="box" pos="0.1414213562373095 0.14142135623730953 0.0" quat="1 0 0 0"
+        size="0.01 0.01 0.01" rgba="0.0 1 1 1.0" />
+      <site name="site1" type="box" pos="-0.1414213562373095 0.14142135623730953 0.0" quat="1 0 0 0"
+        size="0.01 0.01 0.01" rgba="0.0 1 1 1.0" />
+      <site name="site2" type="box" pos="-0.1414213562373095 -0.1414213562373095 0.0" quat="1 0 0 0"
+        size="0.01 0.01 0.01" rgba="0.0 1 1 1.0" />
+      <site name="site3" type="box" pos="0.14142135623730948 -0.14142135623730956 0.0"
+        quat="1 0 0 0" size="0.01 0.01 0.01" rgba="0.0 1 1 1.0" />
+      <site name="quadrotor_thrust" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0"
+        size="0.035 0.035 0.035" rgba="0.0 1 1 1.0" />
+      <site name="quadrotor_Mx" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025"
+        rgba="0.0 1 1 1.0" />
+      <site name="quadrotor_My" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025"
+        rgba="0.0 1 1 1.0" />
+      <site name="quadrotor_Mz" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025"
+        rgba="0.0 1 1 1.0" />
+      <composite type="cable" curve="s" count="41 1 1" size="1" offset="0 0 0.0" initial="ball">
+        <plugin plugin="mujoco.elasticity.cable">
+          <!--Units
+          are in Pa (SI)-->
+          <config key="twist" value="0" />
+          <config key="bend" value="0" />
+        </plugin>
+        <joint kind="main" damping=".001" stiffness="0." />
+        <geom type="capsule" size=".0015" mass="0.00024" rgba=".8 .2 .1 1" />
+      </composite>
+    </body>
+    <body name="pyld" pos="1.0 0.0 0.075" quat="1 0 0 0">
+      <!-- <inertial mass="0.15" pos="0. 0. 0." diaginertia="0.0005078125 0.0005078125 0.001" /> -->
+      <geom name="pyld" type="box" mass="0.15" density="50" size="0.05 0.05 0.025"
+        rgba="0.0 1 1 1.0" />
+      <site name="pyld_cntr" type="sphere" pos="0. 0. 0.025" quat="1 0 0 0" size="0.005"
+        rgba="0.1 0.1 0.5 1.0" />
+      <!-- <site name="pyld_poc0" type="sphere" pos="0.2 0.2 0.025" quat="1 0 0 0" size="0.005"
+      rgba="0.1 0.1 0.5 1.0" /> -->
+      <!-- <site name="pyld_poc1" type="sphere" pos="-0.2 0.2 0.025" quat="1 0 0 0" size="0.005"
+      rgba="0.1 0.1 0.5 1.0" /> -->
+      <!-- <site name="pyld_poc2" type="sphere" pos="-0.2 -0.2 0.025" quat="1 0 0 0" size="0.005"
+      rgba="0.1 0.1 0.5 1.0" /> -->
+      <!-- <site name="pyld_poc3" type="sphere" pos="0.2 -0.2 0.025" quat="1 0 0 0" size="0.005"
+      rgba="0.1 0.1 0.5 1.0" /> -->
+      <joint name="pyld_joint" type="free" />
+    </body>
+  </worldbody>
+  <actuator>
+    <motor ctrllimited="true" site="site0" ctrlrange="0.0 10.0"
+      gear="0. 0. 1. 0. 0. -.024994577607878814" /> # each propeller can generate a force of 10N <motor
+      ctrllimited="true" site="site1" ctrlrange="0.0 10.0" gear="0. 0. 1. 0. 0. .024994577607878814" />
+     <motor
+      ctrllimited="true" site="site2" ctrlrange="0.0 10.0"
+      gear="0. 0. 1. 0. 0. -.024994577607878814" />
+     <motor ctrllimited="true" site="site3"
+      ctrlrange="0.0 10.0" gear="0. 0. 1. 0. 0. .024994577607878814" />
+     <motor ctrllimited="true"
+      site="quadrotor_thrust" ctrlrange="0.0 40.0" gear="0.0 0.0 1.0 0.0 0.0 0.0" />
+     <motor
+      ctrllimited="true" site="quadrotor_Mx" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 1.0 0.0 0.0" />
+     <motor
+      ctrllimited="true" site="quadrotor_My" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 0.0 1.0 0.0" />
+     <motor
+      ctrllimited="true" site="quadrotor_Mz" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 0.0 0.0 1.0" />
+  </actuator>
+  <equality>
+    <!-- <connect name="left_boundary" body1="B_first" body2="quadrotor" anchor=".0 0 2.0"/> -->
+    <connect name="right_boundary" body1="B_last" body2="pyld" anchor=".025 0 0.0" active="true"
+      solref="0.0002 1" />
+  </equality>
+  <contact>
+    <exclude body1="B_first" body2="quadrotor" />
+    <!-- <exclude body1="B_last" body2="pyld"/> -->
+  </contact>
+  <!-- <tendon>
+      <spatial limited="true" range="0.0 1.0" width="0.005" damping="0.0" stiffness="0.0">
+         <site site="quadrotor_end1"/>
+         <site site="end2"/>
+      </spatial>
+   </tendon> -->
+</mujoco>
