@@ -10,27 +10,24 @@ This package contains mathematical models for quadrotor(s) with suspended payloa
 <table>
   <tr>
     <th>Name</th>
-    <th>Render</th>
     <th>Remarks</th>
   </tr>
   <tr>
-    <td>Quadrotor</td>
-    <td>
+    <td>Quadrotor
       <p float="left">
         <img src=".media/quadrotor_mj.gif" width="400" />
       </p>
     </td>
     <td>
       <ul>
-        <li>Geometric control on SE(3).</li>
+        <li>Geometric control on SE(3).  <a href="https://ieeexplore.ieee.org/document/5717652">[1]</a></li>
         <li>Geometric L1 Adaptive control on SO(3). TODO</li>
         <li>MPC on variation linearized dynamics. TODO</li>
       </ul>
     </td>
   </tr>
   <tr>
-    <td>Quadrotor with Cable-Suspended Payload</td>
-    <td>
+    <td> Quadrotor with Cable Suspended Payload
       <p float="left">
         <img src=".media/quadrotor_cspayload_mj.gif" width="400" />
       </p>
