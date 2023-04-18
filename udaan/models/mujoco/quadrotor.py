@@ -33,7 +33,7 @@ class Quadrotor(base.Quadrotor):
         # loading mujoco model
         self._mjMdl = MujocoModel("quadrotor_mj.xml", render=self.render)
         self._mj_quad_body_index = 1
-        if self._input_type == base.Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
+        if self._force_type == base.Quadrotor.FORCE_TYPE.PROP_FORCES:
             self._ctrl_index = 0
         else:
             self._ctrl_index = 4
@@ -64,6 +64,25 @@ class Quadrotor(base.Quadrotor):
             I = np.diag(I)
         self._mjMdl.model.body_inertia[self._mj_quad_body_index] = I
         return
+      
+    def _parse_input(self):
+        """Parse input type based on input and force type"""
+        if self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
+            if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
+              self._repack_input = lambda u : self._in_accel_out_propforces(u)
+            else:
+              self._repack_input = lambda u : self._in_accel_out_wrench(u)
+        elif self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
+            if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
+              self._repack_input = lambda u : self._in_propforces_out_propforces(u)
+            else:
+              self._repack_input = lambda u : self._in_propforces_out_wrench(u)
+        else:            
+          if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
+            self._repack_input = lambda u : self._in_wrench_out_propforces(u)
+          else:
+            self._repack_input = lambda u: self._in_wrench_out_wrench(u)
+        return  
 
     def reset(self, **kwargs):
         self.t = 0.
@@ -81,12 +100,7 @@ class Quadrotor(base.Quadrotor):
 
     def step(self, u):
         for _ in range(self._step_iter):
-            if self._input_type == base.Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
-                u_clamped = np.clip(u, self._prop_min_force,
-                                    self._prop_max_force)
-            else:
-                thrust, torque = self._parse_input(u)
-                u_clamped = np.append(thrust, torque)
+            u_clamped = self._repack_input(u)
             # set control
             self._mjMdl.data.ctrl[self._ctrl_index:self._ctrl_index +
                                   4] = u_clamped
@@ -97,7 +111,7 @@ class Quadrotor(base.Quadrotor):
             # add tracking marker
             if self._mjMdl.render:
                 # self.add_reference_marker(self.xQd)
-                if self._input_type == base.Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
+                if self._force_type == base.Quadrotor.FORCE_TYPE.PROP_FORCES:
                     for i in range(4):
                         self._mjMdl.add_arrow_at(
                             self._mjMdl.data.site_xpos[i],
