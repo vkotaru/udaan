@@ -9,11 +9,57 @@ from ... import utils
 
 
 class Quadrotor(BaseModel):
+    """Base quadrotor model containing the common quadrotor dynamics and
+    control functions and other related functions.
+    
+    Quadrotor model here is defined as a floating rigidbody with the type 
+    of force applied on it defined by FORCE_TYPE. 
+    
+    Quadrotor class lets the user define the type of input to the quadrotor,
+    this enables different control schemes to be implemented at different
+    hirarchial levels. The input type is defined by INPUT_TYPE.
+
+    Args:
+        BaseModel (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
 
     class INPUT_TYPE(enum.Enum):
+        """Input type to the quadrotor.
+        
+        CMD_WRENCH: thrust [N] (scalar), torque [Nm] (3x1) : (4x1) enables 
+        the user to directly specify the thrust and torque to be applied on
+        the quadrotor rigidbody.
+        CMD_PROP_FORCES: propeller forces [N] (4x1) enables the user to define
+        the forces applied at the four propeller locations.
+        CMD_ACCEL: acceleration [m/s^2] (3x1) enables the user to define the 
+        position acceleration of the quadrotor and an attitude control is
+        used internally to convert the acceleration to WRENCH/PROP_FORCES
+        based on FORCE_TYPE.
+
+        Args:
+            enum (_type_): _description_
+        """
         CMD_WRENCH = 0  # thrust [N] (scalar), torque [Nm] (3x1) : (4x1)
         CMD_PROP_FORCES = 1  # propeller forces [N] (4x1)
         CMD_ACCEL = 2  # acceleration [m/s^2] (3x1)
+        
+    class FORCE_TYPE(enum.Enum):
+      """Type of force to apply on the quadrotor rigidbody.
+      WRENCH: wrench (thrust [N], torque [Nm]) applies a thrust along the 
+      perpendicular to the quadrotor body and a torque around the center of
+      mass of the quadrotor in the body frame.
+      
+      PROP_FORCES: propeller forces [N] (4x1) applies forces at the four
+      propeller locations, the forces are perpendicular to the quadrotor frame.
+
+      Args:
+          enum (_type_): _description_
+      """
+      WRENCH = 0
+      PROP_FORCES = 1
 
     class State(object):
 
@@ -47,15 +93,16 @@ class Quadrotor(BaseModel):
         self._max_torque = np.array([5., 5., 2.])
         self._prop_min_force = 0.0
         self._prop_max_force = 10.0
-        self._wrench_min = np.concatenate(
-            [np.array([self._min_thrust]), self._min_torque])
-        self._wrench_max = np.concatenate(
-            [np.array([self._max_thrust]), self._max_torque])
+        self._wrench_min = np.array([self._min_thrust, *self._min_torque])
+        self._wrench_max = np.array([self._max_thrust, *self._max_torque])
 
         self._input_type = Quadrotor.INPUT_TYPE.CMD_ACCEL
+        self._force_type = Quadrotor.FORCE_TYPE.WRENCH
         self._n_action = 4
         self._step_freq = 500.
         self._step_iter = max(1, int(1. / self._step_freq / self.sim_timestep))
+        
+        self._repackage_input = None
 
         self._parse_args(**kwargs)
         if "sim_timestep" in kwargs.keys():
@@ -79,8 +126,15 @@ class Quadrotor(BaseModel):
                 self._step_freq = 500.
                 self._step_iter = max(
                     1, int(1. / self._step_freq / self.sim_timestep))
+                
+        if "force" in kwargs.keys():
+            if kwargs["force"] == "prop_forces":
+                self._force_type = Quadrotor.FORCE_TYPE.PROP_FORCES
+            else:
+                self._force_type = Quadrotor.FORCE_TYPE.WRENCH
 
         self._compute_allocation_matrix()
+        self._parse_input()
         self._init_default_controllers()
         return
 
@@ -156,8 +210,6 @@ class Quadrotor(BaseModel):
     def _wrench_to_propforces(self, wrench):
         """wrench is 4x1, (f, Mx, My, Mz)"""
         f = self._allocation_inv @ wrench
-        f = np.clip(f, np.array([1., 1., 1., 1.]),
-                    np.array([10., 10., 10., 10.]))
         # TODO another level of abstraction for 1st order motor dynamics
         return f
 
@@ -166,21 +218,52 @@ class Quadrotor(BaseModel):
         wrench = self._allocation_matrix @ prop_forces
         return wrench
 
-    def _parse_input(self, input):
+    def _parse_input(self):
+        """Parse input type. Default parse only to wrench type."""
         if self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
-            thrust, torque = self._att_controller.compute(
-                self.t, (self.state.orientation, self.state.angular_velocity),
-                input)
+            self._repackage_input = lambda u : self._in_accel_out_wrench(u)
         elif self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
-            utils.printc_warn("TODO: Incorrect implementation verify")
-            wrench = self._propforces_to_wrench(input)
-            thrust, torque = wrench[0], wrench[1:]
+            self._repackage_input = lambda u : self._in_propforces_out_wrench(u)
         else:
-            thrust, torque = input[0], input[1:]
-
+            self._repackage_input = lambda u: self._in_wrench_out_wrench(u)
+        return
+      
+    def _in_accel_out_wrench(self, u):
+        """Compute attitude control from accel force."""
+        thrust, torque = self._att_controller.compute(
+            self.t, (self.state.orientation, self.state.angular_velocity),
+            u)      
         thrust = np.clip(thrust, self._min_thrust, self._max_thrust)
         torque = np.clip(torque, -self._max_torque, self._max_torque)
         return thrust, torque
+    
+    def _in_accel_out_propforces(self, u):
+        """Compute prop forces from accel force."""
+        thrust, torque = self._att_controller.compute(
+            self.t, (self.state.orientation, self.state.angular_velocity),
+            u)    
+        u = np.array([thrust, *torque])
+        u = self._wrench_to_propforces(u)
+        u = np.clip(u, self._prop_min_force, self._prop_max_force)
+        return u
+        
+    def _in_wrench_out_wrench(self, u):
+        u = np.clip(u, self._wrench_min, self._wrench_max)
+        return u
+      
+    def _in_propforces_out_propforces(self, u):
+        u = np.clip(u, self._prop_min_force, self._prop_max_force)
+        return u
+        
+    def _in_wrench_out_propforces(self, u):
+        u = self._wrench_to_propforces(u)
+        u = np.clip(u, self._prop_min_force, self._prop_max_force)
+        return u
+      
+    def _in_propforces_out_wrench(self, u):
+        u = self._propforces_to_wrench(u)
+        u = np.clip(u, self._wrench_min, self._wrench_max)
+        return u
 
     def step(self, input: np.ndarray):
         """Zero-order hold on the system equations of motion
@@ -192,7 +275,7 @@ class Quadrotor(BaseModel):
         """
         for _ in range(self._step_iter):
             # integrate dynamics
-            thrust, torque = self._parse_input(input)
+            thrust, torque = self._repackage_input(input)
             # physical input limits
             thrust = np.clip(thrust, self._min_thrust, self._max_thrust)
             torque = np.clip(torque, self._min_torque, self._max_torque)

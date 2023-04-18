@@ -20,6 +20,8 @@ class BaseModel(object):
 
         self.verbose = False
         self.render = False
+        # matched disturbance, i.e., disturbance if added to the input before updating the dynamics
+        self.disturbance = False
         return
 
     def _parse_args(self, **kwargs):
