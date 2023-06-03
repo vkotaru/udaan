@@ -87,7 +87,7 @@ class QuadAttGeoPD(Controller):
             Omega, self.inertia @ Omega)
         M += -1 * self.inertia @ (hat(Omega) @ R.T @ Rd @ Omegad -
                                   R.T @ Rd @ dOmegad)
-        f = thrust_force.dot(R[:, 2])
+        f = thrust_force.dot(R[:, 2])*self.mass
         return f, M
 
 

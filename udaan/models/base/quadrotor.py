@@ -305,9 +305,20 @@ class Quadrotor(BaseModel):
                     self.t,
                     (self.state.position, self.state.velocity,
                      self.state.orientation, self.state.angular_velocity))
-            else:
+            elif self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
                 u = self._pos_controller.compute(
                     self.t, (self.state.position, self.state.velocity))
+              
+            else:
+                thrust_force = self._pos_controller.compute(
+                    self.t, (self.state.position, self.state.velocity))
+                thrust, torque = self._att_controller.compute(
+                    self.t, (self.state.orientation, self.state.angular_velocity),
+                    thrust_force)      
+                thrust = np.clip(thrust, self._min_thrust, self._max_thrust)
+                torque = np.clip(torque, -self._max_torque, self._max_torque)
+                u = np.array([thrust, *torque])
+                
             self.step(u)
 
         end_t = time.time_ns()

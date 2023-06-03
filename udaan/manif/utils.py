@@ -1,5 +1,5 @@
 import numpy as np
-import casadi as ca
+# import casadi as ca
 import math
 
 def hat(vector):
@@ -23,14 +23,14 @@ def expmTaylorExpansion(M, order=2):
     for i in range(1, order+1):
       R += np.power(M, i)/math.factorial(i)
       
-def ca_expmTaylorExpansion(M, order=2):
-    R = ca.DM.eye(3)
-    for i in range(1, order+1):
-      R += ca.mpower(M, i)/math.factorial(i)
-    return R
+# def ca_expmTaylorExpansion(M, order=2):
+#     R = ca.DM.eye(3)
+#     for i in range(1, order+1):
+#       R += ca.mpower(M, i)/math.factorial(i)
+#     return R
 
-def casadi_hat(x):
-    M = ca.vertcat(ca.horzcat(0, -x[2], x[1]),
-                    ca.horzcat(x[2], 0, -x[0]),
-                    ca.horzcat(-x[1], x[0], 0))
-    return M
+# def casadi_hat(x):
+#     M = ca.vertcat(ca.horzcat(0, -x[2], x[1]),
+#                     ca.horzcat(x[2], 0, -x[0]),
+#                     ca.horzcat(-x[1], x[0], 0))
+#     return M
