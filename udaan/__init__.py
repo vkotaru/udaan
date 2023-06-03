@@ -5,3 +5,4 @@ _FOLDER_PATH, _FILE_PATH = os.path.split(
 from . import models
 from . import control
 from . import utils
+from . import manif
