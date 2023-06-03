@@ -117,7 +117,7 @@ class Quadrotor(base.Quadrotor):
                             self._mjMdl.data.site_xpos[i],
                             self._mjMdl.data.site_xmat[i],
                             s=[0.005, 0.005, 0.25 * float(u_clamped[i])],
-                            label="f%d" % i,
+                            # label="f%d" % i, @User: uncomment to show force arrows labels in mujoco.
                             color=[1., 1., 0., 1.])
         return
 
