@@ -60,29 +60,29 @@ class Quadrotor(base.Quadrotor):
     @base.Quadrotor.inertia.setter
     def inertia(self, I):
         super(Quadrotor, self.__class__).inertia.fset(self, I)
-        if (I.ndim == 2):
+        if I.ndim == 2:
             I = np.diag(I)
         self._mjMdl.model.body_inertia[self._mj_quad_body_index] = I
         return
-      
+
     def _parse_input(self):
         """Parse input type based on input and force type"""
         if self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
             if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
-              self._repack_input = lambda u : self._in_accel_out_propforces(u)
+                self._repack_input = lambda u: self._in_accel_out_propforces(u)
             else:
-              self._repack_input = lambda u : self._in_accel_out_wrench(u)
+                self._repack_input = lambda u: self._in_accel_out_wrench(u)
         elif self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
             if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
-              self._repack_input = lambda u : self._in_propforces_out_propforces(u)
+                self._repack_input = lambda u: self._in_propforces_out_propforces(u)
             else:
-              self._repack_input = lambda u : self._in_propforces_out_wrench(u)
-        else:            
-          if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
-            self._repack_input = lambda u : self._in_wrench_out_propforces(u)
-          else:
-            self._repack_input = lambda u: self._in_wrench_out_wrench(u)
-        return  
+                self._repack_input = lambda u: self._in_propforces_out_wrench(u)
+        else:
+            if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
+                self._repack_input = lambda u: self._in_wrench_out_propforces(u)
+            else:
+                self._repack_input = lambda u: self._in_wrench_out_wrench(u)
+        return
 
     def reset(self, **kwargs):
         self.t = 0.
@@ -103,7 +103,7 @@ class Quadrotor(base.Quadrotor):
             u_clamped = self._repack_input(u)
             # set control
             self._mjMdl.data.ctrl[self._ctrl_index:self._ctrl_index +
-                                  4] = u_clamped
+                                                   4] = u_clamped
             # mujoco simulation
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state
