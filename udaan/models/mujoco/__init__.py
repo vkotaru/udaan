@@ -1,5 +1,6 @@
 import os
 import numpy as np
+
 try:
     import mujoco
 except ImportError as e:
@@ -18,10 +19,10 @@ class MujocoModel(object):
 
     def __init__(self, model_path, render=False):
 
-        self.fullpath = os.path.join(_FOLDER_PATH, "udaan", "models", "assets",
-                                     "mjcf", model_path)
-        if not os.path.exists(self.fullpath):
-            raise OSError(f"File {self.fullpath} does not exist")
+        self.full_path = os.path.join(_FOLDER_PATH, "udaan", "models", "assets",
+                                      "mjcf", model_path)
+        if not os.path.exists(self.full_path):
+            raise OSError(f"File {self.full_path} does not exist")
 
         self.render = render
         self.viewer = None
@@ -33,8 +34,8 @@ class MujocoModel(object):
         return
 
     def _initialize_simulation(self):
-        print("Loading model from {}".format(self.fullpath))
-        self.model = mujoco.MjModel.from_xml_path(self.fullpath)
+        print("Loading model from {}".format(self.full_path))
+        self.model = mujoco.MjModel.from_xml_path(self.full_path)
         self.data = mujoco.MjData(self.model)
 
         # mujoco py not implemented
@@ -42,7 +43,7 @@ class MujocoModel(object):
         # ---------------------------------
         # mj_path = mujoco_py.utils.discover_mujoco()
         # # xml_path = os.path.join(mj_path, 'model', 'humanoid.xml')
-        # model = mujoco_py.load_model_from_path(self.fullpath)
+        # model = mujoco_py.load_model_from_path(self.full_path)
         # sim = mujoco_py.MjSim(model)
         # sim.forward()
 
@@ -70,16 +71,16 @@ class MujocoModel(object):
             2 * (q[0] * q[0] + q[1] * q[1]) - 1,
             2 * (q[1] * q[2] - q[0] * q[3]), 2 * (q[1] * q[3] + q[0] * q[2])
         ],
-                         [
-                             2 * (q[1] * q[2] + q[0] * q[3]),
-                             2 * (q[0] * q[0] + q[2] * q[2]) - 1,
-                             2 * (q[2] * q[3] - q[0] * q[1])
-                         ],
-                         [
-                             2 * (q[1] * q[3] - q[0] * q[2]),
-                             2 * (q[2] * q[3] + q[0] * q[1]),
-                             2 * (q[0] * q[0] + q[3] * q[3]) - 1
-                         ]])
+            [
+                2 * (q[1] * q[2] + q[0] * q[3]),
+                2 * (q[0] * q[0] + q[2] * q[2]) - 1,
+                2 * (q[2] * q[3] - q[0] * q[1])
+            ],
+            [
+                2 * (q[1] * q[3] - q[0] * q[2]),
+                2 * (q[2] * q[3] + q[0] * q[1]),
+                2 * (q[0] * q[0] + q[3] * q[3]) - 1
+            ]])
 
     def reset(self):
         mujoco.mj_resetData(self.model, self.data)
@@ -88,12 +89,14 @@ class MujocoModel(object):
     def viewer_setup(self):
         if self.render:
             self.viewer.cam.trackbodyid = 0  # id of the body to track ()
-            self.viewer.cam.distance = self.model.stat.extent * 2.0  # how much you "zoom in", model.stat.extent is the max limits of the arena
+            self.viewer.cam.distance = self.model.stat.extent * 2.0  # how much you "zoom in", model.stat.extent is
+            # the max limits of the arena
             self.viewer.cam.lookat[
                 0] += 0.5  # x,y,z offset from the object (works if trackbodyid=-1)
             self.viewer.cam.lookat[1] += 0.5
             self.viewer.cam.lookat[2] += 0.5
-            self.viewer.cam.elevation = -40  # camera rotation around the axis in the plane going through the frame origin (if 0 you just see a line)
+            self.viewer.cam.elevation = -40  # camera rotation around the axis in the plane going through the frame
+            # origin (if 0 you just see a line)
             self.viewer.cam.azimuth = 0  # camera rotation around the camera's vertical axis
 
     def add_marker_at(self, p, label=""):
@@ -105,7 +108,9 @@ class MujocoModel(object):
                                    label=label)
         return
 
-    def add_arrow_at(self, p, R, s, label="", color=[1, 0, 0, 0.75]):
+    def add_arrow_at(self, p, R, s, label="", color=None):
+        if color is None:
+            color = [1, 0, 0, 0.75]
         if self.render:
             self.viewer.add_marker(pos=p,
                                    mat=R,
