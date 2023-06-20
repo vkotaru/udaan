@@ -1,8 +1,6 @@
 #!/usr/bin/python
 
-from cgitb import text
 import xml.etree.ElementTree as ET
-import os
 import math
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot

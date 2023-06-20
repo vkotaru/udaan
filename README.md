@@ -15,7 +15,7 @@ This package contains mathematical models for quadrotor(s) with suspended payloa
   <tr>
     <td>Quadrotor
       <p float="left">
-        <img src=".media/quadrotor_mj.gif" width="400" />
+        <img src=".media/quadrotor_mj.gif" width="200" />
       </p>
     </td>
     <td>
@@ -29,7 +29,7 @@ This package contains mathematical models for quadrotor(s) with suspended payloa
   <tr>
     <td> Quadrotor with Cable Suspended Payload
       <p float="left">
-        <img src=".media/quadrotor_cspayload_mj.gif" width="400" />
+        <img src=".media/quadrotor_cspayload_mj.gif" width="200" />
       </p>
     </td>
     <td>
@@ -44,7 +44,7 @@ This package contains mathematical models for quadrotor(s) with suspended payloa
 --- 
 References
 
-1. 
+TODO
 
 ---
 Some of the other simulators for quadrotors
