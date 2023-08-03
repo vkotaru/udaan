@@ -25,6 +25,7 @@ class MujocoAssetCreator(object):
         self.worldbody = ET.SubElement(self.root, "worldbody")
 
         self.ground_plane(size=5.)
+        self.light()
         return
 
     def save_to(self, filename="mujoco_asset.xml", verbose=False):
@@ -54,6 +55,55 @@ class MujocoAssetCreator(object):
         texture.attrib["height"] = "256"
         return asset
 
+    def fancy_asset(self):
+        visual = ET.SubElement(self.root, "visual")
+        map = ET.SubElement(visual, "map")
+        map.attrib["fogstart"] = "3.0"
+        map.attrib["fogend"] = "5.0"
+        map.attrib["force"] = "0.1"
+        map.attrib["znear"] = "0.1"
+        asset = ET.SubElement(self.root, "asset")
+        texture1 = ET.SubElement(asset, "texture")
+        texture1.attrib["type"] = "skybox"
+        texture1.attrib["builtin"] = "gradient"
+        texture1.attrib["rgb1"] = "1.0 1.0 1.0"
+        texture1.attrib["rgb2"] = "0.6 0.8 1.0"
+        texture1.attrib["width"] = "127"
+        texture1.attrib["height"] = "1278"
+        texture2 = ET.SubElement(asset, "texture")
+        texture2.attrib["name"] = "texplane"
+        texture2.attrib["type"] = "2d"
+        texture2.attrib["builtin"] = "checker"
+        texture2.attrib["rgb1"] = "0.2 0.3 0.4"
+        texture2.attrib["rgb2"] = ".1 0.15 0.2"
+        texture2.attrib["width"] = "512"
+        texture2.attrib["height"] = "512"
+        
+        mat1 = ET.SubElement(asset, "material")
+        mat1.attrib["name"] = "MatPlane"
+        mat1.attrib["texture"] = "texplane"
+        mat1.attrib["reflectance"] = "0.5"
+        mat1.attrib["texrepeat"] = "1 1"
+        mat1.attrib["texuniform"] = "true"
+        return asset 
+
+    def tendon(self, parent):
+        tendon = ET.SubElement(parent, "tendon")
+        return tendon
+      
+    def spatial(self, parent, site1, site2, range=[0., 1.0], width=0.005, damping=0., stiffness=0.):
+        spatial = ET.SubElement(parent, "spatial")
+        spatial.attrib["limited"] = "true"
+        spatial.attrib["range"] = " ".join([str(x) for x in range])
+        spatial.attrib["width"] = str(width)
+        spatial.attrib["damping"] = str(damping)
+        spatial.attrib["stiffness"] = str(stiffness)
+        s1 = ET.SubElement(spatial, "site")
+        s1.attrib["site"] = site1
+        s2 = ET.SubElement(spatial, "site")
+        s2.attrib["site"] = site2
+        return spatial
+
     def ground_plane(self,
                      pos=np.array([0., 0, 0.]),
                      size=2,
@@ -74,6 +124,15 @@ class MujocoAssetCreator(object):
         geom.attrib["pos"] = " ".join([str(x) for x in pos])
         geom.attrib["rgba"] = " ".join([str(x) for x in rgba])
         return geom
+      
+    def light(self):
+        light = ET.SubElement(self.worldbody, "light")
+        light.attrib["directional"] = "true"
+        light.attrib["diffuse"] = ".9 .9 .9"
+        light.attrib["specular"] = ".3 .3 .3"
+        light.attrib["pos"] = "0 0 4.0"
+        light.attrib["dir"] = "0 0.15 -1"
+        return light
 
     def body(self,
              parent,
@@ -348,41 +407,38 @@ class MujocoAssetCreator(object):
 
     def create_quadrotor0(self, parent, name, pos, xtype=True):
         chassis = self.body(parent, name, pos)
-        chassis_geom = self.box(chassis,
-                                "geom",
-                                size=np.array([0.08, 0.04, 0.025]),
-                                mass=0.75,
-                                density=1000,
-                                rgba=[0.3, 0.3, 0.8, 1.0])
-        chassis_joint = self.joint(chassis, "root_joint", "free")
+        chassis_geom = self.box(chassis, name+"_geom", size=np.array(
+            [0.08, 0.04, 0.025]), mass=0.75, density=1000, rgba=[0.3, 0.3, 0.8, 1.0])
+        chassis_joint = self.joint(chassis, name+"_root_joint", "free")
 
         zaxis = np.array([0, 0, 1])
         l = 0.2
         rotor_arm_offset = np.array([l, 0, 0])
 
-        rotor_angles = [
-            0.25 * math.pi, 0.75 * math.pi, 1.25 * math.pi, 1.75 * math.pi
-        ]
+        rotor_angles = [0.25 * math.pi, 0.75 *
+                        math.pi, 1.25 * math.pi, 1.75 * math.pi]
         if not xtype:
             rotor_angles = [0, 0.5 * math.pi, math.pi, 1.5 * math.pi]
 
         for i in range(len(rotor_angles)):
             angle = rotor_angles[i]
-            r = sp_rot.from_rotvec(zaxis * angle)
+            r = sp_rot.from_rotvec(zaxis*angle)
             rotor_arm_quat = r.as_quat()
             rotor_prop_pos = r.apply(rotor_arm_offset)
-            rotor_arm_geom = self.box(chassis,
-                                      "rotor_arm_geom_%d" % i,
-                                      quat=rotor_arm_quat,
-                                      size=np.array([l, 0.01, 0.01]),
-                                      mass=0.01)
-            rotor_prop_geom = self.cylinder(chassis,
-                                            "rotor_prop_geom_%d" % i,
-                                            pos=rotor_prop_pos,
-                                            radius=0.1,
-                                            length=0.01,
-                                            mass=0.05)
-        return chassis
+            rotor_arm_geom = self.box(chassis, name+"_rotor_arm_geom_%d" % i, quat=rotor_arm_quat,  size=np.array([l, 0.01, 0.01]), mass=0.01)
+            rotor_prop_geom = self.cylinder(chassis, name+"_rotor_prop_geom_%d" % i,  pos=rotor_prop_pos, radius=0.1, length=0.01, mass=0.05)
+        self.site(chassis, name+"_end1", pos=np.array([0., 0., 0.]), type="sphere", size=[0.01])
+        sitef = self.site(chassis, name+"_thrust", pos=np.array([0., 0., 0.]), rgba=[0.0, 1, 1, 1.0])
+        sitex = self.site(chassis, name+"_Mx", pos=np.array([0., 0., 0.]), size=np.array([0.06, 0.035, 0.025]), rgba=[0.0, 1, 1, 1.0])
+        sitey = self.site(chassis, name+"_My", pos=np.array([0., 0., 0.]), size=np.array([0.06, 0.035, 0.025]), rgba=[0.0, 1, 1, 1.0])
+        sitez = self.site(chassis, name+"_Mz", pos=np.array([0., 0., 0.]), size=np.array([0.06, 0.035, 0.025]),rgba=[0.0, 1, 1, 1.0])
+    
+        actuator = self.actuator(self.root)
+        motorf = self.motor(actuator, site=name+"_thrust", range=[0., 30.0], gear=np.array([0 , 0. ,1., 0., 0., 0.]) )
+        motorMx = self.motor(actuator, site=name+"_Mx", range=[-3., 3.0], gear=np.array([0 , 0. ,0., 1., 0., 0.]) )
+        motorMy = self.motor(actuator, site=name+"_My", range=[-3., 3.0], gear=np.array([0 , 0. ,0., 0., 1., 0.]) )
+        motorMz = self.motor(actuator, site=name+"_Mz", range=[-3., 3.0], gear=np.array([0 , 0. ,0., 0., 0., 1.]) )
+        return chassis, actuator
 
     def create_cable_payload(self, parent, name, pos, length=1, mass=0.15):
         cable = self.body(parent, name, pos)
@@ -472,70 +528,3 @@ class MujocoAssetCreator(object):
                                 armature=0.0)
         return cable
 
-
-def create_quadcopter():
-    # mjcWriter = MujocoAssetCreator("Quadcopter")
-    # mjcWriter.create_isaacgym_quadcopter(mjcWriter.worldbody, "quadcopter", np.array([0., 0., 1.]))
-    # mjcWriter.save_to("./assets/quadcopter.xml", verbose=True)
-
-    mjcWriter = MujocoAssetCreator("Quadrotor")
-    mjcWriter.create_quadrotor(mjcWriter.worldbody, "quadrotor",
-                               np.array([0., 0., 1.]))
-    mjcWriter.save_to("./assets/quadrotor.xml", verbose=True)
-    return
-
-
-def quadrotor_payload():
-    cable_length = 1.0
-    mjcWriter = MujocoAssetCreator("QuadrotorPayload")
-    quad = mjcWriter.create_quadrotor0(mjcWriter.worldbody, "quadrotor",
-                                       np.array([0., 0., 2.]))
-    sitef = mjcWriter.site(quad,
-                           "thrust",
-                           pos=np.array([0., 0., 0.]),
-                           rgba=[0.0, 1, 1, 1.0])
-    sitex = mjcWriter.site(quad,
-                           "rateX",
-                           pos=np.array([0., 0., 0.]),
-                           size=np.array([0.06, 0.035, 0.025]),
-                           rgba=[0.0, 1, 1, 1.0])
-    sitey = mjcWriter.site(quad,
-                           "rateY",
-                           pos=np.array([0., 0., 0.]),
-                           size=np.array([0.06, 0.035, 0.025]),
-                           rgba=[0.0, 1, 1, 1.0])
-    sitez = mjcWriter.site(quad,
-                           "rateZ",
-                           pos=np.array([0., 0., 0.]),
-                           size=np.array([0.06, 0.035, 0.025]),
-                           rgba=[0.0, 1, 1, 1.0])
-    mjcWriter.create_flexible_cable_payload(quad,
-                                            "cable",
-                                            np.array(
-                                                [0., 0., -.5 * cable_length]),
-                                            N=1,
-                                            length=cable_length)
-
-    actuator = mjcWriter.actuator(mjcWriter.root)
-    motorf = mjcWriter.motor(actuator,
-                             site="thrust",
-                             range=[0., 30.0],
-                             gear=np.array([0, 0., 1., 0., 0., 0.]))
-    motorMx = mjcWriter.motor(actuator,
-                              site="rateX",
-                              range=[-3., 3.0],
-                              gear=np.array([0, 0., 0., 1., 0., 0.]))
-    motorMy = mjcWriter.motor(actuator,
-                              site="rateY",
-                              range=[-3., 3.0],
-                              gear=np.array([0, 0., 0., 0., 1., 0.]))
-    motorMz = mjcWriter.motor(actuator,
-                              site="rateZ",
-                              range=[-3., 3.0],
-                              gear=np.array([0, 0., 0., 0., 0., 1.]))
-    mjcWriter.save_to("./assets/quadrotor_payload.xml", verbose=True)
-    return
-
-
-if __name__ == "__main__":
-    quadrotor_payload()
