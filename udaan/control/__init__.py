@@ -2,7 +2,6 @@ import numpy as np
 
 
 class Gains(object):
-
     def __init__(self, kp=np.zeros(3), kd=np.zeros(3), ki=np.zeros(3)):
         self.kp = kp
         self.kd = kd
@@ -11,15 +10,14 @@ class Gains(object):
 
 
 class Controller(object):
-
     def __init__(self):
-        self.freq = 500.
+        self.freq = 500.0
         self._g = 9.81
-        self._ge3 = np.array([0., 0., self._g])
-        self._e1 = np.array([1., 0., 0.])
-        self._e2 = np.array([0., 1., 0.])
-        self._e3 = np.array([0., 0., 1.])
-        self._gravity = np.array([0., 0., -self._g])
+        self._ge3 = np.array([0.0, 0.0, self._g])
+        self._e1 = np.array([1.0, 0.0, 0.0])
+        self._e2 = np.array([0.0, 1.0, 0.0])
+        self._e3 = np.array([0.0, 0.0, 1.0])
+        self._gravity = np.array([0.0, 0.0, -self._g])
         return
 
     def compute(self, *args):
@@ -27,7 +25,6 @@ class Controller(object):
 
 
 class PDController(Controller):
-
     def __init__(self, **kwargs):
         super().__init__()
         self._gains = Gains()
@@ -40,8 +37,11 @@ class PDController(Controller):
         if "setpoint" in kwargs.keys():
             self.setpoint = kwargs["setpoint"]
         else:
-            self.setpoint = lambda t: (np.array([0., 0., 1.]), np.zeros(3),
-                                       np.zeros(3))
+            self.setpoint = lambda t: (
+                np.array([0.0, 0.0, 1.0]),
+                np.zeros(3),
+                np.zeros(3),
+            )
         return
 
     def compute(self, *args):
