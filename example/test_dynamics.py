@@ -10,7 +10,7 @@ import numpy as np
 # mdl.simulate(tf=10, x0=np.array([1., 1., 0.]))
 
 mdl = U.models.mujoco.Quadrotor(render=True, force="prop_forces", input="wrench")
-mdl.simulate(tf=10, position=np.array([-1., 2., 0.]))
+mdl.simulate(tf=10, position=np.array([-1.0, 2.0, 0.0]))
 
 # mdl = U.models.base.QuadrotorCSPayload(render=True)
 # mdl.simulate(tf=10, position=np.array([-1., 2., 0.]))

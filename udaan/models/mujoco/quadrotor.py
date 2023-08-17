@@ -10,7 +10,6 @@ from ... import utils
 
 
 class Quadrotor(base.Quadrotor):
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -24,7 +23,7 @@ class Quadrotor(base.Quadrotor):
         if "attitude_zoh" in kwargs:
             self._attitude_zoh = kwargs["attitude_zoh"]
 
-        self._mjDt = 1. / 500.
+        self._mjDt = 1.0 / 500.0
         self._step_iter = int(self.sim_timestep / self._mjDt)
         self._nFrames = 1
         if self._attitude_zoh:
@@ -39,10 +38,10 @@ class Quadrotor(base.Quadrotor):
             self._ctrl_index = 4
 
         # read inertial parameters from mujoco model
-        self.mass = copy.deepcopy(
-            self._mjMdl.model.body_mass[self._mj_quad_body_index])
+        self.mass = copy.deepcopy(self._mjMdl.model.body_mass[self._mj_quad_body_index])
         self.inertia = copy.deepcopy(
-            self._mjMdl.model.body_inertia[self._mj_quad_body_index])
+            self._mjMdl.model.body_inertia[self._mj_quad_body_index]
+        )
 
         # reinitialize controllers after loading mujoco model & params
         self._init_default_controllers()
@@ -85,7 +84,7 @@ class Quadrotor(base.Quadrotor):
         return
 
     def reset(self, **kwargs):
-        self.t = 0.
+        self.t = 0.0
         super().reset(**kwargs)
         self._mjMdl.reset()
 
@@ -102,8 +101,7 @@ class Quadrotor(base.Quadrotor):
         for _ in range(self._step_iter):
             u_clamped = self._repack_input(u)
             # set control
-            self._mjMdl.data.ctrl[self._ctrl_index:self._ctrl_index +
-                                                   4] = u_clamped
+            self._mjMdl.data.ctrl[self._ctrl_index : self._ctrl_index + 4] = u_clamped
             # mujoco simulation
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state
@@ -118,7 +116,8 @@ class Quadrotor(base.Quadrotor):
                             self._mjMdl.data.site_xmat[i],
                             s=[0.005, 0.005, 0.25 * float(u_clamped[i])],
                             # label="f%d" % i, @User: uncomment to show force arrows labels in mujoco.
-                            color=[1., 1., 0., 1.])
+                            color=[1.0, 1.0, 0.0, 1.0],
+                        )
         return
 
     def _query_latest_state(self):

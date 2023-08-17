@@ -2,70 +2,78 @@ from . import *
 
 
 class QuadrotorVFX(VFXHandler):
-
     def __init__(self, rate=200, retain=100):
-        super().__init__(title='Quadrotor', rate=rate)
+        super().__init__(title="Quadrotor", rate=rate)
         super().create_env()
         self._rate = rate
         self._retain = retain
-        self.point = vp.sphere(color=vp.color.blue,
-                               radius=0.025,
-                               make_trail=True,
-                               retain=self._retain,
-                               opacity=0.75)
-        self.goal = vp.sphere(color=vp.color.red,
-                              radius=0.05,
-                              make_trail=True,
-                              retain=1)
+        self.point = vp.sphere(
+            color=vp.color.blue,
+            radius=0.025,
+            make_trail=True,
+            retain=self._retain,
+            opacity=0.75,
+        )
+        self.goal = vp.sphere(
+            color=vp.color.red, radius=0.05, make_trail=True, retain=1
+        )
 
         self.arm_l = 0.1  # length of quadrotor boom
         self.prop_r = 0.125  # radius of propeller prop
 
         self._arm0 = [
-            np.array([self.arm_l, 0., 0.05]),
-            np.array([self.arm_l, 0., 0.0]),
-            np.array([-self.arm_l, 0., 0.0]),
-            np.array([-self.arm_l, 0.0, 0.05])
+            np.array([self.arm_l, 0.0, 0.05]),
+            np.array([self.arm_l, 0.0, 0.0]),
+            np.array([-self.arm_l, 0.0, 0.0]),
+            np.array([-self.arm_l, 0.0, 0.05]),
         ]
 
         self._arm1 = [
-            np.array([0., self.arm_l, 0.05]),
-            np.array([0., self.arm_l, 0.0]),
-            np.array([0., -self.arm_l, 0.0]),
-            np.array([0., -self.arm_l, 0.05])
+            np.array([0.0, self.arm_l, 0.05]),
+            np.array([0.0, self.arm_l, 0.0]),
+            np.array([0.0, -self.arm_l, 0.0]),
+            np.array([0.0, -self.arm_l, 0.05]),
         ]
 
         self._props = [
-            np.array([self.arm_l, 0., 0.05]),
-            np.array([0., self.arm_l, 0.05]),
-            np.array([0., -self.arm_l, 0.05]),
-            np.array([-self.arm_l, 0., 0.05])
+            np.array([self.arm_l, 0.0, 0.05]),
+            np.array([0.0, self.arm_l, 0.05]),
+            np.array([0.0, -self.arm_l, 0.05]),
+            np.array([-self.arm_l, 0.0, 0.05]),
         ]
 
         self.curve1 = vp.curve(color=vp.color.red, radius=0.01)
         self.curve2 = vp.curve(color=vp.color.blue, radius=0.01)
 
         self.props = [
-            vp.ellipsoid(length=self.prop_r,
-                         height=0.1 * self.prop_r,
-                         width=self.prop_r,
-                         color=vp.color.cyan,
-                         opacity=0.5),
-            vp.ellipsoid(length=self.prop_r,
-                         height=0.1 * self.prop_r,
-                         width=self.prop_r,
-                         color=vp.color.black,
-                         opacity=0.5),
-            vp.ellipsoid(length=self.prop_r,
-                         height=0.1 * self.prop_r,
-                         width=self.prop_r,
-                         color=vp.color.black,
-                         opacity=0.5),
-            vp.ellipsoid(length=self.prop_r,
-                         height=0.1 * self.prop_r,
-                         width=self.prop_r,
-                         color=vp.color.black,
-                         opacity=0.5)
+            vp.ellipsoid(
+                length=self.prop_r,
+                height=0.1 * self.prop_r,
+                width=self.prop_r,
+                color=vp.color.cyan,
+                opacity=0.5,
+            ),
+            vp.ellipsoid(
+                length=self.prop_r,
+                height=0.1 * self.prop_r,
+                width=self.prop_r,
+                color=vp.color.black,
+                opacity=0.5,
+            ),
+            vp.ellipsoid(
+                length=self.prop_r,
+                height=0.1 * self.prop_r,
+                width=self.prop_r,
+                color=vp.color.black,
+                opacity=0.5,
+            ),
+            vp.ellipsoid(
+                length=self.prop_r,
+                height=0.1 * self.prop_r,
+                width=self.prop_r,
+                color=vp.color.black,
+                opacity=0.5,
+            ),
         ]
 
         self._traj = vp.curve(color=vp.color.black, radius=0.025)
@@ -90,7 +98,7 @@ class QuadrotorVFX(VFXHandler):
 
         for i in range(4):
             p = x + R @ self._props[i]
-            ax = R @ np.array([0., 0., 1.])
+            ax = R @ np.array([0.0, 0.0, 1.0])
             self.props[i].pos = vp.vector(p[0], p[1], p[2])
             self.props[i].up = vp.vector(ax[0], ax[1], ax[2])
 

@@ -6,16 +6,16 @@ import sys
 
 
 class VFXHandler(object):
-
-    def __init__(self, title='visuals', rate=200):
-        self._title = 'floating_models::' + title
+    def __init__(self, title="visuals", rate=200):
+        self._title = "floating_models::" + title
         self.scene = vp.canvas(
             title=self._title,
             width=1080,  # 1920
             height=640,  # 1080
             center=vp.vector(1, 2, 0),
             background=vp.color.white,
-            isnotebook=8080)
+            isnotebook=8080,
+        )
 
         # self.scene.caption = """To rotate "camera", drag with right button or Ctrl-drag.
         #         To zoom, drag with middle button or Alt/Option depressed, or use scroll wheel.
@@ -46,23 +46,32 @@ class VFXHandler(object):
     def create_env(self):
         self.axes = []
         self.axes.append(
-            vp.arrow(pos=vp.vector(0, 0, 0),
-                     axis=vp.vector(2, 0, 0),
-                     color=vp.vector(1, 0, 0),
-                     opacity=0.15,
-                     shaftwidth=0.01))
+            vp.arrow(
+                pos=vp.vector(0, 0, 0),
+                axis=vp.vector(2, 0, 0),
+                color=vp.vector(1, 0, 0),
+                opacity=0.15,
+                shaftwidth=0.01,
+            )
+        )
         self.axes.append(
-            vp.arrow(pos=vp.vector(0, 0, 0),
-                     axis=vp.vector(0, 2, 0),
-                     color=vp.vector(0, 1, 0),
-                     opacity=0.15,
-                     shaftwidth=0.01))
+            vp.arrow(
+                pos=vp.vector(0, 0, 0),
+                axis=vp.vector(0, 2, 0),
+                color=vp.vector(0, 1, 0),
+                opacity=0.15,
+                shaftwidth=0.01,
+            )
+        )
         self.axes.append(
-            vp.arrow(pos=vp.vector(0, 0, 0),
-                     axis=vp.vector(0, 0, 2),
-                     color=vp.vector(0, 0, 1),
-                     opacity=0.15,
-                     shaftwidth=0.01))
+            vp.arrow(
+                pos=vp.vector(0, 0, 0),
+                axis=vp.vector(0, 0, 2),
+                color=vp.vector(0, 0, 1),
+                opacity=0.15,
+                shaftwidth=0.01,
+            )
+        )
         return
 
     def delete_env(self):
@@ -93,7 +102,6 @@ class VFXHandler(object):
 
 
 class Model(object):
-
     def __init__(self, name):
         self.name = name
 
@@ -105,55 +113,40 @@ class Model(object):
 
 
 class BoundingBox(Model):
-
-    def __init__(self,
-                 name='bounding_box',
-                 orig=np.zeros(3),
-                 xmin=-1.5,
-                 xmax=1.5,
-                 ymin=-2.5,
-                 ymax=2.5,
-                 zmin=0.0,
-                 zmax=4.0,
-                 color='purple'):
+    def __init__(
+        self,
+        name="bounding_box",
+        orig=np.zeros(3),
+        xmin=-1.5,
+        xmax=1.5,
+        ymin=-2.5,
+        ymax=2.5,
+        zmin=0.0,
+        zmax=4.0,
+        color="purple",
+    ):
         super().__init__(name)
         self.orig = orig
         self.bndry = vp.curve(color=colors[color], radius=0.01)
         self.points = []
-        self.points.append(
-            vp.vector(orig[0] + xmin, orig[1] + ymin, orig[2] + zmin))
-        self.points.append(
-            vp.vector(orig[0] + xmax, orig[1] + ymin, orig[2] + zmin))
-        self.points.append(
-            vp.vector(orig[0] + xmax, orig[1] + ymax, orig[2] + zmin))
-        self.points.append(
-            vp.vector(orig[0] + xmin, orig[1] + ymax, orig[2] + zmin))
-        self.points.append(
-            vp.vector(orig[0] + xmin, orig[1] + ymin, orig[2] + zmin))
+        self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymin, orig[2] + zmin))
+        self.points.append(vp.vector(orig[0] + xmax, orig[1] + ymin, orig[2] + zmin))
+        self.points.append(vp.vector(orig[0] + xmax, orig[1] + ymax, orig[2] + zmin))
+        self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymax, orig[2] + zmin))
+        self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymin, orig[2] + zmin))
 
-        self.points.append(
-            vp.vector(orig[0] + xmin, orig[1] + ymin, orig[2] + zmax))
-        self.points.append(
-            vp.vector(orig[0] + xmax, orig[1] + ymin, orig[2] + zmax))
-        self.points.append(
-            vp.vector(orig[0] + xmax, orig[1] + ymax, orig[2] + zmax))
-        self.points.append(
-            vp.vector(orig[0] + xmin, orig[1] + ymax, orig[2] + zmax))
-        self.points.append(
-            vp.vector(orig[0] + xmin, orig[1] + ymin, orig[2] + zmax))
+        self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymin, orig[2] + zmax))
+        self.points.append(vp.vector(orig[0] + xmax, orig[1] + ymin, orig[2] + zmax))
+        self.points.append(vp.vector(orig[0] + xmax, orig[1] + ymax, orig[2] + zmax))
+        self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymax, orig[2] + zmax))
+        self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymin, orig[2] + zmax))
 
-        self.points.append(
-            vp.vector(orig[0] + xmax, orig[1] + ymin, orig[2] + zmax))
-        self.points.append(
-            vp.vector(orig[0] + xmax, orig[1] + ymin, orig[2] + zmin))
-        self.points.append(
-            vp.vector(orig[0] + xmax, orig[1] + ymax, orig[2] + zmin))
-        self.points.append(
-            vp.vector(orig[0] + xmax, orig[1] + ymax, orig[2] + zmax))
-        self.points.append(
-            vp.vector(orig[0] + xmin, orig[1] + ymax, orig[2] + zmax))
-        self.points.append(
-            vp.vector(orig[0] + xmin, orig[1] + ymax, orig[2] + zmin))
+        self.points.append(vp.vector(orig[0] + xmax, orig[1] + ymin, orig[2] + zmax))
+        self.points.append(vp.vector(orig[0] + xmax, orig[1] + ymin, orig[2] + zmin))
+        self.points.append(vp.vector(orig[0] + xmax, orig[1] + ymax, orig[2] + zmin))
+        self.points.append(vp.vector(orig[0] + xmax, orig[1] + ymax, orig[2] + zmax))
+        self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymax, orig[2] + zmax))
+        self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymax, orig[2] + zmin))
         for p in self.points:
             self.bndry.append(p)
         pass
