@@ -140,3 +140,4 @@ class MujocoModel(object):
 
 from .quadrotor import Quadrotor
 from .quadrotor_cspayload import QuadrotorCSPayload
+from .multi_quad_cs_pointmass import MultiQuadrotorCSPointmass
