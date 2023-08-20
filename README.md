@@ -47,12 +47,10 @@ References
 TODO
 
 ---
-Some of the other simulators for quadrotors
-- [PX4 Autopilot](https://docs.px4.io/main/en/simulation/)
-- [rosflight](https://github.com/rosflight/rosflight)
-- [rotors_simulator](https://github.com/ethz-asl/rotors_simulator)
-- [flightmare](https://github.com/uzh-rpg/flightmare)
-- [AirSim](https://microsoft.github.io/AirSim/)
-- [gym-pybullet-drones](https://github.com/utiasDSL/gym-pybullet-drones)
 
+Some other simulators for quadrotors: [PX4 Autopilot](https://docs.px4.io/main/en/simulation/), [rosflight](https://github.com/rosflight/rosflight), [rotors_simulator](https://github.com/ethz-asl/rotors_simulator), [flightmare](https://github.com/uzh-rpg/flightmare), [AirSim](https://microsoft.github.io/AirSim/), [gym-pybullet-drones](https://github.com/utiasDSL/gym-pybullet-drones)
+
+---
+
+&copy; [Prasanth Kotaru](github.com/vkotaru)
 
