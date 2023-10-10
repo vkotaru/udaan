@@ -37,7 +37,8 @@ class MujocoAssetCreator(object):
         # Pretty printing to Python shell for testing purposes
         from xml.dom import minidom
 
-        xmlstr = minidom.parseString(ET.tostring(self.root)).toprettyxml(indent="   ")
+        xmlstr = minidom.parseString(ET.tostring(
+            self.root)).toprettyxml(indent="   ")
         if verbose:
             print(xmlstr)
         with open(filename, "w") as f:
@@ -86,7 +87,14 @@ class MujocoAssetCreator(object):
         mat1.attrib["texrepeat"] = "1 1"
         mat1.attrib["texuniform"] = "true"
         return asset
-
+      
+    def exclude_contact(self, body1:str, body2:str):
+        contact = ET.SubElement(self.root, "contact")
+        exclude = ET.SubElement(contact, "exclude")
+        exclude.attrib["body1"] = body1
+        exclude.attrib["body2"] = body2
+        return contact
+      
     def tendon(self, parent):
         tendon = ET.SubElement(parent, "tendon")
         return tendon
@@ -146,19 +154,20 @@ class MujocoAssetCreator(object):
         return light
 
     def body(
-        self,
-        parent,
-        name,
-        pos=np.array([0.0, 0.0, 0.0]),
-        quat=np.array([0.0, 0.0, 0.0, 1.0]),
-        mass=1.0,
-        inertia=np.array([1.0, 1.0, 1.0]),
-        rgba=[0.8, 0.9, 0.8, 1.0],
+            self,
+            parent,
+            name,
+            pos=np.array([0.0, 0.0, 0.0]),
+            quat=np.array([0.0, 0.0, 0.0, 1.0]),
+            mass=1.0,
+            inertia=np.array([1.0, 1.0, 1.0]),
+            rgba=[0.8, 0.9, 0.8, 1.0],
     ):
         body = ET.SubElement(parent, "body")
         body.attrib["name"] = name
         body.attrib["pos"] = " ".join([str(x) for x in pos])
-        body.attrib["quat"] = "%g %g %g %g" % (quat[3], quat[0], quat[1], quat[2])
+        body.attrib["quat"] = "%g %g %g %g" % (quat[3], quat[0], quat[1],
+                                               quat[2])
         # body.attrib["mass"] = str(mass)
         # body.attrib["inertia"] = " ".join([str(x) for x in inertia])
         return body
@@ -172,7 +181,8 @@ class MujocoAssetCreator(object):
         density=1000,
         radius=0.1,
         length=0.1,
-        rgba=[0.5, 0.1, 0.1, 1.0],
+        alpha=1.0,
+        rgb=[0.5, 0.1, 0.1],
     ):
         geom = ET.SubElement(parent, "geom")
         geom.attrib["name"] = name
@@ -181,7 +191,7 @@ class MujocoAssetCreator(object):
         geom.attrib["pos"] = " ".join([str(x) for x in pos])
         geom.attrib["mass"] = str(mass)
         geom.attrib["density"] = str(density)
-        geom.attrib["rgba"] = " ".join([str(x) for x in rgba])
+        geom.attrib["rgba"] = " ".join([str(x) for x in rgb + [alpha]])
         return geom
 
     def sphere(
@@ -192,7 +202,8 @@ class MujocoAssetCreator(object):
         quat=np.array([0.0, 0.0, 0.0, 1.0]),
         radius=0.1,
         mass=0.01,
-        rgba=[0.1, 0.5, 0.1, 1.0],
+        alpha=1.0,
+        rgb=[0.1, 0.5, 0.1],
         density=1000,
     ):
         geom = ET.SubElement(parent, "geom")
@@ -201,7 +212,7 @@ class MujocoAssetCreator(object):
         geom.attrib["size"] = "%g" % (radius)
         geom.attrib["mass"] = str(mass)
         geom.attrib["density"] = str(density)
-        geom.attrib["rgba"] = " ".join([str(x) for x in rgba])
+        geom.attrib["rgba"] = " ".join([str(x) for x in rgb + [alpha]])
         return geom
 
     def box(
@@ -212,18 +223,20 @@ class MujocoAssetCreator(object):
         quat=np.array([0.0, 0.0, 0.0, 1.0]),
         size=np.array([0.1, 0.1, 0.1]),
         mass=0.01,
-        rgba=[0.1, 0.1, 0.5, 1.0],
+        alpha=1.0,
+        rgb=[0.1, 0.1, 0.5],
         density=1000,
     ):
         geom = ET.SubElement(parent, "geom")
         geom.attrib["name"] = name
         geom.attrib["type"] = "box"
         geom.attrib["pos"] = " ".join([str(x) for x in pos])
-        geom.attrib["quat"] = "%g %g %g %g" % (quat[3], quat[0], quat[1], quat[2])
+        geom.attrib["quat"] = "%g %g %g %g" % (quat[3], quat[0], quat[1],
+                                               quat[2])
         geom.attrib["size"] = " ".join([str(x) for x in size])
         geom.attrib["mass"] = str(mass)
         geom.attrib["density"] = str(density)
-        geom.attrib["rgba"] = " ".join([str(x) for x in rgba])
+        geom.attrib["rgba"] = " ".join([str(x) for x in rgb + [alpha]])
         return geom
 
     def joint(
@@ -256,20 +269,21 @@ class MujocoAssetCreator(object):
         return joint
 
     def site(
-        self,
-        parent,
-        name,
-        type="box",
-        pos=np.array([0.0, 0.0, 0.0]),
-        quat=np.array([0.0, 0.0, 0.0, 1.0]),
-        size=np.array([0.035, 0.035, 0.035]),
-        rgba=[0.1, 0.1, 0.5, 1.0],
+            self,
+            parent,
+            name,
+            type="box",
+            pos=np.array([0.0, 0.0, 0.0]),
+            quat=np.array([0.0, 0.0, 0.0, 1.0]),
+            size=np.array([0.035, 0.035, 0.035]),
+            rgba=[0.1, 0.1, 0.5, 1.0],
     ):
         site = ET.SubElement(parent, "site")
         site.attrib["name"] = name
         site.attrib["type"] = type
         site.attrib["pos"] = " ".join([str(x) for x in pos])
-        site.attrib["quat"] = "%g %g %g %g" % (quat[3], quat[0], quat[1], quat[2])
+        site.attrib["quat"] = "%g %g %g %g" % (quat[3], quat[0], quat[1],
+                                               quat[2])
         site.attrib["size"] = " ".join([str(x) for x in size])
         site.attrib["rgba"] = " ".join([str(x) for x in rgba])
         return site
@@ -278,9 +292,11 @@ class MujocoAssetCreator(object):
         actuator = ET.SubElement(parent, "actuator")
         return actuator
 
-    def motor(
-        self, parent, site, range=[], gear=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-    ):
+    def motor(self,
+              parent,
+              site,
+              range=[],
+              gear=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])):
         motor = ET.SubElement(parent, "motor")
         motor.attrib["ctrllimited"] = "true"
         motor.attrib["site"] = site
@@ -289,12 +305,12 @@ class MujocoAssetCreator(object):
         return motor
 
     def velocity(
-        self,
-        parent,
-        site,
-        range=[-1.0, 1.0],
-        kv=0.1,
-        gear=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            self,
+            parent,
+            site,
+            range=[-1.0, 1.0],
+            kv=0.1,
+            gear=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     ):
         velocity = ET.SubElement(parent, "velocity")
         velocity.attrib["ctrllimited"] = "true"
@@ -327,11 +343,14 @@ class MujocoAssetCreator(object):
         chassis_joint = self.joint(chassis, "root_joint", "free")
 
         zaxis = np.array([0, 0, 1])
-        rotor_arm_offset = np.array([chassis_radius + 0.25 * rotor_arm_radius, 0, 0])
+        rotor_arm_offset = np.array(
+            [chassis_radius + 0.25 * rotor_arm_radius, 0, 0])
         pitch_joint_offset = np.array([0, 0, 0])
         rotor_offset = np.array([rotor_radius + 0.25 * rotor_arm_radius, 0, 0])
 
-        rotor_angles = [0.25 * math.pi, 0.75 * math.pi, 1.25 * math.pi, 1.75 * math.pi]
+        rotor_angles = [
+            0.25 * math.pi, 0.75 * math.pi, 1.25 * math.pi, 1.75 * math.pi
+        ]
         for i in range(len(rotor_angles)):
             angle = rotor_angles[i]
             # print("rotor_arm_offset", rotor_arm_offset)
@@ -344,9 +363,8 @@ class MujocoAssetCreator(object):
             rotor_pos = rotor_offset
             rotor_quat = np.array([0, 0, 0, 1])
 
-            rotor_arm = self.body(
-                chassis, ("rotor_arm_%d" % i), rotor_arm_pos, rotor_arm_quat
-            )
+            rotor_arm = self.body(chassis, ("rotor_arm_%d" % i), rotor_arm_pos,
+                                  rotor_arm_quat)
             rotor_arm_geom = self.sphere(
                 rotor_arm,
                 "rotor_arm_geom_%d" % i,
@@ -401,7 +419,9 @@ class MujocoAssetCreator(object):
         l = 0.2
         rotor_arm_offset = np.array([l, 0, 0])
 
-        rotor_angles = [0.25 * math.pi, 0.75 * math.pi, 1.25 * math.pi, 1.75 * math.pi]
+        rotor_angles = [
+            0.25 * math.pi, 0.75 * math.pi, 1.25 * math.pi, 1.75 * math.pi
+        ]
         if not xtype:
             rotor_angles = [0, 0.5 * math.pi, math.pi, 1.5 * math.pi]
 
@@ -417,9 +437,8 @@ class MujocoAssetCreator(object):
                 size=np.array([l, 0.01, 0.01]),
                 mass=0.01,
             )
-            rotor_prop = self.body(
-                chassis, ("rotor_prop_%d" % i), rotor_prop_pos, np.array([0, 0, 0, 1])
-            )
+            rotor_prop = self.body(chassis, ("rotor_prop_%d" % i),
+                                   rotor_prop_pos, np.array([0, 0, 0, 1]))
             rotor_joint = self.joint(
                 rotor_prop,
                 "rotor_joint_%d" % i,
@@ -432,29 +451,40 @@ class MujocoAssetCreator(object):
                 stiffness=10000,
                 armature=0.0,
             )
-            rotor_prop_geom = self.cylinder(
-                rotor_prop, "rotor_prop_geom_%d" % i, radius=0.1, length=0.01, mass=0.05
-            )
+            rotor_prop_geom = self.cylinder(rotor_prop,
+                                            "rotor_prop_geom_%d" % i,
+                                            radius=0.1,
+                                            length=0.01,
+                                            mass=0.05)
 
         return chassis
 
-    def create_quadrotor0(self, parent, name, pos, xtype=True):
+    def create_quadrotor0(self,
+                          parent,
+                          name,
+                          pos,
+                          xtype=True,
+                          alpha=1.0,
+                          rgb=[0.8, 0.3, 0.3]):
         chassis = self.body(parent, name, pos)
-        chassis_geom = self.box(
+        self.box(
             chassis,
             name + "_geom",
             size=np.array([0.08, 0.04, 0.025]),
             mass=0.75,
             density=1000,
-            rgba=[0.3, 0.3, 0.8, 1.0],
+            alpha=alpha,
+            rgb=[0.3, 0.3, 0.8],
         )
-        chassis_joint = self.joint(chassis, name + "_root_joint", "free")
+        self.joint(chassis, name + "_root_joint", "free")
 
         zaxis = np.array([0, 0, 1])
         l = 0.2
         rotor_arm_offset = np.array([l, 0, 0])
 
-        rotor_angles = [0.25 * math.pi, 0.75 * math.pi, 1.25 * math.pi, 1.75 * math.pi]
+        rotor_angles = [
+            0.25 * math.pi, 0.75 * math.pi, 1.25 * math.pi, 1.75 * math.pi
+        ]
         if not xtype:
             rotor_angles = [0, 0.5 * math.pi, math.pi, 1.5 * math.pi]
 
@@ -463,21 +493,25 @@ class MujocoAssetCreator(object):
             r = sp_rot.from_rotvec(zaxis * angle)
             rotor_arm_quat = r.as_quat()
             rotor_prop_pos = r.apply(rotor_arm_offset)
-            rotor_arm_geom = self.box(
-                chassis,
-                name + "_rotor_arm_geom_%d" % i,
-                quat=rotor_arm_quat,
-                size=np.array([l, 0.01, 0.01]),
-                mass=0.01,
-            )
-            rotor_prop_geom = self.cylinder(
+            self.box(chassis,
+                     name + "_rotor_arm_geom_%d" % i,
+                     quat=rotor_arm_quat,
+                     size=np.array([l, 0.01, 0.01]),
+                     mass=0.01,
+                     alpha=alpha,
+                     rgb=[0.1, 0.1, 0.1])
+            self.cylinder(
                 chassis,
                 name + "_rotor_prop_geom_%d" % i,
                 pos=rotor_prop_pos,
                 radius=0.1,
                 length=0.01,
                 mass=0.05,
+                rgb=rgb,
+                alpha=alpha,
             )
+        
+        # Creating actuator sites
         self.site(
             chassis,
             name + "_end1",
@@ -485,54 +519,54 @@ class MujocoAssetCreator(object):
             type="sphere",
             size=[0.01],
         )
-        sitef = self.site(
+        self.site(
             chassis,
             name + "_thrust",
             pos=np.array([0.0, 0.0, 0.0]),
-            rgba=[0.0, 1, 1, 1.0],
+            rgba=[0.0, 1, 1, alpha],
         )
-        sitex = self.site(
+        self.site(
             chassis,
             name + "_Mx",
             pos=np.array([0.0, 0.0, 0.0]),
             size=np.array([0.06, 0.035, 0.025]),
-            rgba=[0.0, 1, 1, 1.0],
+            rgba=[0.0, 1, 1, alpha],
         )
-        sitey = self.site(
+        self.site(
             chassis,
             name + "_My",
             pos=np.array([0.0, 0.0, 0.0]),
             size=np.array([0.06, 0.035, 0.025]),
-            rgba=[0.0, 1, 1, 1.0],
+            rgba=[0.0, 1, 1, alpha],
         )
-        sitez = self.site(
+        self.site(
             chassis,
             name + "_Mz",
             pos=np.array([0.0, 0.0, 0.0]),
             size=np.array([0.06, 0.035, 0.025]),
-            rgba=[0.0, 1, 1, 1.0],
+            rgba=[0.0, 1, 1, alpha],
         )
-
+        # Creating actuators
         actuator = self.actuator(self.root)
-        motorf = self.motor(
+        self.motor(
             actuator,
             site=name + "_thrust",
             range=[0.0, 30.0],
             gear=np.array([0, 0.0, 1.0, 0.0, 0.0, 0.0]),
         )
-        motorMx = self.motor(
+        self.motor(
             actuator,
             site=name + "_Mx",
             range=[-3.0, 3.0],
             gear=np.array([0, 0.0, 0.0, 1.0, 0.0, 0.0]),
         )
-        motorMy = self.motor(
+        self.motor(
             actuator,
             site=name + "_My",
             range=[-3.0, 3.0],
             gear=np.array([0, 0.0, 0.0, 0.0, 1.0, 0.0]),
         )
-        motorMz = self.motor(
+        self.motor(
             actuator,
             site=name + "_Mz",
             range=[-3.0, 3.0],
@@ -558,10 +592,15 @@ class MujocoAssetCreator(object):
             density=50,
             rgba=[0.2, 0.2, 0.2, 1.0],
         )
-        pyld = self.body(cable, "pyld", pos=np.array([0.0, 0.0, -0.5 * length]))
-        pyld_geom = self.sphere(
-            pyld, "pyld", radius=0.05, mass=mass, density=50, rgba=[0.0, 0.8, 0.2, 1.0]
-        )
+        pyld = self.body(cable,
+                         "pyld",
+                         pos=np.array([0.0, 0.0, -0.5 * length]))
+        pyld_geom = self.sphere(pyld,
+                                "pyld",
+                                radius=0.05,
+                                mass=mass,
+                                density=50,
+                                rgba=[0.0, 0.8, 0.2, 1.0])
         pyld_joint = self.joint(
             pyld,
             "pyld_joint",
@@ -574,9 +613,13 @@ class MujocoAssetCreator(object):
         )
         return cable
 
-    def create_flexible_cable_payload(
-        self, parent, name, pos, N=5, length=1, mass=0.15
-    ):
+    def create_flexible_cable_payload(self,
+                                      parent,
+                                      name,
+                                      pos,
+                                      N=5,
+                                      length=1,
+                                      mass=0.15):
         dl = length / N
         cable_mass = 0.01
         dm = cable_mass / N
@@ -599,7 +642,8 @@ class MujocoAssetCreator(object):
             rgba=[0.2, 0.2, 0.2, 1.0],
         )
         for i in range(1, N):
-            cable = self.body(cable, name + "_" + str(i), np.array([0.0, 0.0, -dl]))
+            cable = self.body(cable, name + "_" + str(i),
+                              np.array([0.0, 0.0, -dl]))
             cable_joint = self.joint(
                 cable,
                 "cable_quad_joint_" + str(i),
@@ -618,9 +662,12 @@ class MujocoAssetCreator(object):
                 rgba=[0.2, 0.2, 0.2, 1.0],
             )
         pyld = self.body(cable, "pyld", pos=np.array([0.0, 0.0, -0.5 * dl]))
-        pyld_geom = self.sphere(
-            pyld, "pyld", radius=0.05, mass=mass, density=50, rgba=[0.0, 0.8, 0.2, 1.0]
-        )
+        pyld_geom = self.sphere(pyld,
+                                "pyld",
+                                radius=0.05,
+                                mass=mass,
+                                density=50,
+                                rgba=[0.0, 0.8, 0.2, 1.0])
         pyld_joint = self.joint(
             pyld,
             "pyld_joint",
