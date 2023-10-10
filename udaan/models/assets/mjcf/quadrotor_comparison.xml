@@ -1,0 +1,60 @@
+<?xml version="1.0" ?>
+<mujoco model="Quadcopter">
+   <compiler angle="degree" coordinate="local" inertiafromgeom="true"/>
+   <asset>
+      <texture type="skybox" builtin="gradient" rgb1="1.0 1.0 1.0" rgb2="0.6 0.8 1.0" width="256" height="256"/>
+   </asset>
+   <worldbody>
+      <geom name="ground" type="plane" size="5.0 5.0 0.02" friction="1.0" pos="0.0 0.0 0.0" rgba="0.8 0.9 0.8 1.0"/>
+      <light directional="true" diffuse=".9 .9 .9" specular=".3 .3 .3" pos="0 0 4.0" dir="0 0.15 -1"/>
+      <body name="plant" pos="0.0 0.0 0.4" quat="1 0 0 0">
+         <geom name="plant_geom" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.08 0.04 0.025" mass="0.75" density="1000" rgba="0.3 0.3 0.8 1.0"/>
+         <joint name="plant_root_joint" type="free" limited="false" pos="0.0 0.0 0.0" axis="0.0 0.0 1.0" range="-1.0 1.0" armature="0.0" damping="0.1" stiffness="0.0"/>
+         <geom name="plant_rotor_arm_geom_0" type="box" pos="0.0 0.0 0.0" quat="0.92388 0 0 0.382683" size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.1 1.0"/>
+         <geom name="plant_rotor_prop_geom_0" type="cylinder" size="0.1 0.005" pos="0.1414213562373095 0.14142135623730953 0.0" mass="0.05" density="1000" rgba="1.0 0.0 0.0 1.0"/>
+         <geom name="plant_rotor_arm_geom_1" type="box" pos="0.0 0.0 0.0" quat="0.382683 0 0 0.92388" size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.1 1.0"/>
+         <geom name="plant_rotor_prop_geom_1" type="cylinder" size="0.1 0.005" pos="-0.1414213562373095 0.14142135623730953 0.0" mass="0.05" density="1000" rgba="1.0 0.0 0.0 1.0"/>
+         <geom name="plant_rotor_arm_geom_2" type="box" pos="0.0 0.0 0.0" quat="-0.382683 0 0 0.92388" size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.1 1.0"/>
+         <geom name="plant_rotor_prop_geom_2" type="cylinder" size="0.1 0.005" pos="-0.1414213562373095 -0.1414213562373095 0.0" mass="0.05" density="1000" rgba="1.0 0.0 0.0 1.0"/>
+         <geom name="plant_rotor_arm_geom_3" type="box" pos="0.0 0.0 0.0" quat="-0.92388 0 0 0.382683" size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.1 1.0"/>
+         <geom name="plant_rotor_prop_geom_3" type="cylinder" size="0.1 0.005" pos="0.14142135623730948 -0.14142135623730956 0.0" mass="0.05" density="1000" rgba="1.0 0.0 0.0 1.0"/>
+         <site name="plant_end1" type="sphere" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.01" rgba="0.1 0.1 0.5 1.0"/>
+         <site name="plant_thrust" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.035 0.035 0.035" rgba="0.0 1 1 1.0"/>
+         <site name="plant_Mx" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025" rgba="0.0 1 1 1.0"/>
+         <site name="plant_My" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025" rgba="0.0 1 1 1.0"/>
+         <site name="plant_Mz" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025" rgba="0.0 1 1 1.0"/>
+      </body>
+      <body name="reference" pos="0.0 0.0 0.4" quat="1 0 0 0">
+         <geom name="reference_geom" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.08 0.04 0.025" mass="0.75" density="1000" rgba="0.3 0.3 0.8 0.25"/>
+         <joint name="reference_root_joint" type="free" limited="false" pos="0.0 0.0 0.0" axis="0.0 0.0 1.0" range="-1.0 1.0" armature="0.0" damping="0.1" stiffness="0.0"/>
+         <geom name="reference_rotor_arm_geom_0" type="box" pos="0.0 0.0 0.0" quat="0.92388 0 0 0.382683" size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.1 0.25"/>
+         <geom name="reference_rotor_prop_geom_0" type="cylinder" size="0.1 0.005" pos="0.1414213562373095 0.14142135623730953 0.0" mass="0.05" density="1000" rgba="1.0 0.0 0.4 0.25"/>
+         <geom name="reference_rotor_arm_geom_1" type="box" pos="0.0 0.0 0.0" quat="0.382683 0 0 0.92388" size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.1 0.25"/>
+         <geom name="reference_rotor_prop_geom_1" type="cylinder" size="0.1 0.005" pos="-0.1414213562373095 0.14142135623730953 0.0" mass="0.05" density="1000" rgba="1.0 0.0 0.4 0.25"/>
+         <geom name="reference_rotor_arm_geom_2" type="box" pos="0.0 0.0 0.0" quat="-0.382683 0 0 0.92388" size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.1 0.25"/>
+         <geom name="reference_rotor_prop_geom_2" type="cylinder" size="0.1 0.005" pos="-0.1414213562373095 -0.1414213562373095 0.0" mass="0.05" density="1000" rgba="1.0 0.0 0.4 0.25"/>
+         <geom name="reference_rotor_arm_geom_3" type="box" pos="0.0 0.0 0.0" quat="-0.92388 0 0 0.382683" size="0.2 0.01 0.01" mass="0.01" density="1000" rgba="0.1 0.1 0.1 0.25"/>
+         <geom name="reference_rotor_prop_geom_3" type="cylinder" size="0.1 0.005" pos="0.14142135623730948 -0.14142135623730956 0.0" mass="0.05" density="1000" rgba="1.0 0.0 0.4 0.25"/>
+         <site name="reference_end1" type="sphere" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.01" rgba="0.1 0.1 0.5 1.0"/>
+         <site name="reference_thrust" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.035 0.035 0.035" rgba="0.0 1 1 0.25"/>
+         <site name="reference_Mx" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025" rgba="0.0 1 1 0.25"/>
+         <site name="reference_My" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025" rgba="0.0 1 1 0.25"/>
+         <site name="reference_Mz" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025" rgba="0.0 1 1 0.25"/>
+      </body>
+   </worldbody>
+   <actuator>
+      <motor ctrllimited="true" site="plant_thrust" ctrlrange="0.0 30.0" gear="0.0 0.0 1.0 0.0 0.0 0.0"/>
+      <motor ctrllimited="true" site="plant_Mx" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 1.0 0.0 0.0"/>
+      <motor ctrllimited="true" site="plant_My" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 0.0 1.0 0.0"/>
+      <motor ctrllimited="true" site="plant_Mz" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 0.0 0.0 1.0"/>
+   </actuator>
+   <actuator>
+      <motor ctrllimited="true" site="reference_thrust" ctrlrange="0.0 30.0" gear="0.0 0.0 1.0 0.0 0.0 0.0"/>
+      <motor ctrllimited="true" site="reference_Mx" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 1.0 0.0 0.0"/>
+      <motor ctrllimited="true" site="reference_My" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 0.0 1.0 0.0"/>
+      <motor ctrllimited="true" site="reference_Mz" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 0.0 0.0 1.0"/>
+   </actuator>
+   <contact>
+      <exclude body1="plant" body2="reference"/>
+   </contact>
+</mujoco>
