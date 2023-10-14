@@ -1,11 +1,11 @@
 # udaan
 
-A collection of simulation and control scripts written/developed during my stay at Hybrid Robotics;
+A collection of simulation and control scripts written/developed as part of my thesis, Dynamics and Control for Collaborative Aerial Manipulation.
 
 This package contains mathematical models for quadrotor(s) with suspended payload(s) and controllers for the same. Models are either written manually or modeled using `pybullet` or `mujoco` simulators. 
 
 
-### Models
+## Models
 
 <table>
   <tr>
@@ -20,9 +20,20 @@ This package contains mathematical models for quadrotor(s) with suspended payloa
     </td>
     <td>
       <ul>
-        <li>Geometric control on SE(3). <a href="https://ieeexplore.ieee.org/document/5717652">[1]</a></li>
-        <li>Geometric L1 Adaptive control on SO(3) [2]. TODO</li>
+        <li>Geometric control on SE(3): <a href="https://ieeexplore.ieee.org/document/5717652">paper</a>, <a href="https://ieeexplore.ieee.org/document/5717652">code</a></li>
         <li>MPC on variation linearized dynamics [3]. TODO</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td>Quadrotor Comparison
+      <p float="left">
+        <img src=".media/quadrotor_mj.gif" width="200" />
+      </p>
+    </td>
+    <td>
+      <ul>
+        <li>Geometric L1 Adaptive control on SO(3) [2]. TODO</li>
       </ul>
     </td>
   </tr>
@@ -42,13 +53,21 @@ This package contains mathematical models for quadrotor(s) with suspended payloa
 </table>
 
 --- 
-References
 
-TODO
+## Citations
 
----
+- Dynamics and Control for Collaborative Aerial Manipulation, Prasanth Kotaru, Ph.D. Dissertation, UC Berkeley, December 2022.
+  
+  ```
+  @phdthesis{kotaru2022dynamics,
+    title={Dynamics and Control for Collaborative Aerial Manipulation},
+    author={Kotaru, Prasanth},
+    year={2022},
+    school={UC Berkeley}
+  }
+  ```
 
-Some other simulators for quadrotors: [PX4 Autopilot](https://docs.px4.io/main/en/simulation/), [rosflight](https://github.com/rosflight/rosflight), [rotors_simulator](https://github.com/ethz-asl/rotors_simulator), [flightmare](https://github.com/uzh-rpg/flightmare), [AirSim](https://microsoft.github.io/AirSim/), [gym-pybullet-drones](https://github.com/utiasDSL/gym-pybullet-drones)
+For individual controllers cite the corresponding papers linked in the above table.
 
 ---
 

@@ -144,7 +144,25 @@ class Quadrotor(BaseModel):
             mass=self.mass, inertia=self.inertia
         )
         return
-
+    
+    @property
+    def position_controller(self):
+        return self._pos_controller
+      
+    @position_controller.setter
+    def position_controller(self, controller):
+        self._pos_controller = controller
+        return
+    
+    @property
+    def attitude_controller(self):
+        return self._att_controller
+      
+    @attitude_controller.setter
+    def attitude_controller(self, controller):
+        self._att_controller = controller
+        return
+      
     @property
     def mass(self):
         return self._mass
@@ -242,7 +260,7 @@ class Quadrotor(BaseModel):
         )
         thrust = np.clip(thrust, self._min_thrust, self._max_thrust)
         torque = np.clip(torque, -self._max_torque, self._max_torque)
-        return thrust, torque
+        return np.array([thrust, *torque])
 
     def _in_accel_out_propforces(self, u):
         """Compute prop forces from accel force."""

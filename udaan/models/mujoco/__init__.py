@@ -112,12 +112,12 @@ class MujocoModel(object):
                 0  # camera rotation around the camera's vertical axis
             )
 
-    def add_marker_at(self, p, label=""):
+    def add_marker_at(self, p, size=[0.05, 0.05, 0.05], rgba=[1, 0, 0, 0.75], label=""):
         if self.render:
             self.viewer.add_marker(
                 pos=p,
-                size=[0.05, 0.05, 0.05],
-                rgba=[1, 0, 0, 0.75],
+                size=size,
+                rgba=rgba,
                 type=mujoco.mjtGeom.mjGEOM_BOX,
                 label=label,
             )
@@ -141,3 +141,4 @@ class MujocoModel(object):
 from .quadrotor import Quadrotor
 from .quadrotor_cspayload import QuadrotorCSPayload
 from .multi_quad_cs_pointmass import MultiQuadrotorCSPointmass
+from .quadrotor_comparison import QuadrotorComparison
