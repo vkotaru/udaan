@@ -27,7 +27,7 @@ def simulate(mdl, tf):
 
         # integrate
         mdl.step(np.concatenate((u_plant, u_reference)))
-        
+
         # add target marker
         mdl.add_reference_marker(mdl.plant.position_controller.pos_setpoint)
 
@@ -38,9 +38,12 @@ def simulate(mdl, tf):
 
 
 def main():
+    # Generate mujoco .xml file with unmodeled weight.
+
+    # Create the Udaan model.
     mdl = U.models.mujoco.QuadrotorComparison(render=True)
 
-    # system parameters
+    # System parameters
     mass = mdl.plant.mass
     inertia = mdl.plant.inertia
 
@@ -50,16 +53,21 @@ def main():
     added_inertia = -added_mass * U.manif.hat(r) @ U.manif.hat(r)
     actual_mass = mass + added_mass
     actual_inertia = inertia + added_inertia
-    
+
     mdl.set_mass(actual_mass, plant=True)
     mdl.set_inertia(actual_inertia, plant=True)
 
-    # plant controllers
-    mdl.plant.position_controller = U.control.QuadPosPD(mass=mass)
+    # Reference trajectory for the quadrotors.
+    setpoint = lambda t: (np.array([1., 1., 2.]), np.zeros(3), np.zeros(3))
+
+    # Plant controllers
+    mdl.plant.position_controller = U.control.QuadPosPD(mass=mass,
+                                                        setpoint=setpoint)
     mdl.plant.attitude_controller = U.control.QuadAttGeoPD(inertia=inertia)
 
-    # reference controllers
-    mdl.reference.position_controller = U.control.QuadPosPD(mass=mass)
+    # Reference controllers
+    mdl.reference.position_controller = U.control.QuadPosPD(mass=mass,
+                                                            setpoint=setpoint)
     mdl.reference.attitude_controller = U.control.QuadAttGeoPD(inertia=inertia)
 
     # simulate

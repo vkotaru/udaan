@@ -87,14 +87,14 @@ class MujocoAssetCreator(object):
         mat1.attrib["texrepeat"] = "1 1"
         mat1.attrib["texuniform"] = "true"
         return asset
-      
-    def exclude_contact(self, body1:str, body2:str):
+
+    def exclude_contact(self, body1: str, body2: str):
         contact = ET.SubElement(self.root, "contact")
         exclude = ET.SubElement(contact, "exclude")
         exclude.attrib["body1"] = body1
         exclude.attrib["body2"] = body2
         return contact
-      
+
     def tendon(self, parent):
         tendon = ET.SubElement(parent, "tendon")
         return tendon
@@ -510,7 +510,7 @@ class MujocoAssetCreator(object):
                 rgb=rgb,
                 alpha=alpha,
             )
-        
+
         # Creating actuator sites
         self.site(
             chassis,

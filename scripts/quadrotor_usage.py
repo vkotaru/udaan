@@ -6,7 +6,8 @@ import argparse
 
 def usage(args):
     mdl = getattr(U.models, args.model).Quadrotor(render=args.render)
-    mdl.simulate(tf=args.time, position=np.array([1.0, 1.0, 0.0]))  # initial position
+    mdl.simulate(tf=args.time, position=np.array([1.0, 1.0,
+                                                  0.0]))  # initial position
 
     # TODO add controller option
     # TODO add trajectory option

@@ -5,13 +5,11 @@ import math
 
 
 def hat(vector):
-    return np.array(
-        [
-            [0.0, -vector[2], vector[1]],
-            [vector[2], 0.0, -vector[0]],
-            [-vector[1], vector[0], 0.0],
-        ]
-    )
+    return np.array([
+        [0.0, -vector[2], vector[1]],
+        [vector[2], 0.0, -vector[0]],
+        [-vector[1], vector[0], 0.0],
+    ])
 
 
 def vee(matrix):
