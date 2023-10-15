@@ -9,6 +9,7 @@ from ... import utils
 
 
 class QuadrotorCSPayload(base.QuadrotorCSPayload):
+
     class MODEL_TYPE(enum.Enum):
         LINKS = 0
         TENDON = 1  # https://mujoco.readthedocs.io/en/stable/XMLreference.html#default-tendon
@@ -38,12 +39,12 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
                 self._model_type = self.MODEL_TYPE.TENDON
             elif kwargs["model"] == "cable":
                 self._model_type = self.MODEL_TYPE.CABLE
-                utils.printc_fail("Note, cable model has not been validated yet")
+                utils.printc_fail(
+                    "Note, cable model has not been validated yet")
             elif kwargs["model"] == "links":
                 self._model_type = self.MODEL_TYPE.LINKS
                 utils.printc_fail(
-                    "Note, links model has not been extensively tested yet"
-                )
+                    "Note, links model has not been extensively tested yet")
             else:
                 raise ValueError(
                     "Invalid model type provided for mujoco quadrotor_cspayload"
@@ -88,9 +89,8 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
         return
 
     def __init_tendon_model(self):
-        self._mjMdl = MujocoModel(
-            model_path="quad_payload_mj.xml", render=self._mj_render
-        )
+        self._mjMdl = MujocoModel(model_path="quad_payload_mj.xml",
+                                  render=self._mj_render)
         self._mj_quad_pos_index = 0
         self._mj_quad_quat_index = 3
         self._mj_quad_vel_index = 0
@@ -108,9 +108,8 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
         return
 
     def __init_nlink_model(self):
-        self._mjMdl = MujocoModel(
-            model_path="quad_flxcbl_mj.xml", render=self._mj_render
-        )
+        self._mjMdl = MujocoModel(model_path="quad_flxcbl_mj.xml",
+                                  render=self._mj_render)
         self._mj_quad_pos_index = 0
         self._mj_quad_quat_index = 3
         self._mj_quad_vel_index = 0
@@ -122,9 +121,8 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
         return
 
     def __init_composite_model(self):
-        self._mjMdl = MujocoModel(
-            model_path="quad_cable_mj.xml", render=self._mj_render
-        )
+        self._mjMdl = MujocoModel(model_path="quad_cable_mj.xml",
+                                  render=self._mj_render)
         self._mj_quad_pos_index = 0
         self._mj_quad_quat_index = 3
         self._mj_quad_vel_index = 0
@@ -144,7 +142,8 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
 
     @base.QuadrotorCSPayload.qrotor_inertia.setter
     def qrotor_inertia(self, value):
-        super(QuadrotorCSPayload, self.__class__).qrotor_inertia.fset(self, value)
+        super(QuadrotorCSPayload,
+              self.__class__).qrotor_inertia.fset(self, value)
         if value.ndim == 2:
             value = np.diag(value)
         self._mjMdl.model.body_inertia[self._mj_quad_body_index] = value
@@ -152,18 +151,24 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
 
     @base.QuadrotorCSPayload.cable_length.setter
     def cable_length(self, value):
-        super(QuadrotorCSPayload, self.__class__).cable_length.fset(self, value)
+        super(QuadrotorCSPayload,
+              self.__class__).cable_length.fset(self, value)
         if self._model_type == self.MODEL_TYPE.TENDON:
-            self._mjMdl.model.tendon_length0[self._mj_cable_tendon_index] = value
-            self._mjMdl.model.tendon_limited[self._mj_cable_tendon_index] = True
-            self._mjMdl.model.tendon_range[self._mj_cable_tendon_index][1] = value
-            self._mjMdl.model.tendon_lengthspring[self._mj_cable_tendon_index] = value
+            self._mjMdl.model.tendon_length0[
+                self._mj_cable_tendon_index] = value
+            self._mjMdl.model.tendon_limited[
+                self._mj_cable_tendon_index] = True
+            self._mjMdl.model.tendon_range[
+                self._mj_cable_tendon_index][1] = value
+            self._mjMdl.model.tendon_lengthspring[
+                self._mj_cable_tendon_index] = value
             mujoco.mj_tendon(self._mjMdl.model, self._mjMdl.data)
         return
 
     @base.QuadrotorCSPayload.payload_mass.setter
     def payload_mass(self, value):
-        super(QuadrotorCSPayload, self.__class__).payload_mass.fset(self, value)
+        super(QuadrotorCSPayload,
+              self.__class__).payload_mass.fset(self, value)
         self._mjMdl.model.body_mass[self._mj_payload_body_index] = value
         return
 
@@ -184,46 +189,41 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
         return
 
     def __reset_tendon_model(self):
-        quat_Q = np.array([1.0, 0.0, 0.0, 0.0])  # quadrotor attitude (w, x, y, z)
+        quat_Q = np.array([1.0, 0.0, 0.0,
+                           0.0])  # quadrotor attitude (w, x, y, z)
         _qQ = utils.sp_rot.from_matrix(self.state.orientation).as_quat()
         quat_Q = np.array([_qQ[3], _qQ[0], _qQ[1], _qQ[2]])
 
-        self._mjMdl.data.qpos[
-            self._mj_quad_pos_index : self._mj_quad_pos_index + 3
-        ] = self.state.position
-        self._mjMdl.data.qpos[
-            self._mj_quad_quat_index : self._mj_quad_quat_index + 4
-        ] = quat_Q
+        self._mjMdl.data.qpos[self._mj_quad_pos_index:self._mj_quad_pos_index +
+                              3] = self.state.position
+        self._mjMdl.data.qpos[self.
+                              _mj_quad_quat_index:self._mj_quad_quat_index +
+                              4] = quat_Q
+        self._mjMdl.data.qvel[self._mj_quad_vel_index:self._mj_quad_vel_index +
+                              3] = self.state.velocity  # quadrotor velocity
         self._mjMdl.data.qvel[
-            self._mj_quad_vel_index : self._mj_quad_vel_index + 3
-        ] = self.state.velocity  # quadrotor velocity
-        self._mjMdl.data.qvel[
-            self._mj_quad_omega_index : self._mj_quad_omega_index + 3
-        ] = self.state.angular_velocity  # quadrotor angular velocity
+            self._mj_quad_omega_index:self._mj_quad_omega_index +
+            3] = self.state.angular_velocity  # quadrotor angular velocity
 
-        self._mjMdl.data.qpos[
-            self._mj_payload_pos_index : self._mj_payload_pos_index + 3
-        ] = self.state.payload_position
-        self._mjMdl.data.qpos[
-            self._mj_payload_quat_index : self._mj_payload_quat_index + 4
-        ] = np.array(
-            [1.0, 0.0, 0.0, 0.0]
-        )  # point mass payload, this is obsolete
+        self._mjMdl.data.qpos[self._mj_payload_pos_index:self.
+                              _mj_payload_pos_index +
+                              3] = self.state.payload_position
+        self._mjMdl.data.qpos[self._mj_payload_quat_index:self.
+                              _mj_payload_quat_index + 4] = np.array([
+                                  1.0, 0.0, 0.0, 0.0
+                              ])  # point mass payload, this is obsolete
         self._mjMdl.data.qvel[
-            self._mj_payload_vel_index : self._mj_payload_vel_index + 3
-        ] = self.state.payload_velocity  # payload velocity
-        self._mjMdl.data.qvel[
-            self._mj_payload_omega_index : self._mj_payload_omega_index + 3
-        ] = np.zeros(
-            3
-        )  # payload angular velocity, always zero
+            self._mj_payload_vel_index:self._mj_payload_vel_index +
+            3] = self.state.payload_velocity  # payload velocity
+        self._mjMdl.data.qvel[self._mj_payload_omega_index:self.
+                              _mj_payload_omega_index + 3] = np.zeros(
+                                  3)  # payload angular velocity, always zero
 
         return
 
     def __reset_nlink_model(self):
-        self._mjMdl.data.qpos[
-            self._mj_quad_pos_index : self._mj_quad_pos_index + 3
-        ] = self.state.position
+        self._mjMdl.data.qpos[self._mj_quad_pos_index:self._mj_quad_pos_index +
+                              3] = self.state.position
         return
 
     def __reset_composite_model(self):
@@ -236,21 +236,21 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
     def step(self, u):
         for _ in range(self._step_iter):
             if self._input_type == base.QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES:
-                u_clamped = np.clip(u, self._prop_min_force, self._prop_max_force)
+                u_clamped = np.clip(u, self._prop_min_force,
+                                    self._prop_max_force)
             else:
                 thrust, torque = self._parse_input(u)
                 u_clamped = np.append(thrust, torque)
             # set control
-            self._mjMdl.data.ctrl[self._ctrl_index : self._ctrl_index + 4] = u_clamped
+            self._mjMdl.data.ctrl[self._ctrl_index:self._ctrl_index +
+                                  4] = u_clamped
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state required to be in the loop for attitude control
             self._query_latest_state()
             # add tracking marker
             if self._mjMdl.render:
-                if (
-                    self._input_type
-                    == base.QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES
-                ):
+                if (self._input_type ==
+                        base.QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES):
                     for i in range(4):
                         self._mjMdl.add_arrow_at(
                             self._mjMdl.data.site_xpos[i],
@@ -290,72 +290,55 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
 
     def __query_state_tendon_model(self):
         self._mj_data__quad_pos = self._mjMdl.data.qpos[
-            self._mj_quad_pos_index : self._mj_quad_pos_index + 3
-        ]
+            self._mj_quad_pos_index:self._mj_quad_pos_index + 3]
         self._mj_data__quad_quat = self._mjMdl.data.qpos[
-            self._mj_quad_quat_index : self._mj_quad_quat_index + 4
-        ]
+            self._mj_quad_quat_index:self._mj_quad_quat_index + 4]
         self._mj_data__quad_vel = self._mjMdl.data.qvel[
-            self._mj_quad_vel_index : self._mj_quad_vel_index + 3
-        ]
+            self._mj_quad_vel_index:self._mj_quad_vel_index + 3]
         self._mj_data__quad_angvel = self._mjMdl.data.qvel[
-            self._mj_quad_omega_index : self._mj_quad_omega_index + 3
-        ]
+            self._mj_quad_omega_index:self._mj_quad_omega_index + 3]
 
         self._mj_data__payload_pos = self._mjMdl.data.qpos[
-            self._mj_payload_pos_index : self._mj_payload_pos_index + 3
-        ]
+            self._mj_payload_pos_index:self._mj_payload_pos_index + 3]
         self._mj_data__payload_vel = self._mjMdl.data.qvel[
-            self._mj_payload_vel_index : self._mj_payload_vel_index + 3
-        ]
+            self._mj_payload_vel_index:self._mj_payload_vel_index + 3]
         return
 
     def __query_state_composite_model(self):
         self._mj_data__quad_pos = self._mjMdl.data.qpos[
-            self._mj_quad_pos_index : self._mj_quad_pos_index + 3
-        ]
+            self._mj_quad_pos_index:self._mj_quad_pos_index + 3]
         self._mj_data__quad_quat = self._mjMdl.data.qpos[
-            self._mj_quad_quat_index : self._mj_quad_quat_index + 4
-        ]
+            self._mj_quad_quat_index:self._mj_quad_quat_index + 4]
         self._mj_data__quad_vel = self._mjMdl.data.qvel[
-            self._mj_quad_vel_index : self._mj_quad_vel_index + 3
-        ]
+            self._mj_quad_vel_index:self._mj_quad_vel_index + 3]
         self._mj_data__quad_angvel = self._mjMdl.data.qvel[
-            self._mj_quad_omega_index : self._mj_quad_omega_index + 3
-        ]
+            self._mj_quad_omega_index:self._mj_quad_omega_index + 3]
 
         self._mj_data__payload_pos = self._mjMdl.data.qpos[
-            self._mj_payload_pos_index : self._mj_payload_pos_index + 3
-        ]
+            self._mj_payload_pos_index:self._mj_payload_pos_index + 3]
         self._mj_data__payload_quat = self._mjMdl.data.qpos[
-            self._mj_payload_quat_index : self._mj_payload_quat_index + 4
-        ]
+            self._mj_payload_quat_index:self._mj_payload_quat_index + 4]
         self._mj_data__payload_vel = self._mjMdl.data.qvel[
-            self._mj_payload_vel_index : self._mj_payload_vel_index + 3
-        ]
+            self._mj_payload_vel_index:self._mj_payload_vel_index + 3]
         self._mj_data__payload_angvel = self._mjMdl.data.qvel[
-            self._mj_payload_omega_index : self._mj_payload_omega_index + 3
-        ]
+            self._mj_payload_omega_index:self._mj_payload_omega_index + 3]
         return
 
     def __query_state_nlink_model(self):
         self._mj_data__quad_pos = self._mjMdl.data.qpos[
-            self._mj_quad_pos_index : self._mj_quad_pos_index + 3
-        ]
+            self._mj_quad_pos_index:self._mj_quad_pos_index + 3]
         self._mj_data__quad_quat = self._mjMdl.data.qpos[
-            self._mj_quad_quat_index : self._mj_quad_quat_index + 4
-        ]
+            self._mj_quad_quat_index:self._mj_quad_quat_index + 4]
         self._mj_data__quad_vel = self._mjMdl.data.qvel[
-            self._mj_quad_vel_index : self._mj_quad_vel_index + 3
-        ]
+            self._mj_quad_vel_index:self._mj_quad_vel_index + 3]
         self._mj_data__quad_angvel = self._mjMdl.data.qvel[
-            self._mj_quad_omega_index : self._mj_quad_omega_index + 3
-        ]
+            self._mj_quad_omega_index:self._mj_quad_omega_index + 3]
 
-        self._mj_data__payload_pos = self._mjMdl.data.xpos[self._mj_payload_body_index]
+        self._mj_data__payload_pos = self._mjMdl.data.xpos[
+            self._mj_payload_body_index]
         self._mj_data__payload_vel = (
-            self._mj_data__payload_pos - self._mj_data__payload_pos_prev
-        ) / self._mjMdl.model.opt.timestep
+            self._mj_data__payload_pos -
+            self._mj_data__payload_pos_prev) / self._mjMdl.model.opt.timestep
         if not self._mj_data__payload_vel_not_initialized:
             self._mj_data__payload_vel = np.zeros(3)
             self._mj_data__payload_vel_not_initialized = True

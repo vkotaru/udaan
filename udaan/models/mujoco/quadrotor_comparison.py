@@ -14,7 +14,9 @@ class QuadrotorComparison(base.BaseModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        # Actual plant model.
         self.plant = base.Quadrotor()
+        # Reference model for comparison, running either a different controller, or just the reference trajectory.
         self.reference = base.Quadrotor()
 
         # mujoco model param handling
@@ -98,14 +100,14 @@ class QuadrotorComparison(base.BaseModel):
         qQ = sp_rot.from_matrix(self.plant.state.orientation).as_quat()
         self._mjMdl.data.qpos[3:7] = np.array([qQ[3], qQ[0], qQ[1], qQ[2]])
         self._mjMdl.data.qvel[3:6] = self.plant.state.angular_velocity
-        
+
         # Set reference position
         self._mjMdl.data.qpos[7:10] = self.reference.state.position
         self._mjMdl.data.qvel[6:9] = self.reference.state.velocity
         qQ = sp_rot.from_matrix(self.reference.state.orientation).as_quat()
         self._mjMdl.data.qpos[10:14] = np.array([qQ[3], qQ[0], qQ[1], qQ[2]])
         self._mjMdl.data.qvel[9:12] = self.reference.state.angular_velocity
-        
+
         self._query_latest_state()
         return
 
@@ -120,12 +122,12 @@ class QuadrotorComparison(base.BaseModel):
         self.plant.state.velocity = np.array(vel)
         self.plant.state.orientation = self._mjMdl._quat2rot(q)
         self.plant.state.angular_velocity = np.array(ang_vel)
-        
+
         pos2 = copy.deepcopy(self._mjMdl.data.qpos[7:10])
         q2 = copy.deepcopy(self._mjMdl.data.qpos[10:14])
         vel2 = copy.deepcopy(self._mjMdl.data.qvel[6:9])
         ang_vel2 = copy.deepcopy(self._mjMdl.data.qvel[9:12])
-        
+
         self.reference.state.position = np.array(pos2)
         self.reference.state.velocity = np.array(vel2)
         self.reference.state.orientation = self._mjMdl._quat2rot(q2)
@@ -137,10 +139,11 @@ class QuadrotorComparison(base.BaseModel):
             u_plant = u[0:4]
             u_reference = u[4:8]
             # set control
-            self._mjMdl.data.ctrl[self._mj_plant_ctrl_idx:self._mj_plant_ctrl_idx +
+            self._mjMdl.data.ctrl[self.
+                                  _mj_plant_ctrl_idx:self._mj_plant_ctrl_idx +
                                   4] = u_plant
-            self._mjMdl.data.ctrl[self._mj_reference_ctrl_idx:self._mj_reference_ctrl_idx +
-                                  4] = u_reference
+            self._mjMdl.data.ctrl[self._mj_reference_ctrl_idx:self.
+                                  _mj_reference_ctrl_idx + 4] = u_reference
             # mujoco simulation
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state

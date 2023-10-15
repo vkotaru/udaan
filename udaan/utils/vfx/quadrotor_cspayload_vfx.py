@@ -2,20 +2,25 @@ from . import *
 
 
 class QuadrotorCSPayloadVFX(VFXHandler):
+
     def __init__(self, l=1, rate=200, retain=100):
         super().__init__(title="Quadrotor payload", rate=rate)
         super().create_env()
         self._rate = rate
         self._retain = retain
-        self.point = vp.sphere(
-            color=vp.color.blue, radius=0.025, make_trail=True, retain=1, opacity=0.75
-        )
-        self.goal = vp.sphere(
-            color=vp.color.red, radius=0.05, make_trail=True, retain=self._retain
-        )
-        self.payload = vp.sphere(
-            color=vp.color.blue, radius=0.05, make_trail=True, retain=self._retain
-        )
+        self.point = vp.sphere(color=vp.color.blue,
+                               radius=0.025,
+                               make_trail=True,
+                               retain=1,
+                               opacity=0.75)
+        self.goal = vp.sphere(color=vp.color.red,
+                              radius=0.05,
+                              make_trail=True,
+                              retain=self._retain)
+        self.payload = vp.sphere(color=vp.color.blue,
+                                 radius=0.05,
+                                 make_trail=True,
+                                 retain=self._retain)
         self.cable = vp.arrow(color=vp.color.black, shaftwidth=0.01, retain=1)
         self.l = l
 
@@ -85,7 +90,8 @@ class QuadrotorCSPayloadVFX(VFXHandler):
         self.goal.clear_trail()
         self.update(x, q, R)
 
-    def update(self, pL=np.zeros(3), q=np.array([0.0, 0.0, -1.0]), R=np.eye(3)):
+    def update(self, pL=np.zeros(3), q=np.array([0.0, 0.0, -1.0]),
+               R=np.eye(3)):
         self.curve1.clear()
         self.curve2.clear()
 

@@ -48,26 +48,28 @@ def multi_quad_pointmass(nQ=2,
     mjcWriter.save_to(filename, verbose=verbose)
     return
 
+
 def quadrotor_comparison(**kwargs):
-  
+
     mjcWriter = MujocoAssetCreator("QuadrotorComparison")
     mjcWriter.create_quadrotor0(
-            mjcWriter.worldbody,
-            "plant",
-            np.array([0., 0, 0.4]),
-            rgb=[1.0, 0., 0.],
-        )
+        mjcWriter.worldbody,
+        "plant",
+        np.array([0., 0, 0.4]),
+        rgb=[1.0, 0., 0.],
+    )
     mjcWriter.create_quadrotor0(
-            mjcWriter.worldbody,
-            "reference",
-            np.array([0., 0, 0.4]),
-            rgb=[1.0, 0., 0.4],
-            alpha=0.25,
-        )
+        mjcWriter.worldbody,
+        "reference",
+        np.array([0., 0, 0.4]),
+        rgb=[1.0, 0., 0.4],
+        alpha=0.25,
+    )
     mjcWriter.exclude_contact("plant", "reference")
     mjcWriter.save_to(filename=kwargs['filename'], verbose=kwargs['verbose'])
     return
-  
+
+
 # TODO(vkotaru): Cleanup the following functions
 
 # def create_quadcopter(verbose=True):
@@ -80,7 +82,6 @@ def quadrotor_comparison(**kwargs):
 #                                np.array([0.0, 0.0, 1.0]))
 #     mjcWriter.save_to("./assets/quadrotor.xml", verbose=verbose)
 #     return
-
 
 # def quadrotor_payload(verbose=True):
 #     cable_length = 1.0

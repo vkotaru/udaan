@@ -12,10 +12,10 @@ def usage(args):
         print("Given model is not yet supported.")
         return
     generator(
-            nQ=args.num_of_quads,
-            filename=U.PATH + "/udaan/models/assets/mjcf/quadrotor_comparison.xml",
-            verbose=args.verbose,
-        )
+        nQ=args.num_of_quads,
+        filename=U.PATH + "/udaan/models/assets/mjcf/quadrotor_comparison.xml",
+        verbose=args.verbose,
+    )
 
 
 if __name__ == "__main__":

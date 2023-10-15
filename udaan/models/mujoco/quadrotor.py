@@ -10,6 +10,7 @@ from ... import utils
 
 
 class Quadrotor(base.Quadrotor):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -38,10 +39,10 @@ class Quadrotor(base.Quadrotor):
             self._ctrl_index = 4
 
         # read inertial parameters from mujoco model
-        self.mass = copy.deepcopy(self._mjMdl.model.body_mass[self._mj_quad_body_index])
+        self.mass = copy.deepcopy(
+            self._mjMdl.model.body_mass[self._mj_quad_body_index])
         self.inertia = copy.deepcopy(
-            self._mjMdl.model.body_inertia[self._mj_quad_body_index]
-        )
+            self._mjMdl.model.body_inertia[self._mj_quad_body_index])
 
         # reinitialize controllers after loading mujoco model & params
         self._init_default_controllers()
@@ -73,12 +74,15 @@ class Quadrotor(base.Quadrotor):
                 self._repack_input = lambda u: self._in_accel_out_wrench(u)
         elif self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
             if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
-                self._repack_input = lambda u: self._in_propforces_out_propforces(u)
+                self._repack_input = lambda u: self._in_propforces_out_propforces(
+                    u)
             else:
-                self._repack_input = lambda u: self._in_propforces_out_wrench(u)
+                self._repack_input = lambda u: self._in_propforces_out_wrench(u
+                                                                              )
         else:
             if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
-                self._repack_input = lambda u: self._in_wrench_out_propforces(u)
+                self._repack_input = lambda u: self._in_wrench_out_propforces(u
+                                                                              )
             else:
                 self._repack_input = lambda u: self._in_wrench_out_wrench(u)
         return
@@ -101,7 +105,8 @@ class Quadrotor(base.Quadrotor):
         for _ in range(self._step_iter):
             u_clamped = self._repack_input(u)
             # set control
-            self._mjMdl.data.ctrl[self._ctrl_index : self._ctrl_index + 4] = u_clamped
+            self._mjMdl.data.ctrl[self._ctrl_index:self._ctrl_index +
+                                  4] = u_clamped
             # mujoco simulation
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state

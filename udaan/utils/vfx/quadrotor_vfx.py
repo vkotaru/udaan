@@ -2,6 +2,7 @@ from . import *
 
 
 class QuadrotorVFX(VFXHandler):
+
     def __init__(self, rate=200, retain=100):
         super().__init__(title="Quadrotor", rate=rate)
         super().create_env()
@@ -14,9 +15,10 @@ class QuadrotorVFX(VFXHandler):
             retain=self._retain,
             opacity=0.75,
         )
-        self.goal = vp.sphere(
-            color=vp.color.red, radius=0.05, make_trail=True, retain=1
-        )
+        self.goal = vp.sphere(color=vp.color.red,
+                              radius=0.05,
+                              make_trail=True,
+                              retain=1)
 
         self.arm_l = 0.1  # length of quadrotor boom
         self.prop_r = 0.125  # radius of propeller prop

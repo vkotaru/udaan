@@ -4,6 +4,7 @@ import scipy.linalg
 
 
 class SO3(np.ndarray):
+
     def __new__(cls, R=np.eye(3)):
         # Input array is an already formed ndarray instance
         # We first cast to be our class type
@@ -14,15 +15,14 @@ class SO3(np.ndarray):
         return obj
 
     def step(
-        self,
-        Omega=np.zeros(
-            3,
-        ),
+            self,
+            Omega=np.zeros(3, ),
     ):
         return SO3(self @ scipy.linalg.expm(hat(Omega)))
 
 
 class RotationMatrix(object):
+
     def __init__(self):
         self._e3 = np.array([0.0, 0.0, 1.0])
         self._e2 = np.array([0.0, 1.0, 0.0])
@@ -34,20 +34,16 @@ class RotationMatrix(object):
         norm_b3_b1d = np.linalg.norm(b3_b1d)
         b1 = (-1 / norm_b3_b1d) * np.cross(b3, b3_b1d)
         b2 = np.cross(b3, b1)
-        R = np.hstack(
-            [
-                np.expand_dims(b1, axis=1),
-                np.expand_dims(b2, axis=1),
-                np.expand_dims(b3, axis=1),
-            ]
-        )
+        R = np.hstack([
+            np.expand_dims(b1, axis=1),
+            np.expand_dims(b2, axis=1),
+            np.expand_dims(b3, axis=1),
+        ])
         return R
 
     def tilt(
-        self,
-        ang_vec=np.zeros(
-            3,
-        ),
+            self,
+            ang_vec=np.zeros(3, ),
     ):
         R = scipy.linalg.expm(hat(ang_vec))
         return R @ self._e3

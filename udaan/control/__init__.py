@@ -2,6 +2,7 @@ import numpy as np
 
 
 class Gains(object):
+
     def __init__(self, kp=np.zeros(3), kd=np.zeros(3), ki=np.zeros(3)):
         self.kp = kp
         self.kd = kd
@@ -10,6 +11,7 @@ class Gains(object):
 
 
 class Controller(object):
+
     def __init__(self):
         self.freq = 500.0
         self._g = 9.81
@@ -25,6 +27,7 @@ class Controller(object):
 
 
 class PDController(Controller):
+
     def __init__(self, **kwargs):
         super().__init__()
         self._gains = Gains()
