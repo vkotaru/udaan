@@ -7,7 +7,7 @@ import os
 
 def usage(args):
     try:
-        generator = getattr(U.utils.assets.model_generator, args.model)
+        generator = getattr(U.utils.xml_model_generator, args.model)
     except AttributeError:
         print("Given model is not yet supported.")
         return

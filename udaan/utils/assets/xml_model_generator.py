@@ -50,23 +50,59 @@ def multi_quad_pointmass(nQ=2,
 
 
 def quadrotor_comparison(**kwargs):
+    model_name = kwargs[
+        'model_name'] if 'model_name' in kwargs else "QuadrotorComparison"
+    if 'filename' in kwargs:
+        filename = kwargs['filename']
+    else:
+        raise ValueError("filename not provided")
+    verbosity = kwargs['verbose'] if 'verbose' in kwargs else False
 
-    mjcWriter = MujocoAssetCreator("QuadrotorComparison")
-    mjcWriter.create_quadrotor0(
-        mjcWriter.worldbody,
-        "plant",
-        np.array([0., 0, 0.4]),
-        rgb=[1.0, 0., 0.],
-    )
-    mjcWriter.create_quadrotor0(
-        mjcWriter.worldbody,
-        "reference",
-        np.array([0., 0, 0.4]),
-        rgb=[1.0, 0., 0.4],
-        alpha=0.25,
-    )
+    unmodeled_dynamics = False
+    if 'unmodeled_mass' in kwargs:
+        unmodeled_dynamics = True
+        unmodeled_mass = kwargs['unmodeled_mass']
+    if 'unmodeled_mass_loc' in kwargs:
+        unmodeled_mass_loc = kwargs['unmodeled_mass_loc']
+    else:
+        unmodeled_mass_loc = np.array([0.0, 0.0, 0.0])
+
+    mjcWriter = MujocoAssetCreator(model_name)
+    if unmodeled_dynamics:
+        mjcWriter.create_quadrotor0(
+            mjcWriter.worldbody,
+            "plant",
+            np.array([0., 0, 0.4]),
+            rgb=[1.0, 0., 0.],
+            unmodeled_mass=unmodeled_mass,
+            unmodeled_mass_loc=unmodeled_mass_loc,
+        )
+        mjcWriter.create_quadrotor0(
+            mjcWriter.worldbody,
+            "reference",
+            np.array([0., 0, 0.4]),
+            rgb=[1.0, 0., 0.4],
+            alpha=0.25,
+            unmodeled_mass=unmodeled_mass,
+            unmodeled_mass_loc=unmodeled_mass_loc,
+        )
+
+    else:
+        mjcWriter.create_quadrotor0(
+            mjcWriter.worldbody,
+            "plant",
+            np.array([0., 0, 0.4]),
+            rgb=[1.0, 0., 0.],
+        )
+        mjcWriter.create_quadrotor0(
+            mjcWriter.worldbody,
+            "reference",
+            np.array([0., 0, 0.4]),
+            rgb=[1.0, 0., 0.4],
+            alpha=0.25,
+        )
     mjcWriter.exclude_contact("plant", "reference")
-    mjcWriter.save_to(filename=kwargs['filename'], verbose=kwargs['verbose'])
+    mjcWriter.save_to(filename=filename, verbose=verbosity)
     return
 
 

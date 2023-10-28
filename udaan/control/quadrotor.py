@@ -3,13 +3,11 @@ import numpy as np
 from ..utils import printc_fail, hat, vee
 
 
-class QuadPosPD(PDController):
+class PositionPDController(PDController):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.mass = 1.0
-        if "mass" in kwargs.keys():
-            self.mass = kwargs["mass"]
+        self.mass = 1.0 if "mass" not in kwargs.keys() else kwargs["mass"]
 
         self._gains.kp = np.array([4.1, 4.1, 8.1])
         self._gains.kd = 1.5 * np.array([2.0, 2.0, 6.0])
@@ -31,7 +29,7 @@ class QuadPosPD(PDController):
         return u
 
 
-class QuadAttGeoPD(Controller):
+class GeometricAttitudeController(Controller):
 
     def __init__(self, **kwargs):
         self._gains = Gains(kp=np.array([2.4, 2.4, 1.35]),
@@ -94,13 +92,13 @@ class QuadAttGeoPD(Controller):
         return f, M
 
 
-class QuadPropForceController(Controller):
+class DirectPropllerForceController(Controller):
 
     def __init__(self, **kwargs):
         super().__init__()
         self.compute_alloc_matrix()
-        self._pos_controller = QuadPosPD(**kwargs)
-        self._att_controller = QuadAttGeoPD(**kwargs)
+        self._pos_controller = PositionPDController(**kwargs)
+        self._att_controller = GeometricAttitudeController(**kwargs)
 
     def compute_alloc_matrix(self):
         """
@@ -138,3 +136,72 @@ class QuadPropForceController(Controller):
         f, M = self._att_controller.compute(t, (args[1][2], args[1][3]),
                                             thrust_force)
         return self._allocation_inv @ np.append(f, M)
+
+# -------------
+# L1 Controller
+# -------------
+
+
+class PositionL1Controller(PDController):
+    """Quadrotor position controller using L1 adaption.
+
+    Args:
+        PDController (_type_): _description_
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.mass = 1.0 if "mass" not in kwargs.keys() else kwargs["mass"]
+
+        self.control_initialized = False
+
+        # MRAC reference states
+        self.mrac_position = np.array([0.0, 0.0, 0.0])
+        self.mrac_velocity = np.array([0.0, 0.0, 0.0])
+
+        self.delta = np.zeros(3)
+        self.lpf_delta = np.zeros(3)
+
+        self.Gamma = np.array([1000., 1000., 1000.])
+        
+        # A = 
+        # B = 
+
+        self.last_t = 0.0
+        self.last_mrac_input = np.zeros(3)
+
+    def compute(self, *args):
+        t = args[0]
+        dt = t - self.last_t
+        self.last_t = t
+        pos, vel = args[1][0], args[1][1]
+        # Desired (reference) trajectory
+        pos_d, vel_d, acc_d = self.setpoint(t)
+
+        if not self.control_initialized:
+            self.mrac_position = pos
+            self.mrac_velocity = vel
+            self.control_initialized = True
+            return np.zeros(3)
+          
+        # Compute mrac reference model states.
+        self.mrac_position += self.mrac_velocity * dt + 0.5 * self.last_mrac_input * dt * dt
+        self.mrac_velocity += self.last_mrac_input * dt
+          
+        # Compute input. 
+    # % Altitude
+    # err_z_t = [eQ_h(3); vQ_h(3)] - [eQ(3); vQ(3)];
+    # y = [0;1/obj.m]'*err_z_t;
+
+    # f_ = ((norm(Delta_h_z)^2)-(deltamax_z^2))/(eps_z*(deltamax_z^2));
+    # df = 2*Delta_h_z/(eps_z*deltamax_z^2);
+
+    # if f_>0 && y'*df>0
+    #     proj = y-((df*df')/(norm(df)^2))*y*f_;
+    # else
+    #     proj = y;
+    # end
+
+    # Delta_h_z_dot = gamma_z*proj;
+    # CsDelta_h_z_dot = a_z*Delta_h_z-a_z*CsDelta_h_z;
+

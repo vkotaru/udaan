@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+"""
+Usage: ./quadrotor_geometric_l1.py
+
+Implements:
+Geometric $L_1$ Adaptive Attitude Control for a Quadrotor Unmanned Aerial Vehicle.
+pdf: https://doi.org/10.1115/1.4045558
+"""
+
 import udaan as U
 import numpy as np
 import time
@@ -13,7 +22,7 @@ def compute_input(t, sys):
 
 
 # Simulate
-def simulate(mdl, tf):
+def run_simulation(mdl, tf):
     mdl.reset(position=np.array([0.0, 0.0, 0.2]))
     start_t = time.time_ns()
     while mdl.t < tf:
@@ -39,39 +48,41 @@ def simulate(mdl, tf):
 
 def main():
     # Generate mujoco .xml file with unmodeled weight.
+    unmodeled_mass = 0.25
+    unmodeled_mass_loc = np.array([0.2, 0.2, -0.05])
+    U.utils.xml_model_generator.quadrotor_comparison(
+        name="QuadrotorL1Comparison",
+        filename=U.PATH +
+        "/udaan/models/assets/mjcf/quadrotor_l1_comparison.xml",
+        verbose=True,
+        unmodeled_mass=unmodeled_mass,
+        unmodeled_mass_loc=unmodeled_mass_loc,
+    )
 
     # Create the Udaan model.
-    mdl = U.models.mujoco.QuadrotorComparison(render=True)
+    mdl = U.models.mujoco.QuadrotorComparison(
+        filename="quadrotor_l1_comparison.xml", render=True)
 
-    # System parameters
-    mass = mdl.plant.mass
-    inertia = mdl.plant.inertia
-
-    # unmdoeled dynamics parameters
-    added_mass = 0.5
-    r = np.array([0.25, 0.25, -0.25])
-    added_inertia = -added_mass * U.manif.hat(r) @ U.manif.hat(r)
-    actual_mass = mass + added_mass
-    actual_inertia = inertia + added_inertia
-
-    mdl.set_mass(actual_mass, plant=True)
-    mdl.set_inertia(actual_inertia, plant=True)
+    # System parameters without the added mass
+    mass = 0.99
+    inertia = np.array([[0.01153467, 0., 0.], [0., 0.00652658, 0.],
+                        [0., 0., 0.00532658]])
 
     # Reference trajectory for the quadrotors.
-    setpoint = lambda t: (np.array([1., 1., 2.]), np.zeros(3), np.zeros(3))
+    ref_traj = lambda t: (np.array([1., 1., 2.]), np.zeros(3), np.zeros(3))
 
     # Plant controllers
-    mdl.plant.position_controller = U.control.QuadPosPD(mass=mass,
-                                                        setpoint=setpoint)
+    mdl.plant.position_controller = U.control.QuadrotorPositionL1Controller(mass=mass,
+                                                        setpoint=ref_traj)
     mdl.plant.attitude_controller = U.control.QuadAttGeoPD(inertia=inertia)
 
     # Reference controllers
     mdl.reference.position_controller = U.control.QuadPosPD(mass=mass,
-                                                            setpoint=setpoint)
+                                                            setpoint=ref_traj)
     mdl.reference.attitude_controller = U.control.QuadAttGeoPD(inertia=inertia)
 
     # simulate
-    simulate(mdl, 100.0)
+    run_simulation(mdl, 100.0)
     return
 
 

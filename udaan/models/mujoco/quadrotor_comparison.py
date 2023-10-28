@@ -25,11 +25,11 @@ class QuadrotorComparison(base.BaseModel):
         self._mj_payload_index = None
         self._mj_cable_index = None
 
-        self._attitude_zoh = False
-        if "attitude_zoh" in kwargs:
-            self._attitude_zoh = kwargs["attitude_zoh"]
-        if "render" in kwargs:
-            self.render = kwargs["render"]
+        self._attitude_zoh = kwargs[
+            "attitude_zoh"] if "attitude_zoh" in kwargs else False
+        self.render = kwargs["render"] if "render" in kwargs else False
+        filename = kwargs[
+            "filename"] if "filename" in kwargs else "quadrotor_comparison.xml"
 
         self._mjDt = 1.0 / 500.0
         self._step_iter = int(self.sim_timestep / self._mjDt)
@@ -38,8 +38,7 @@ class QuadrotorComparison(base.BaseModel):
             self._step_iter, self._nFrames = self._nFrames, self._step_iter
 
         # loading mujoco model
-        self._mjMdl = MujocoModel("quadrotor_comparison.xml",
-                                  render=self.render)
+        self._mjMdl = MujocoModel(filename, render=self.render)
         self._mj_plant_body_idx = 1
         self._mj_reference_body_idx = 2
         self._mj_plant_ctrl_idx = 0
