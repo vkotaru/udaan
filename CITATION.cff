@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Kotaru
+    given-names: Prasanth
+title: "Udaan: Python mujoco based models and controllers for quadcopter cable-suspended payload systems."
+url: https://github.com/vkotaru/udaan
+version: v0.0.1
+date-released: 2023-28-10
