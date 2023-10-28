@@ -57,5 +57,5 @@ class PDController(Controller):
         return u
 
 
-from .quadrotor import *
-from .quadrotor_cspayload import *
+from . import quadrotor
+from . import quadrotor_cspayload

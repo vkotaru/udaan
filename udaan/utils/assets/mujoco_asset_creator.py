@@ -459,13 +459,19 @@ class MujocoAssetCreator(object):
 
         return chassis
 
-    def create_quadrotor0(self,
-                          parent,
-                          name,
-                          pos,
-                          xtype=True,
-                          alpha=1.0,
-                          rgb=[0.8, 0.3, 0.3]):
+    def create_quadrotor0(self, parent, name, pos, **kwargs):
+        xtype = kwargs["xtype"] if "xtype" in kwargs else True
+        alpha = kwargs["alpha"] if "alpha" in kwargs else 1.0
+        rgb = kwargs["rgb"] if "rgb" in kwargs else [0.8, 0.3, 0.3]
+        unmodeled_dynamics = False
+        if "unmodeled_mass" in kwargs:
+            unmodeled_dynamics = True
+            unmodeled_mass = kwargs["unmodeled_mass"]
+        if "unmodeled_mass_loc" in kwargs:
+            unmodeled_mass_loc = kwargs["unmodeled_mass_loc"]
+        else:
+            unmodeled_mass_loc = np.array([0.0, 0.0, 0.0])
+
         chassis = self.body(parent, name, pos)
         self.box(
             chassis,
@@ -509,6 +515,18 @@ class MujocoAssetCreator(object):
                 mass=0.05,
                 rgb=rgb,
                 alpha=alpha,
+            )
+
+        if unmodeled_dynamics:
+            self.box(
+                chassis,
+                name + "_unmodeled_mass",
+                size=np.array([0.025, 0.025, 0.025]),
+                mass=unmodeled_mass,
+                density=1000,
+                alpha=alpha,
+                rgb=[0.3, 0.3, 0.8],
+                pos=unmodeled_mass_loc,
             )
 
         # Creating actuator sites
