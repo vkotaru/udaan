@@ -1,9 +1,10 @@
 from ..control import Gains, Controller, PDController
 import numpy as np
 from ..utils import printc_fail, hat, vee
-
+import control as ctrl
 
 class PositionPDController(PDController):
+    """Implements a PD controller for position control of a quadrotor."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -30,6 +31,10 @@ class PositionPDController(PDController):
 
 
 class GeometricAttitudeController(Controller):
+    """Implements the attitude controler from Geometric tracking control of a quadrotor UAV on SE (3).
+    
+    link: https://ieeexplore.ieee.org/document/5717652
+    """
 
     def __init__(self, **kwargs):
         self._gains = Gains(kp=np.array([2.4, 2.4, 1.35]),
@@ -137,22 +142,18 @@ class DirectPropllerForceController(Controller):
                                             thrust_force)
         return self._allocation_inv @ np.append(f, M)
 
+
 # -------------
 # L1 Controller
 # -------------
 
 
-class PositionL1Controller(PDController):
+class PositionL1Controller(PositionPDController):
     """Quadrotor position controller using L1 adaption.
-
-    Args:
-        PDController (_type_): _description_
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.mass = 1.0 if "mass" not in kwargs.keys() else kwargs["mass"]
-
         self.control_initialized = False
 
         # MRAC reference states
@@ -162,17 +163,33 @@ class PositionL1Controller(PDController):
         self.delta = np.zeros(3)
         self.lpf_delta = np.zeros(3)
 
-        self.Gamma = np.array([1000., 1000., 1000.])
+        self.Gamma = np.array([1000., 1000., 100000.])
+
+        I3, O3 = np.eye(3), np.zeros((3, 3))
+        self.F = np.concatenate((np.concatenate((O3, I3), axis=1), 
+                                  np.concatenate((O3, O3), axis=1)))
+        self.G = np.concatenate((O3, I3))*(1/self.mass)
         
-        # A = 
-        # B = 
+        self.K, self.P, _ = ctrl.lqr(self.F, self.G, np.eye(6), np.eye(3)*1e-2)
+        self.yGain = -self.G.T@self.P
+
+        # MRAC parameters
+        self.deltamax = 30.0
+        self.eps = 0.5
+        self.lpf_alpha = 5.0
+        
+        # Unmodeled disturbance states.
+        self.delta = np.zeros(3)
+        self.lpf_delta = np.zeros(3)
+        self.delta_dot = np.zeros(3)
+        self.lpf_delta_dot = np.zeros(3)
+        self.last_delta = np.zeros(3)
 
         self.last_t = 0.0
         self.last_mrac_input = np.zeros(3)
 
     def compute(self, *args):
         t = args[0]
-        dt = t - self.last_t
         self.last_t = t
         pos, vel = args[1][0], args[1][1]
         # Desired (reference) trajectory
@@ -181,27 +198,48 @@ class PositionL1Controller(PDController):
         if not self.control_initialized:
             self.mrac_position = pos
             self.mrac_velocity = vel
+            self.last_t = t
             self.control_initialized = True
             return np.zeros(3)
-          
+
         # Compute mrac reference model states.
+        dt = t - self.last_t
         self.mrac_position += self.mrac_velocity * dt + 0.5 * self.last_mrac_input * dt * dt
         self.mrac_velocity += self.last_mrac_input * dt
-          
-        # Compute input. 
-    # % Altitude
-    # err_z_t = [eQ_h(3); vQ_h(3)] - [eQ(3); vQ(3)];
-    # y = [0;1/obj.m]'*err_z_t;
+        self.delta += self.delta_dot * dt
+        self.lpf_delta = self.delta*self.lpf_alpha  + self.last_delta*(1-self.lpf_alpha)
+        # self.lpf_delta += self.lpf_delta_dot * dt
 
-    # f_ = ((norm(Delta_h_z)^2)-(deltamax_z^2))/(eps_z*(deltamax_z^2));
-    # df = 2*Delta_h_z/(eps_z*deltamax_z^2);
+        # Compute errors.
+        eta = np.concatenate((pos - pos_d, vel - vel_d))
+        mrac_eta = np.concatenate((self.mrac_position-pos_d, self.mrac_velocity-vel_d))        
 
-    # if f_>0 && y'*df>0
-    #     proj = y-((df*df')/(norm(df)^2))*y*f_;
-    # else
-    #     proj = y;
-    # end
-
-    # Delta_h_z_dot = gamma_z*proj;
-    # CsDelta_h_z_dot = a_z*Delta_h_z-a_z*CsDelta_h_z;
-
+        # Compute input.
+        u = -self.K@eta + self.mass*(acc_d +  self._ge3)
+        u_mrac = -self.K@mrac_eta + self.mass*(acc_d +  self._ge3)
+        
+        # Remove unmodeled disturbance.
+        u -= self.lpf_delta
+        u_mrac += self.delta - self.lpf_delta
+        
+        # Unmodeled disturbance prediction.
+        eta_tilde = mrac_eta - eta
+        y = self.yGain@eta_tilde
+        f_ = ((np.linalg.norm(self.delta)**2)-(self.deltamax**2))/(self.eps*(self.deltamax**2))
+        df = 2*self.delta/(self.eps*self.deltamax**2)
+        
+        if f_ > 0 and y.T@df > 0:
+            proj = y-((df@df.T)/(np.linalg.norm(df)**2))*y*f_
+        else:
+            proj = y
+            
+        self.delta_dot = self.Gamma*proj
+        # self.lpf_delta_dot = (self.delta - self.lpf_delta)*self.lpf_alpha
+        
+        self.last_mrac_input = u_mrac
+        self.last_t = t
+        self.last_delta = self.delta
+        # store setpoint for visualization
+        self.pos_setpoint = pos_d
+        print(self.delta, self.lpf_alpha)
+        return u

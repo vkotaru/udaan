@@ -54,22 +54,22 @@ This package contains mathematical models for quadrotor(s) with suspended payloa
 
 --- 
 
-## Citations
+**Citations**
 
-- Dynamics and Control for Collaborative Aerial Manipulation, Prasanth Kotaru, Ph.D. Dissertation, UC Berkeley, December 2022.
-  
-  ```
-  @phdthesis{kotaru2022dynamics,
-    title={Dynamics and Control for Collaborative Aerial Manipulation},
-    author={Kotaru, Prasanth},
-    year={2022},
-    school={UC Berkeley}
-  }
-  ```
+For individual controllers, please cite the corresponding papers linked in the code/table.
 
-For individual controllers cite the corresponding papers linked in the above table.
+For this repository, please cite the following:
+```
+@software{Kotaru_Udaan_Python_mujoco,
+author = {Kotaru, Prasanth},
+title = {{Udaan: Python mujoco based models and controllers for quadcopter cable-suspended payload systems.}},
+url = {https://github.com/vkotaru/udaan},
+version = {v0.0.1}
+}
+```
+
 
 ---
 
-&copy; [Prasanth Kotaru](github.com/vkotaru)
+&copy; [Prasanth Kotaru](github.com/vkotaru), 2023
 

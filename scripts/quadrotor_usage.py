@@ -26,7 +26,7 @@ if __name__ == "__main__":
         help="Model to use.",
     )
     parser.add_argument("--time", "-t", type=float, default=10.0)
-    parser.add_argument("--render", "-r", action="store_true")
+    parser.add_argument("--render", "-r", action="store_true", default=True)
 
     args = parser.parse_args()
 
