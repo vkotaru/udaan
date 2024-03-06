@@ -147,7 +147,7 @@ class MultiQuadrotorCSPointmass(BaseModel):
         return
 
     def _reset_to_default_state(self):
-        self.mjMdl.reset()
+        self._mjMdl.reset()
         return
 
     def _query_latest_state(self):

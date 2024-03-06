@@ -142,14 +142,16 @@ class Quadrotor(BaseModel):
         return
 
     def _init_default_controllers(self):
-        self._att_controller = control.quadrotor.GeometricAttitudeController(inertia=self.inertia)
-        self._pos_controller = control.quadrotor.PositionPDController(mass=self.mass)
+        self._att_controller = control.quadrotor.GeometricAttitudeController(
+            inertia=self.inertia)
+        self._pos_controller = control.quadrotor.PositionPDController(
+            mass=self.mass)
         self._prop_controller = control.quadrotor.DirectPropllerForceController(
             mass=self.mass, inertia=self.inertia)
         return
 
     @property
-    def position_controller(self):
+    def position_controller(self) -> control.Controller:
         return self._pos_controller
 
     @position_controller.setter
@@ -158,7 +160,7 @@ class Quadrotor(BaseModel):
         return
 
     @property
-    def attitude_controller(self):
+    def attitude_controller(self) -> control.Controller:
         return self._att_controller
 
     @attitude_controller.setter
