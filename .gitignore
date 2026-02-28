@@ -135,3 +135,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Ruff cache
+.ruff_cache/
+
+# Planning docs (local only)
+GYMNASIUM_PLAN.md
+LANDSCAPE.md
+refactor.md
