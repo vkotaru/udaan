@@ -1,11 +1,12 @@
+import signal
+import sys
+import threading
+
 import numpy as np
 import vpython as vp
-import signal
-import threading
-import sys
 
 
-class VFXHandler(object):
+class VFXHandler:
 
     def __init__(self, title="visuals", rate=200):
         self._title = "floating_models::" + title
@@ -99,7 +100,7 @@ class VFXHandler(object):
         return
 
 
-class Model(object):
+class Model:
 
     def __init__(self, name):
         self.name = name
@@ -168,5 +169,5 @@ class BoundingBox(Model):
         pass
 
 
-from .quadrotor_vfx import QuadrotorVFX
 from .quadrotor_cspayload_vfx import QuadrotorCSPayloadVFX
+from .quadrotor_vfx import QuadrotorVFX

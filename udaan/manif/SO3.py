@@ -1,6 +1,7 @@
 import numpy as np
-from .utils import hat, vee
 import scipy.linalg
+
+from .utils import hat
 
 
 class SO3(np.ndarray):
@@ -21,7 +22,7 @@ class SO3(np.ndarray):
         return SO3(self @ scipy.linalg.expm(hat(Omega)))
 
 
-class RotationMatrix(object):
+class RotationMatrix:
 
     def __init__(self):
         self._e3 = np.array([0.0, 0.0, 1.0])

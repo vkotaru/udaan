@@ -1,14 +1,16 @@
-from ..control import Gains, Controller, PDController
-import numpy as np
-from ..utils import printc_fail, hat, vee
 import control as ctrl
+import numpy as np
+
+from ..control import Controller, Gains, PDController
+from ..utils import hat, printc_fail
+
 
 class PositionPDController(PDController):
     """Implements a PD controller for position control of a quadrotor."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.mass = 1.0 if "mass" not in kwargs.keys() else kwargs["mass"]
+        self.mass = 1.0 if "mass" not in kwargs else kwargs["mass"]
 
         self._gains.kp = np.array([4.1, 4.1, 8.1])
         self._gains.kd = 1.5 * np.array([2.0, 2.0, 6.0])
@@ -44,11 +46,11 @@ class GeometricAttitudeController(Controller):
         self._inertia_inv = np.eye(3)
         self.mass = 1.0
 
-        if "inertia" in kwargs.keys():
+        if "inertia" in kwargs:
             self.inertia = kwargs["inertia"]
         else:
             printc_fail("Inertia not provided")
-        if "mass" in kwargs.keys():
+        if "mass" in kwargs:
             self.mass = kwargs["mass"]
         return
 
@@ -62,19 +64,43 @@ class GeometricAttitudeController(Controller):
         self._inertia_inv = np.linalg.inv(inertia)
 
     def _cmd_accel_to_cmd_att(self, accel):
-        """command attitude"""
+        """Convert desired acceleration to desired attitude.
+
+        Args:
+            accel: Desired acceleration vector (including gravity compensation).
+
+        Returns:
+            Rd: Desired rotation matrix.
+
+        Note:
+            Returns identity matrix for near-zero acceleration to avoid singularity.
+        """
+        MIN_ACCEL_NORM = 0.001  # Threshold to avoid singularity
+
         norm_accel = np.linalg.norm(accel)
-        b1d = np.array([1.0, 0.0, 0.0])
+        if norm_accel < MIN_ACCEL_NORM:
+            # Near-zero thrust: return identity (hover attitude)
+            return np.eye(3)
+
         b3 = accel / norm_accel
+
+        # Desired heading direction (arbitrary choice: world x-axis)
+        b1d = np.array([1.0, 0.0, 0.0])
+
+        # Handle singularity when b3 is parallel to b1d
         b3_b1d = np.cross(b3, b1d)
         norm_b3_b1d = np.linalg.norm(b3_b1d)
+
+        if norm_b3_b1d < 1e-6:
+            # b3 parallel to x-axis, use y-axis instead
+            b1d = np.array([0.0, 1.0, 0.0])
+            b3_b1d = np.cross(b3, b1d)
+            norm_b3_b1d = np.linalg.norm(b3_b1d)
+
         b1 = (-1 / norm_b3_b1d) * np.cross(b3, b3_b1d)
         b2 = np.cross(b3, b1)
-        Rd = np.hstack([
-            np.expand_dims(b1, axis=1),
-            np.expand_dims(b2, axis=1),
-            np.expand_dims(b3, axis=1),
-        ])
+
+        Rd = np.column_stack([b1, b2, b3])
         return Rd
 
     def compute(self, *args):
@@ -106,12 +132,15 @@ class DirectPropllerForceController(Controller):
         self._att_controller = GeometricAttitudeController(**kwargs)
 
     def compute_alloc_matrix(self):
-        """
-         (1)CW    CCW(0) [-1]      y^
-              \_^_/                 |
-               |_|                  |
-              /   \                 |
-        (2)CCW     CW(3)           z.------> x
+        r"""Compute propeller force allocation matrix.
+
+        Propeller layout::
+
+             (1)CW    CCW(0) [-1]      y^
+                  \_^_/                 |
+                   |_|                  |
+                  /   \                 |
+            (2)CCW     CW(3)           z.------> x
         """
         self._force_constant = 4.104890333e-6
         self._torque_constant = 1.026e-07
@@ -166,24 +195,22 @@ class PositionL1Controller(PositionPDController):
         self.Gamma = np.array([1000., 1000., 100000.])
 
         I3, O3 = np.eye(3), np.zeros((3, 3))
-        self.F = np.concatenate((np.concatenate((O3, I3), axis=1), 
+        self.F = np.concatenate((np.concatenate((O3, I3), axis=1),
                                   np.concatenate((O3, O3), axis=1)))
         self.G = np.concatenate((O3, I3))*(1/self.mass)
-        
+
         self.K, self.P, _ = ctrl.lqr(self.F, self.G, np.eye(6), np.eye(3)*1e-2)
         self.yGain = -self.G.T@self.P
 
         # MRAC parameters
         self.deltamax = 30.0
         self.eps = 0.5
-        self.lpf_alpha = 5.0
-        
+        self.lpf_cutoff = 5.0  # Low-pass filter cutoff frequency [Hz]
+
         # Unmodeled disturbance states.
         self.delta = np.zeros(3)
         self.lpf_delta = np.zeros(3)
         self.delta_dot = np.zeros(3)
-        self.lpf_delta_dot = np.zeros(3)
-        self.last_delta = np.zeros(3)
 
         self.last_t = 0.0
         self.last_mrac_input = np.zeros(3)
@@ -202,44 +229,56 @@ class PositionL1Controller(PositionPDController):
             self.control_initialized = True
             return np.zeros(3)
 
-        # Compute mrac reference model states.
+        # Compute time step
         dt = t - self.last_t
+        if dt <= 0:
+            dt = 1e-6  # Prevent division by zero
+
+        # Update MRAC reference model states
         self.mrac_position += self.mrac_velocity * dt + 0.5 * self.last_mrac_input * dt * dt
         self.mrac_velocity += self.last_mrac_input * dt
+
+        # Update disturbance estimate
         self.delta += self.delta_dot * dt
-        self.lpf_delta = self.delta*self.lpf_alpha  + self.last_delta*(1-self.lpf_alpha)
-        # self.lpf_delta += self.lpf_delta_dot * dt
+
+        # Apply first-order low-pass filter to disturbance estimate
+        # Discrete approximation: lpf_delta += dt * cutoff * (delta - lpf_delta)
+        alpha = min(1.0, dt * self.lpf_cutoff)  # Clamp for numerical stability
+        self.lpf_delta = self.lpf_delta + alpha * (self.delta - self.lpf_delta)
 
         # Compute errors.
         eta = np.concatenate((pos - pos_d, vel - vel_d))
-        mrac_eta = np.concatenate((self.mrac_position-pos_d, self.mrac_velocity-vel_d))        
+        mrac_eta = np.concatenate((self.mrac_position-pos_d, self.mrac_velocity-vel_d))
 
         # Compute input.
         u = -self.K@eta + self.mass*(acc_d +  self._ge3)
         u_mrac = -self.K@mrac_eta + self.mass*(acc_d +  self._ge3)
-        
+
         # Remove unmodeled disturbance.
         u -= self.lpf_delta
         u_mrac += self.delta - self.lpf_delta
-        
-        # Unmodeled disturbance prediction.
+
+        # Unmodeled disturbance prediction using projection operator
         eta_tilde = mrac_eta - eta
-        y = self.yGain@eta_tilde
-        f_ = ((np.linalg.norm(self.delta)**2)-(self.deltamax**2))/(self.eps*(self.deltamax**2))
-        df = 2*self.delta/(self.eps*self.deltamax**2)
-        
-        if f_ > 0 and y.T@df > 0:
-            proj = y-((df@df.T)/(np.linalg.norm(df)**2))*y*f_
+        y = self.yGain @ eta_tilde
+
+        # Projection operator to bound disturbance estimate
+        f_ = (np.linalg.norm(self.delta)**2 - self.deltamax**2) / (self.eps * self.deltamax**2)
+        df = 2 * self.delta / (self.eps * self.deltamax**2)
+        df_norm_sq = np.dot(df, df)
+
+        if f_ > 0 and np.dot(y, df) > 0 and df_norm_sq > 1e-10:
+            # Project onto tangent of constraint boundary
+            proj = y - (np.dot(df, y) / df_norm_sq) * df * f_
         else:
             proj = y
-            
-        self.delta_dot = self.Gamma*proj
-        # self.lpf_delta_dot = (self.delta - self.lpf_delta)*self.lpf_alpha
-        
+
+        self.delta_dot = self.Gamma * proj
+
+        # Update internal state
         self.last_mrac_input = u_mrac
         self.last_t = t
-        self.last_delta = self.delta
-        # store setpoint for visualization
+
+        # Store setpoint for visualization
         self.pos_setpoint = pos_d
-        print(self.delta, self.lpf_alpha)
         return u

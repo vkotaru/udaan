@@ -1,6 +1,7 @@
 import numpy as np
-from .utils import hat, vee
 import scipy.linalg
+
+from .utils import hat
 
 
 class S2(np.ndarray):

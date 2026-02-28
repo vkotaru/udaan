@@ -1,6 +1,6 @@
 #!/usr/bin/python
+
 from .mujoco_asset_creator import *
-import math
 
 
 def multi_quad_pointmass(nQ=2,

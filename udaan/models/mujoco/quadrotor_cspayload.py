@@ -1,11 +1,11 @@
-import numpy as np
-from scipy.linalg import expm
 import copy
 import enum
 
-from ..mujoco import MujocoModel, mujoco
-from .. import base
+import numpy as np
+
 from ... import utils
+from .. import base
+from ..mujoco import MujocoModel, mujoco
 
 
 class QuadrotorCSPayload(base.QuadrotorCSPayload):

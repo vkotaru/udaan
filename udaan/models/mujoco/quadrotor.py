@@ -1,12 +1,11 @@
-import numpy as np
-import time
 import copy
-import enum
+
+import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
-from ..mujoco import MujocoModel
-from .. import base
 from ... import utils
+from .. import base
+from ..mujoco import MujocoModel
 
 
 class Quadrotor(base.Quadrotor):

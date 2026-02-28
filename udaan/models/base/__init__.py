@@ -1,8 +1,9 @@
 import numpy as np
+
 from ... import utils
 
 
-class BaseModel(object):
+class BaseModel:
 
     def __init__(self, **kwargs):
         self._g = 9.81
@@ -33,7 +34,7 @@ class BaseModel(object):
                     self.__dict__[key] = value
             else:
                 utils.printc_warn(
-                    "Key {} not found in environment".format(key))
+                    f"Key {key} not found in environment")
 
     def reset(self):
         raise NotImplementedError

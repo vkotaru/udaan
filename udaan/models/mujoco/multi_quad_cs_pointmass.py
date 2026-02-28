@@ -1,12 +1,10 @@
-import numpy as np
-from scipy.linalg import expm
-import copy
 import time
+
+import numpy as np
 import numpy.matlib
 
-from ..mujoco import MujocoModel, mujoco
 from ..base import BaseModel
-from ... import utils
+from ..mujoco import MujocoModel
 
 
 class MultiQuadrotorCSPointmass(BaseModel):
@@ -16,9 +14,9 @@ class MultiQuadrotorCSPointmass(BaseModel):
         BaseModel (_type_): _description_
     """
 
-    class State(object):
+    class State:
 
-        class Quadrotor(object):
+        class Quadrotor:
 
             def __init__(self, **kwargs):
                 self.rotation = np.eye(3)
@@ -38,7 +36,7 @@ class MultiQuadrotorCSPointmass(BaseModel):
                 self.quaternion = np.array([1.0, 0.0, 0.0, 0.0])  # w, x, y, z
                 return
 
-        class Cable(object):
+        class Cable:
 
             def __init__(self, **kwargs):
                 self.q = np.array([0.0, 0.0, -1.0])

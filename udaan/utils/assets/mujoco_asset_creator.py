@@ -1,12 +1,13 @@
 #!/usr/bin/python
 
-import xml.etree.ElementTree as ET
 import math
+import xml.etree.ElementTree as ET
+
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
 
-class MujocoAssetCreator(object):
+class MujocoAssetCreator:
     """Adapted from IsaacGymEnvs
 
     Args:

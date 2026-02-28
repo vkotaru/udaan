@@ -1,21 +1,20 @@
-import os
-import numpy as np
+"""MuJoCo physics backend for Udaan.
 
-try:
-    import mujoco
-except ImportError as e:
-    raise ImportError(e)
-try:
-    import mujoco_viewer
-except ImportError as e:
-    raise ImportError(e)
+Requires mujoco and mujoco-python-viewer packages.
+Install with: pip install udaan[mujoco]
+"""
+import os
+
+import mujoco
+import mujoco_viewer
+import numpy as np
 
 from ... import _FOLDER_PATH
 
 DEFAULT_SIZE = 480
 
 
-class MujocoModel(object):
+class MujocoModel:
 
     def __init__(self, model_path, render=False):
         self.full_path = os.path.join(_FOLDER_PATH, "udaan", "models",
@@ -33,7 +32,7 @@ class MujocoModel(object):
         return
 
     def _initialize_simulation(self):
-        print("Loading model from {}".format(self.full_path))
+        print(f"Loading model from {self.full_path}")
         self.model = mujoco.MjModel.from_xml_path(self.full_path)
         self.data = mujoco.MjData(self.model)
 
@@ -139,7 +138,7 @@ class MujocoModel(object):
         return
 
 
-from .quadrotor import Quadrotor
-from .quadrotor_cspayload import QuadrotorCSPayload
 from .multi_quad_cs_pointmass import MultiQuadrotorCSPointmass
+from .quadrotor import Quadrotor
 from .quadrotor_comparison import QuadrotorComparison
+from .quadrotor_cspayload import QuadrotorCSPayload

@@ -1,12 +1,11 @@
-import numpy as np
-import time
 import copy
-import enum
+
+import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
-from . import MujocoModel
-from .. import base
 from ... import utils
+from .. import base
+from . import MujocoModel
 
 
 class QuadrotorComparison(base.BaseModel):

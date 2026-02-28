@@ -1,7 +1,7 @@
-import numpy as np
-
 # import casadi as ca
 import math
+
+import numpy as np
 
 
 def hat(vector):

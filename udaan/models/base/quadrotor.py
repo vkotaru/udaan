@@ -1,11 +1,11 @@
+import enum
+import time
+
 import numpy as np
 from scipy.linalg import expm
-import time
-import enum
 
+from ... import control, utils
 from ..base import BaseModel
-from ... import control
-from ... import utils
 
 
 class Quadrotor(BaseModel):
@@ -63,7 +63,7 @@ class Quadrotor(BaseModel):
         WRENCH = 0
         PROP_FORCES = 1
 
-    class State(object):
+    class State:
 
         def __init__(self):
             self.position = np.zeros(3)
@@ -108,9 +108,9 @@ class Quadrotor(BaseModel):
         self._repackage_input = None
 
         self._parse_args(**kwargs)
-        if "sim_timestep" in kwargs.keys():
+        if "sim_timestep" in kwargs:
             self.sim_timestep = kwargs["sim_timestep"]
-        if "input" in kwargs.keys():
+        if "input" in kwargs:
             if kwargs["input"] == "prop_forces":
                 self._input_type = Quadrotor.INPUT_TYPE.CMD_PROP_FORCES
                 self._n_action = 4
@@ -130,7 +130,7 @@ class Quadrotor(BaseModel):
                 self._step_iter = max(
                     1, int(1.0 / self._step_freq / self.sim_timestep))
 
-        if "force" in kwargs.keys():
+        if "force" in kwargs:
             if kwargs["force"] == "prop_forces":
                 self._force_type = Quadrotor.FORCE_TYPE.PROP_FORCES
             else:
@@ -207,14 +207,17 @@ class Quadrotor(BaseModel):
         self._force2torque_const = self._torque_constant / self._force_constant
 
     def _compute_allocation_matrix(self):
+        r"""Compute propeller force allocation matrix.
+
+        Propeller layout::
+
+             (1)CW    CCW(0)           y^
+                  \_^_/                 |
+                   |_|                  |
+                  /   \                 |
+            (2)CCW     CW(3)           z.------> x
+        """
         self._actuation_params()
-        """
-         (1)CW    CCW(0)           y^
-              \_^_/                 |
-               |_|                  |
-              /   \                 |
-        (2)CCW     CW(3)           z.------> x
-        """
         l = 0.2  # 0.175  # arm length
         ang = [np.pi / 4.0, 3 * np.pi / 4.0, 5 * np.pi / 4.0, 7 * np.pi / 4.0]
         d = [-1.0, 1.0, -1.0, 1.0]
@@ -297,7 +300,9 @@ class Quadrotor(BaseModel):
         """
         for _ in range(self._step_iter):
             # integrate dynamics
-            thrust, torque = self._repackage_input(input)
+            wrnch = self._repackage_input(input)
+            thrust = wrnch[0]
+            torque = wrnch[1:]
             # physical input limits
             thrust = np.clip(thrust, self._min_thrust, self._max_thrust)
             torque = np.clip(torque, self._min_torque, self._max_torque)
