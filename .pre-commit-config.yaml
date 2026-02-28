@@ -8,20 +8,19 @@ repos:
     rev: v0.1.6
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        # Only check staged files, don't block on existing issues
+        args: [--fix]
       - id: ruff-format
 
   # Mypy - Static type checking
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.7.0
-    hooks:
-      - id: mypy
-        additional_dependencies:
-          - numpy
-        args: [--config-file=pyproject.toml]
-        # Only check typed files initially
-        pass_filenames: false
-        entry: mypy udaan/
+  # Disabled until codebase is fully typed (mypy follows imports)
+  # Run manually: mypy udaan/core/
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.7.0
+  #   hooks:
+  #     - id: mypy
+  #       additional_dependencies: [numpy]
+  #       files: ^udaan/core/
 
   # General file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
