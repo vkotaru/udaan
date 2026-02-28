@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-import udaan as U
-import numpy as np
 import argparse
-import os
+
+import udaan as U
 
 
 def usage(args):
@@ -26,17 +25,17 @@ if __name__ == "__main__":
         type=str,
         default="quadrotor",
         choices=[
-            "quadrotor", "quadrotor_comparison", "quadrotor_payload",
-            "multi_quad_pointmass", "multi_quad_rigidload"
+            "quadrotor",
+            "quadrotor_comparison",
+            "quadrotor_payload",
+            "multi_quad_pointmass",
+            "multi_quad_rigidload",
         ],
         help="Model to use.",
         required=True,
     )
     parser.add_argument("--num_of_quads", "-nQ", type=int, default=2)
-    parser.add_argument("--output_filename",
-                        "-of",
-                        type=str,
-                        default='temp.xml')
+    parser.add_argument("--output_filename", "-of", type=str, default="temp.xml")
     parser.add_argument("--verbose", "-v", action="store_true")
 
     args = parser.parse_args()

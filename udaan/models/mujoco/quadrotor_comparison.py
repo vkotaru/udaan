@@ -9,7 +9,6 @@ from . import MujocoModel
 
 
 class QuadrotorComparison(base.BaseModel):
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -24,11 +23,9 @@ class QuadrotorComparison(base.BaseModel):
         self._mj_payload_index = None
         self._mj_cable_index = None
 
-        self._attitude_zoh = kwargs[
-            "attitude_zoh"] if "attitude_zoh" in kwargs else False
+        self._attitude_zoh = kwargs["attitude_zoh"] if "attitude_zoh" in kwargs else False
         self.render = kwargs["render"] if "render" in kwargs else False
-        filename = kwargs[
-            "filename"] if "filename" in kwargs else "quadrotor_comparison.xml"
+        filename = kwargs["filename"] if "filename" in kwargs else "quadrotor_comparison.xml"
 
         self._mjDt = 1.0 / 500.0
         self._step_iter = int(self.sim_timestep / self._mjDt)
@@ -44,14 +41,14 @@ class QuadrotorComparison(base.BaseModel):
         self._mj_reference_ctrl_idx = 4
 
         # read inertial parameters from mujoco model
-        self.plant.mass = copy.deepcopy(
-            self._mjMdl.model.body_mass[self._mj_plant_body_idx])
-        self.plant.inertia = copy.deepcopy(
-            self._mjMdl.model.body_inertia[self._mj_plant_body_idx])
+        self.plant.mass = copy.deepcopy(self._mjMdl.model.body_mass[self._mj_plant_body_idx])
+        self.plant.inertia = copy.deepcopy(self._mjMdl.model.body_inertia[self._mj_plant_body_idx])
         self.reference.mass = copy.deepcopy(
-            self._mjMdl.model.body_mass[self._mj_reference_body_idx])
+            self._mjMdl.model.body_mass[self._mj_reference_body_idx]
+        )
         self.reference.inertia = copy.deepcopy(
-            self._mjMdl.model.body_inertia[self._mj_reference_body_idx])
+            self._mjMdl.model.body_inertia[self._mj_reference_body_idx]
+        )
 
         # reinitialize controllers after loading mujoco model & params
         self.plant._init_default_controllers()
@@ -137,11 +134,10 @@ class QuadrotorComparison(base.BaseModel):
             u_plant = u[0:4]
             u_reference = u[4:8]
             # set control
-            self._mjMdl.data.ctrl[self.
-                                  _mj_plant_ctrl_idx:self._mj_plant_ctrl_idx +
-                                  4] = u_plant
-            self._mjMdl.data.ctrl[self._mj_reference_ctrl_idx:self.
-                                  _mj_reference_ctrl_idx + 4] = u_reference
+            self._mjMdl.data.ctrl[self._mj_plant_ctrl_idx : self._mj_plant_ctrl_idx + 4] = u_plant
+            self._mjMdl.data.ctrl[
+                self._mj_reference_ctrl_idx : self._mj_reference_ctrl_idx + 4
+            ] = u_reference
             # mujoco simulation
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state

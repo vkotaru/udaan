@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-import udaan as U
-import numpy as np
 import argparse
+
+import numpy as np
+
+import udaan as U
 
 
 def usage(args):
     mdl = getattr(U.models, args.model).Quadrotor(render=args.render)
-    mdl.simulate(tf=args.time, position=np.array([1.0, 1.0,
-                                                  0.0]))  # initial position
+    mdl.simulate(tf=args.time, position=np.array([1.0, 1.0, 0.0]))  # initial position
 
     # TODO add controller option
     # TODO add trajectory option
 
     return
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

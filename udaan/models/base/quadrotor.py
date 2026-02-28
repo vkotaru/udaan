@@ -64,7 +64,6 @@ class Quadrotor(BaseModel):
         PROP_FORCES = 1
 
     class State:
-
         def __init__(self):
             self.position = np.zeros(3)
             self.velocity = np.zeros(3)
@@ -85,8 +84,9 @@ class Quadrotor(BaseModel):
 
         # system parameters
         self._mass = 0.9  # kg
-        self._inertia = np.array([[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0],
-                                  [0.0, 0.0, 0.004]])  # kg m^2
+        self._inertia = np.array(
+            [[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]]
+        )  # kg m^2
         self._inertia_inv = np.linalg.inv(self._inertia)
 
         self._min_thrust = 0.5
@@ -102,8 +102,7 @@ class Quadrotor(BaseModel):
         self._force_type = Quadrotor.FORCE_TYPE.WRENCH
         self._n_action = 4
         self._step_freq = 500.0
-        self._step_iter = max(1,
-                              int(1.0 / self._step_freq / self.sim_timestep))
+        self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
 
         self._repackage_input = None
 
@@ -115,20 +114,17 @@ class Quadrotor(BaseModel):
                 self._input_type = Quadrotor.INPUT_TYPE.CMD_PROP_FORCES
                 self._n_action = 4
                 self._step_freq = 500.0
-                self._step_iter = max(
-                    1, int(1.0 / self._step_freq / self.sim_timestep))
+                self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
             elif kwargs["input"] == "accel":
                 self._input_type = Quadrotor.INPUT_TYPE.CMD_ACCEL
                 self._n_action = 3
                 self._step_freq = 100.0
-                self._step_iter = max(
-                    1, int(1.0 / self._step_freq / self.sim_timestep))
+                self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
             else:
                 self._input_type = Quadrotor.INPUT_TYPE.CMD_WRENCH
                 self._n_action = 4
                 self._step_freq = 500.0
-                self._step_iter = max(
-                    1, int(1.0 / self._step_freq / self.sim_timestep))
+                self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
 
         if "force" in kwargs:
             if kwargs["force"] == "prop_forces":
@@ -142,12 +138,11 @@ class Quadrotor(BaseModel):
         return
 
     def _init_default_controllers(self):
-        self._att_controller = control.quadrotor.GeometricAttitudeController(
-            inertia=self.inertia)
-        self._pos_controller = control.quadrotor.PositionPDController(
-            mass=self.mass)
+        self._att_controller = control.quadrotor.GeometricAttitudeController(inertia=self.inertia)
+        self._pos_controller = control.quadrotor.PositionPDController(mass=self.mass)
         self._prop_controller = control.quadrotor.DirectPropllerForceController(
-            mass=self.mass, inertia=self.inertia)
+            mass=self.mass, inertia=self.inertia
+        )
         return
 
     @property
@@ -190,14 +185,17 @@ class Quadrotor(BaseModel):
 
     def _zoh(self, thrust, torque):
         accel = -self._ge3 + thrust * self.state.orientation @ self._e3
-        self.state.position += (self.state.velocity * self.sim_timestep +
-                                0.5 * accel * self.sim_timestep**2)
+        self.state.position += (
+            self.state.velocity * self.sim_timestep + 0.5 * accel * self.sim_timestep**2
+        )
         self.state.velocity += accel * self.sim_timestep
         self.state.orientation = self.state.orientation @ expm(
-            utils.hat(torque) * self.sim_timestep)
+            utils.hat(torque) * self.sim_timestep
+        )
         ang_vel_dot = self._inertia_inv @ (
-            torque - np.cross(self.state.angular_velocity,
-                              self._inertia @ self.state.angular_velocity))
+            torque
+            - np.cross(self.state.angular_velocity, self._inertia @ self.state.angular_velocity)
+        )
         self.state.angular_velocity += ang_vel_dot * self.sim_timestep
         return
 
@@ -258,7 +256,8 @@ class Quadrotor(BaseModel):
     def _in_accel_out_wrench(self, u):
         """Compute attitude control from accel force."""
         thrust, torque = self._att_controller.compute(
-            self.t, (self.state.orientation, self.state.angular_velocity), u)
+            self.t, (self.state.orientation, self.state.angular_velocity), u
+        )
         thrust = np.clip(thrust, self._min_thrust, self._max_thrust)
         torque = np.clip(torque, -self._max_torque, self._max_torque)
         return np.array([thrust, *torque])
@@ -266,7 +265,8 @@ class Quadrotor(BaseModel):
     def _in_accel_out_propforces(self, u):
         """Compute prop forces from accel force."""
         thrust, torque = self._att_controller.compute(
-            self.t, (self.state.orientation, self.state.angular_velocity), u)
+            self.t, (self.state.orientation, self.state.angular_velocity), u
+        )
         u = np.array([thrust, *torque])
         u = self._wrench_to_propforces(u)
         u = np.clip(u, self._prop_min_force, self._prop_max_force)
@@ -338,12 +338,12 @@ class Quadrotor(BaseModel):
                     ),
                 )
             elif self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
-                u = self._pos_controller.compute(
-                    self.t, (self.state.position, self.state.velocity))
+                u = self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
 
             else:
                 thrust_force = self._pos_controller.compute(
-                    self.t, (self.state.position, self.state.velocity))
+                    self.t, (self.state.position, self.state.velocity)
+                )
                 thrust, torque = self._att_controller.compute(
                     self.t,
                     (self.state.orientation, self.state.angular_velocity),

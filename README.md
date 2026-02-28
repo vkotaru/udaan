@@ -2,7 +2,7 @@
 
 A collection of simulation and control scripts written/developed as part of my thesis, Dynamics and Control for Collaborative Aerial Manipulation.
 
-This package contains mathematical models for quadrotor(s) with suspended payload(s) and controllers for the same. Models are either written manually or modeled using `pybullet` or `mujoco` simulators. 
+This package contains mathematical models for quadrotor(s) with suspended payload(s) and controllers for the same. Models are either written manually or modeled using `pybullet` or `mujoco` simulators.
 
 
 ## Models
@@ -52,7 +52,7 @@ This package contains mathematical models for quadrotor(s) with suspended payloa
   </tr>
 </table>
 
---- 
+---
 
 **Citations**
 
@@ -72,4 +72,3 @@ version = {v0.0.1}
 ---
 
 &copy; [Prasanth Kotaru](github.com/vkotaru), 2023
-

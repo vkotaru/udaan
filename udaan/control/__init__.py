@@ -2,7 +2,6 @@ import numpy as np
 
 
 class Gains:
-
     def __init__(self, kp=np.zeros(3), kd=np.zeros(3), ki=np.zeros(3)):
         self.kp = kp
         self.kd = kd
@@ -11,7 +10,6 @@ class Gains:
 
 
 class Controller:
-
     def __init__(self):
         self.freq = 500.0
         self._g = 9.81
@@ -27,7 +25,6 @@ class Controller:
 
 
 class PDController(Controller):
-
     def __init__(self, **kwargs):
         super().__init__()
         self._gains = Gains()
@@ -55,6 +52,3 @@ class PDController(Controller):
         de = ds - dsd
         u = -self._gains.kp * e - self._gains.kd * de + d2sd
         return u
-
-
-from . import quadrotor, quadrotor_cspayload

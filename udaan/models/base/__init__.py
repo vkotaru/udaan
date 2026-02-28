@@ -4,7 +4,6 @@ from ... import utils
 
 
 class BaseModel:
-
     def __init__(self, **kwargs):
         self._g = 9.81
         self._ge3 = np.array([0.0, 0.0, self._g])
@@ -33,8 +32,7 @@ class BaseModel:
                 else:
                     self.__dict__[key] = value
             else:
-                utils.printc_warn(
-                    f"Key {key} not found in environment")
+                utils.printc_warn(f"Key {key} not found in environment")
 
     def reset(self):
         raise NotImplementedError
@@ -50,7 +48,3 @@ class BaseModel:
 
     def get_state_size(self):
         return self._n_state
-
-
-from .quadrotor import Quadrotor
-from .quadrotor_cspayload import QuadrotorCSPayload

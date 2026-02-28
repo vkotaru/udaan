@@ -5,7 +5,6 @@ from .utils import hat
 
 
 class S2(np.ndarray):
-
     def __new__(cls, q=np.array([0.0, 0.0, 1.0])):
         # Input array is an already formed ndarray instance
         # We first cast to be our class type
@@ -16,8 +15,10 @@ class S2(np.ndarray):
         return obj
 
     def step(
-            self,
-            omega=np.zeros(3, ),
+        self,
+        omega=np.zeros(
+            3,
+        ),
     ):
         return S2(scipy.linalg.expm(hat(omega)) @ self)
 
@@ -32,7 +33,4 @@ class S2(np.ndarray):
 
     @staticmethod
     def fromEuler(phi=0.0, th=0.0, psi=0.0):
-        return np.array(
-            [np.cos(phi) * np.sin(th),
-             np.sin(phi) * np.sin(th),
-             np.cos(th)])
+        return np.array([np.cos(phi) * np.sin(th), np.sin(phi) * np.sin(th), np.cos(th)])

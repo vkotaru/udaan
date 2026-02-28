@@ -11,7 +11,7 @@
     <texture name="texplane" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2=".1 0.15 0.2"
       width="512" height="512" />
     <material name="MatPlane" texture="texplane" reflectance="0.5" texrepeat="1 1" texuniform="true" />
-  </asset> -->  
+  </asset> -->
   <asset>
     <texture type="skybox" builtin="gradient" rgb1="1.0 1.0 1.0" rgb2="0.6 0.8 1.0" width="256" height="256" />
   </asset>

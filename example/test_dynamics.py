@@ -1,5 +1,6 @@
-import udaan as U
 import numpy as np
+
+import udaan as U
 
 # base models
 # mdl = U.models.base.Quadrotor(render=True)
@@ -19,4 +20,4 @@ import numpy as np
 # mdl.simulate(tf=10, payload_position=np.array([-1., 2., 0.5]))
 
 mdl = U.models.mujoco.MultiQuadrotorCSPointmass(render=True, num_quadrotors=3)
-mdl.simulate(tf=10, payload_position=np.array([-1., 2., 0.5]))
+mdl.simulate(tf=10, payload_position=np.array([-1.0, 2.0, 0.5]))

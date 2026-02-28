@@ -39,9 +39,7 @@ class SingularityError(UdaanError):
     def __init__(self, operation: str, value: float) -> None:
         self.operation = operation
         self.value = value
-        super().__init__(
-            f"Singularity in {operation}: value={value:.2e} is too small"
-        )
+        super().__init__(f"Singularity in {operation}: value={value:.2e} is too small")
 
 
 class ControllerNotInitializedError(UdaanError):

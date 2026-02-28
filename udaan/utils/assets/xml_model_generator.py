@@ -3,9 +3,7 @@
 from .mujoco_asset_creator import *
 
 
-def multi_quad_pointmass(nQ=2,
-                         filename="./assets/multi_quad_pointmass.xml",
-                         verbose=True):
+def multi_quad_pointmass(nQ=2, filename="./assets/multi_quad_pointmass.xml", verbose=True):
     cable_length = 1.0
     z = 2.0
     r = 0.5
@@ -23,47 +21,33 @@ def multi_quad_pointmass(nQ=2,
             np.array([r * np.cos(TH[i]), r * np.sin(TH[i]), z]),
         )
 
-    pyld = mjcWriter.body(mjcWriter.worldbody,
-                          "pyld",
-                          pos=np.array([0.0, 0.0, zL]))
-    mjcWriter.sphere(pyld,
-                     "pyld",
-                     radius=0.05,
-                     rgba=[0.0, 1, 1, 1.0],
-                     mass=0.15)
-    mjcWriter.site(pyld,
-                   "end2",
-                   pos=np.array([0.0, 0.0, 0.0]),
-                   type="sphere",
-                   size=[0.01])
+    pyld = mjcWriter.body(mjcWriter.worldbody, "pyld", pos=np.array([0.0, 0.0, zL]))
+    mjcWriter.sphere(pyld, "pyld", radius=0.05, rgba=[0.0, 1, 1, 1.0], mass=0.15)
+    mjcWriter.site(pyld, "end2", pos=np.array([0.0, 0.0, 0.0]), type="sphere", size=[0.01])
     mjcWriter.joint(pyld, "pyld_joint", type="free")
 
     tendon = mjcWriter.tendon(mjcWriter.root)
     for i in range(nQ):
-        mjcWriter.spatial(tendon,
-                          "quad" + str(i) + "_end1",
-                          "end2",
-                          range=[0.0, cable_length])
+        mjcWriter.spatial(tendon, "quad" + str(i) + "_end1", "end2", range=[0.0, cable_length])
 
     mjcWriter.save_to(filename, verbose=verbose)
     return
 
 
 def quadrotor_comparison(**kwargs):
-    model_name = kwargs[
-        'model_name'] if 'model_name' in kwargs else "QuadrotorComparison"
-    if 'filename' in kwargs:
-        filename = kwargs['filename']
+    model_name = kwargs["model_name"] if "model_name" in kwargs else "QuadrotorComparison"
+    if "filename" in kwargs:
+        filename = kwargs["filename"]
     else:
         raise ValueError("filename not provided")
-    verbosity = kwargs['verbose'] if 'verbose' in kwargs else False
+    verbosity = kwargs["verbose"] if "verbose" in kwargs else False
 
     unmodeled_dynamics = False
-    if 'unmodeled_mass' in kwargs:
+    if "unmodeled_mass" in kwargs:
         unmodeled_dynamics = True
-        unmodeled_mass = kwargs['unmodeled_mass']
-    if 'unmodeled_mass_loc' in kwargs:
-        unmodeled_mass_loc = kwargs['unmodeled_mass_loc']
+        unmodeled_mass = kwargs["unmodeled_mass"]
+    if "unmodeled_mass_loc" in kwargs:
+        unmodeled_mass_loc = kwargs["unmodeled_mass_loc"]
     else:
         unmodeled_mass_loc = np.array([0.0, 0.0, 0.0])
 
@@ -72,16 +56,16 @@ def quadrotor_comparison(**kwargs):
         mjcWriter.create_quadrotor0(
             mjcWriter.worldbody,
             "plant",
-            np.array([0., 0, 0.4]),
-            rgb=[1.0, 0., 0.],
+            np.array([0.0, 0, 0.4]),
+            rgb=[1.0, 0.0, 0.0],
             unmodeled_mass=unmodeled_mass,
             unmodeled_mass_loc=unmodeled_mass_loc,
         )
         mjcWriter.create_quadrotor0(
             mjcWriter.worldbody,
             "reference",
-            np.array([0., 0, 0.4]),
-            rgb=[1.0, 0., 0.4],
+            np.array([0.0, 0, 0.4]),
+            rgb=[1.0, 0.0, 0.4],
             alpha=0.25,
             unmodeled_mass=unmodeled_mass,
             unmodeled_mass_loc=unmodeled_mass_loc,
@@ -91,14 +75,14 @@ def quadrotor_comparison(**kwargs):
         mjcWriter.create_quadrotor0(
             mjcWriter.worldbody,
             "plant",
-            np.array([0., 0, 0.4]),
-            rgb=[1.0, 0., 0.],
+            np.array([0.0, 0, 0.4]),
+            rgb=[1.0, 0.0, 0.0],
         )
         mjcWriter.create_quadrotor0(
             mjcWriter.worldbody,
             "reference",
-            np.array([0., 0, 0.4]),
-            rgb=[1.0, 0., 0.4],
+            np.array([0.0, 0, 0.4]),
+            rgb=[1.0, 0.0, 0.4],
             alpha=0.25,
         )
     mjcWriter.exclude_contact("plant", "reference")
