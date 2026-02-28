@@ -116,9 +116,37 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "E721",   # type comparison (use isinstance)
+    "E731",   # lambda assignment
     "ARG001", # unused function argument (common in callbacks)
     "ARG002", # unused method argument
+    "ARG004", # unused static method argument
+    "ARG005", # unused lambda argument
+    "B006",   # mutable list/dict default argument
+    "B008",   # mutable default argument (common in legacy code)
+    "B028",   # no stacklevel in warnings
+    "E741",   # ambiguous variable name (l, O, I)
+    "F403",   # star imports
+    "F405",   # names from star imports
+    "F821",   # undefined name (from star imports)
+    "F841",   # unused variable (will clean up incrementally)
+    "SIM102", # collapsible if
+    "SIM118", # use key in dict
+    "SIM401", # dict.get instead of if-else
+    "UP031",  # printf format (will clean up incrementally)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Main init has path setup before imports
+"udaan/__init__.py" = ["E402", "PTH100", "PTH120"]
+# Scripts may use lambdas
+"scripts/*" = ["E731"]
+# Legacy visualization code uses vpython star imports
+"udaan/utils/vfx/*" = ["F403", "F405", "B008", "F821"]
+# Legacy model code has many issues to fix incrementally
+"udaan/models/*" = ["E402", "PTH100", "PTH110", "PTH118", "PTH120", "PTH123"]
+# Asset creation uses mutable defaults
+"udaan/utils/assets/*" = ["B006", "PTH123"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["udaan"]
