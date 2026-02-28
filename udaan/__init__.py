@@ -9,8 +9,7 @@ import os
 from pathlib import Path
 
 # Package path for asset loading
-_FOLDER_PATH, _FILE_PATH = os.path.split(
-    os.path.abspath(os.path.dirname(__file__)))
+_FOLDER_PATH, _FILE_PATH = os.path.split(os.path.abspath(os.path.dirname(__file__)))
 PATH = _FOLDER_PATH
 PACKAGE_DIR = Path(__file__).parent
 

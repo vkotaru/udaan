@@ -5,7 +5,7 @@ vpython
 https://github.com/crossbario/autobahn-python/archive/master.zip
 pybullet
 # casadi
-# slycot  
+# slycot
 control
 pyyaml
 mujoco

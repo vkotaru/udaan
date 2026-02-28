@@ -17,7 +17,6 @@ class QuadrotorCSPayload(BaseModel):
         CMD_ACCEL = 2  # acceleration [m/s^2] (3x1)
 
     class State:
-
         def __init__(self, l=1):
             self.cable_length = l
             # Quadrotor state
@@ -54,8 +53,7 @@ class QuadrotorCSPayload(BaseModel):
 
         # system parameters
         self.mQ = 0.9  # kg
-        self.JQ = np.array([[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0],
-                            [0.0, 0.0, 0.004]])  # kg m^2
+        self.JQ = np.array([[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]])  # kg m^2
         self.JQinv = np.linalg.inv(self.JQ)
         self.mL = 0.2  # kg
         self.l = 1.0  # m
@@ -66,16 +64,13 @@ class QuadrotorCSPayload(BaseModel):
         self._max_torque = np.array([5.0, 5.0, 2.0])
         self._prop_min_force = 0.0
         self._prop_max_force = 10.0
-        self._wrench_min = np.concatenate(
-            [np.array([self._min_thrust]), self._min_torque])
-        self._wrench_max = np.concatenate(
-            [np.array([self._max_thrust]), self._max_torque])
+        self._wrench_min = np.concatenate([np.array([self._min_thrust]), self._min_torque])
+        self._wrench_max = np.concatenate([np.array([self._max_thrust]), self._max_torque])
 
         self._input_type = QuadrotorCSPayload.INPUT_TYPE.CMD_ACCEL
         self._n_action = 4
         self._step_freq = 500.0
-        self._step_iter = max(1,
-                              int(1.0 / self._step_freq / self.sim_timestep))
+        self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
 
         self._parse_args(**kwargs)
         if "sim_timestep" in kwargs:
@@ -85,20 +80,17 @@ class QuadrotorCSPayload(BaseModel):
                 self._input_type = QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES
                 self._n_action = 4
                 self._step_freq = 500.0
-                self._step_iter = max(
-                    1, int(1.0 / self._step_freq / self.sim_timestep))
+                self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
             elif kwargs["input"] == "accel":
                 self._input_type = QuadrotorCSPayload.INPUT_TYPE.CMD_ACCEL
                 self._n_action = 3
                 self._step_freq = 100.0
-                self._step_iter = max(
-                    1, int(1.0 / self._step_freq / self.sim_timestep))
+                self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
             else:
                 self._input_type = QuadrotorCSPayload.INPUT_TYPE.CMD_WRENCH
                 self._n_action = 4
                 self._step_freq = 500.0
-                self._step_iter = max(
-                    1, int(1.0 / self._step_freq / self.sim_timestep))
+                self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
 
         if self.render:
             from ...utils import vfx
@@ -109,8 +101,7 @@ class QuadrotorCSPayload(BaseModel):
         return
 
     def _init_default_controllers(self):
-        self._att_controller = control.QuadAttGeoPD(
-            inertia=self.qrotor_inertia)
+        self._att_controller = control.QuadAttGeoPD(inertia=self.qrotor_inertia)
         self._payload_controller = control.QuadCSPayloadController()
         # self._prop_controller = control.QuadPropForceController(mass=self.mass, inertia=self.inertia)
         return
@@ -165,38 +156,36 @@ class QuadrotorCSPayload(BaseModel):
         h = self.sim_timestep
 
         fRe3 = thrust * self.state.orientation @ self._e3
-        payload_accel = (-self._ge3 + (
-            (np.dot(q, fRe3) - self.mQ * self.l * np.dot(dq, dq)) /
-            (self.mQ + self.mL)) * q)
+        payload_accel = (
+            -self._ge3
+            + ((np.dot(q, fRe3) - self.mQ * self.l * np.dot(dq, dq)) / (self.mQ + self.mL)) * q
+        )
 
         # payload position dynamics
-        self.state.payload_position += (self.state.payload_velocity * h +
-                                        0.5 * payload_accel * h**2)
+        self.state.payload_position += self.state.payload_velocity * h + 0.5 * payload_accel * h**2
         self.state.payload_velocity += payload_accel * h
         # cable attitude dynamics
-        self.state.cable_attitude = (
-            expm(utils.hat(h * self.state.cable_ang_velocity)) @ q)
+        self.state.cable_attitude = expm(utils.hat(h * self.state.cable_ang_velocity)) @ q
         domega = -np.cross(q, fRe3) / (self.mQ * self.l)
         self.state.cable_ang_velocity += h * domega
         # quadrotor attitude dynamics
         self.state.orientation = self.state.orientation @ expm(
-            utils.hat(self.state.angular_velocity * h))
+            utils.hat(self.state.angular_velocity * h)
+        )
         ang_vel_dot = self.JQinv @ (
-            torque - np.cross(self.state.angular_velocity,
-                              self.JQ @ self.state.angular_velocity))
+            torque - np.cross(self.state.angular_velocity, self.JQ @ self.state.angular_velocity)
+        )
         self.state.angular_velocity += ang_vel_dot * h
         # Update quadrotor position & velocity
-        self.state.position = (self.state.payload_position -
-                               self.l * self.state.cable_attitude)
-        self.state.velocity = self.state.payload_velocity - self.l * self.state.dq(
-        )
+        self.state.position = self.state.payload_position - self.l * self.state.cable_attitude
+        self.state.velocity = self.state.payload_velocity - self.l * self.state.dq()
         return
 
     def _parse_input(self, input):
         if self._input_type == QuadrotorCSPayload.INPUT_TYPE.CMD_ACCEL:
             thrust, torque = self._att_controller.compute(
-                self.t, (self.state.orientation, self.state.angular_velocity),
-                input)
+                self.t, (self.state.orientation, self.state.angular_velocity), input
+            )
         elif self._input_type == QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES:
             utils.printc_warn("TODO: Incorrect implementation verify")
             wrench = self._propforces_to_wrench(input)
@@ -264,12 +253,10 @@ class QuadrotorCSPayload(BaseModel):
 
         # if only position is given, set payload position accordingly
         if "position" in kwargs:
-            self.state.payload_position = (kwargs["position"] +
-                                           self.l * self.state.cable_attitude)
+            self.state.payload_position = kwargs["position"] + self.l * self.state.cable_attitude
         # if only payload position is given, set position accordingly
         if "payload_position" in kwargs:
-            self.state.position = (kwargs["payload_position"] -
-                                   self.l * self.state.cable_attitude)
+            self.state.position = kwargs["payload_position"] - self.l * self.state.cable_attitude
 
         return
 

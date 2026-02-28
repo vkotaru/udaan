@@ -34,13 +34,12 @@ class PositionPDController(PDController):
 
 class GeometricAttitudeController(Controller):
     """Implements the attitude controler from Geometric tracking control of a quadrotor UAV on SE (3).
-    
+
     link: https://ieeexplore.ieee.org/document/5717652
     """
 
     def __init__(self, **kwargs):
-        self._gains = Gains(kp=np.array([2.4, 2.4, 1.35]),
-                            kd=np.array([0.35, 0.35, 0.225]))
+        self._gains = Gains(kp=np.array([2.4, 2.4, 1.35]), kd=np.array([0.35, 0.35, 0.225]))
 
         self._inertia = np.eye(3)
         self._inertia_inv = np.eye(3)
@@ -115,16 +114,13 @@ class GeometricAttitudeController(Controller):
         tmp = 0.5 * (Rd.T @ R - R.T @ Rd)
         eR = np.array([tmp[2, 1], tmp[0, 2], tmp[1, 0]])  # vee-map
         eOmega = Omega - R.T @ Rd @ Omegad
-        M = (-self._gains.kp * eR - self._gains.kd * eOmega +
-             np.cross(Omega, self.inertia @ Omega))
-        M += -1 * self.inertia @ (hat(Omega) @ R.T @ Rd @ Omegad -
-                                  R.T @ Rd @ dOmegad)
+        M = -self._gains.kp * eR - self._gains.kd * eOmega + np.cross(Omega, self.inertia @ Omega)
+        M += -1 * self.inertia @ (hat(Omega) @ R.T @ Rd @ Omegad - R.T @ Rd @ dOmegad)
         f = thrust_force.dot(R[:, 2]) * self.mass
         return f, M
 
 
 class DirectPropllerForceController(Controller):
-
     def __init__(self, **kwargs):
         super().__init__()
         self.compute_alloc_matrix()
@@ -165,10 +161,8 @@ class DirectPropllerForceController(Controller):
             ndarray : four propeller forces in N
         """
         t = args[0]
-        thrust_force = self._pos_controller.compute(t,
-                                                    (args[1][0], args[1][1]))
-        f, M = self._att_controller.compute(t, (args[1][2], args[1][3]),
-                                            thrust_force)
+        thrust_force = self._pos_controller.compute(t, (args[1][0], args[1][1]))
+        f, M = self._att_controller.compute(t, (args[1][2], args[1][3]), thrust_force)
         return self._allocation_inv @ np.append(f, M)
 
 
@@ -178,8 +172,7 @@ class DirectPropllerForceController(Controller):
 
 
 class PositionL1Controller(PositionPDController):
-    """Quadrotor position controller using L1 adaption.
-    """
+    """Quadrotor position controller using L1 adaption."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -192,15 +185,16 @@ class PositionL1Controller(PositionPDController):
         self.delta = np.zeros(3)
         self.lpf_delta = np.zeros(3)
 
-        self.Gamma = np.array([1000., 1000., 100000.])
+        self.Gamma = np.array([1000.0, 1000.0, 100000.0])
 
         I3, O3 = np.eye(3), np.zeros((3, 3))
-        self.F = np.concatenate((np.concatenate((O3, I3), axis=1),
-                                  np.concatenate((O3, O3), axis=1)))
-        self.G = np.concatenate((O3, I3))*(1/self.mass)
+        self.F = np.concatenate(
+            (np.concatenate((O3, I3), axis=1), np.concatenate((O3, O3), axis=1))
+        )
+        self.G = np.concatenate((O3, I3)) * (1 / self.mass)
 
-        self.K, self.P, _ = ctrl.lqr(self.F, self.G, np.eye(6), np.eye(3)*1e-2)
-        self.yGain = -self.G.T@self.P
+        self.K, self.P, _ = ctrl.lqr(self.F, self.G, np.eye(6), np.eye(3) * 1e-2)
+        self.yGain = -self.G.T @ self.P
 
         # MRAC parameters
         self.deltamax = 30.0
@@ -248,11 +242,11 @@ class PositionL1Controller(PositionPDController):
 
         # Compute errors.
         eta = np.concatenate((pos - pos_d, vel - vel_d))
-        mrac_eta = np.concatenate((self.mrac_position-pos_d, self.mrac_velocity-vel_d))
+        mrac_eta = np.concatenate((self.mrac_position - pos_d, self.mrac_velocity - vel_d))
 
         # Compute input.
-        u = -self.K@eta + self.mass*(acc_d +  self._ge3)
-        u_mrac = -self.K@mrac_eta + self.mass*(acc_d +  self._ge3)
+        u = -self.K @ eta + self.mass * (acc_d + self._ge3)
+        u_mrac = -self.K @ mrac_eta + self.mass * (acc_d + self._ge3)
 
         # Remove unmodeled disturbance.
         u -= self.lpf_delta
@@ -263,7 +257,7 @@ class PositionL1Controller(PositionPDController):
         y = self.yGain @ eta_tilde
 
         # Projection operator to bound disturbance estimate
-        f_ = (np.linalg.norm(self.delta)**2 - self.deltamax**2) / (self.eps * self.deltamax**2)
+        f_ = (np.linalg.norm(self.delta) ** 2 - self.deltamax**2) / (self.eps * self.deltamax**2)
         df = 2 * self.delta / (self.eps * self.deltamax**2)
         df_norm_sq = np.dot(df, df)
 
