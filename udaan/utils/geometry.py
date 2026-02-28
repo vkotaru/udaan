@@ -1,7 +1,6 @@
-import numpy as np
 import math
-from scipy.linalg import expm
-from scipy.spatial.transform import Rotation as sp_rot
+
+import numpy as np
 
 
 def hat(vector):

@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class Gains(object):
+class Gains:
 
     def __init__(self, kp=np.zeros(3), kd=np.zeros(3), ki=np.zeros(3)):
         self.kp = kp
@@ -10,7 +10,7 @@ class Gains(object):
         return
 
 
-class Controller(object):
+class Controller:
 
     def __init__(self):
         self.freq = 500.0
@@ -32,12 +32,12 @@ class PDController(Controller):
         super().__init__()
         self._gains = Gains()
 
-        if "kp" in kwargs.keys():
+        if "kp" in kwargs:
             self._gains.kp = kwargs["kp"]
-        if "kd" in kwargs.keys():
+        if "kd" in kwargs:
             self._gains.kd = kwargs["kd"]
 
-        if "setpoint" in kwargs.keys():
+        if "setpoint" in kwargs:
             self.setpoint = kwargs["setpoint"]
         else:
             self.setpoint = lambda t: (
@@ -57,5 +57,4 @@ class PDController(Controller):
         return u
 
 
-from . import quadrotor
-from . import quadrotor_cspayload
+from . import quadrotor, quadrotor_cspayload

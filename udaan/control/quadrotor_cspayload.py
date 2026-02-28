@@ -1,6 +1,7 @@
-from ..control import Gains, Controller, PDController
 import numpy as np
-from ..utils import printc_fail, hat, vee
+
+from ..control import Gains, PDController
+from ..utils import hat
 
 
 class QuadCSPayloadController(PDController):

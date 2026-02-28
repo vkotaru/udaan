@@ -1,13 +1,11 @@
-from scipy.linalg import block_diag as blkdiag
-import numpy as np
-import scipy as sp
-import time
 import enum
+import time
+
+import numpy as np
 from scipy.linalg import expm
 
+from ... import control, utils
 from . import BaseModel
-from ... import control
-from ... import utils
 
 
 class QuadrotorCSPayload(BaseModel):
@@ -18,7 +16,7 @@ class QuadrotorCSPayload(BaseModel):
         CMD_PROP_FORCES = 1  # propeller forces [N] (4x1)
         CMD_ACCEL = 2  # acceleration [m/s^2] (3x1)
 
-    class State(object):
+    class State:
 
         def __init__(self, l=1):
             self.cable_length = l
@@ -80,9 +78,9 @@ class QuadrotorCSPayload(BaseModel):
                               int(1.0 / self._step_freq / self.sim_timestep))
 
         self._parse_args(**kwargs)
-        if "sim_timestep" in kwargs.keys():
+        if "sim_timestep" in kwargs:
             self.sim_timestep = kwargs["sim_timestep"]
-        if "input" in kwargs.keys():
+        if "input" in kwargs:
             if kwargs["input"] == "prop_forces":
                 self._input_type = QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES
                 self._n_action = 4
