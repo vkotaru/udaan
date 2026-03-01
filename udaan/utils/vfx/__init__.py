@@ -4,6 +4,10 @@ import sys
 import numpy as np
 import vpython as vp
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class VFXHandler:
     def __init__(self, title="visuals", rate=200):
@@ -39,7 +43,7 @@ class VFXHandler:
         pass
 
     def handler(self, signal, frame):
-        print("Ctrl-C.... Exiting")
+        _logger.info("Ctrl-C.... Exiting")
         self.kill_loop = True
         sys.exit(0)
 
