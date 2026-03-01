@@ -5,7 +5,10 @@ import numpy as np
 from scipy.linalg import expm
 
 from ... import control, utils
+from ...utils.logging import get_logger
 from . import BaseModel
+
+_logger = get_logger(__name__)
 
 
 class QuadrotorCSPayload(BaseModel):
@@ -275,5 +278,5 @@ class QuadrotorCSPayload(BaseModel):
 
         end_t = time.time_ns()
         time_taken = (end_t - start_t) * 1e-9
-        print("Took (%.4f)s for simulating (%.4f)s" % (time_taken, self.t))
+        _logger.debug("Took (%.4f)s for simulating (%.4f)s", time_taken, self.t)
         return

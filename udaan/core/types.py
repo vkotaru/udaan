@@ -3,6 +3,7 @@
 This module defines type aliases and enumerations used throughout the codebase
 to ensure type safety and improve code readability.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable

@@ -5,7 +5,10 @@ import numpy as np
 from scipy.linalg import expm
 
 from ... import control, utils
+from ...utils.logging import get_logger
 from ..base import BaseModel
+
+_logger = get_logger(__name__)
 
 
 class Quadrotor(BaseModel):
@@ -228,8 +231,8 @@ class Quadrotor(BaseModel):
             self._allocation_matrix[3, i] = self._force2torque_const * d[i]
 
         self._allocation_inv = np.linalg.pinv(self._allocation_matrix)
-        print(self._allocation_matrix)
-        print(self._allocation_inv)
+        _logger.debug("Allocation matrix:\n%s", self._allocation_matrix)
+        _logger.debug("Allocation inverse:\n%s", self._allocation_inv)
         return
 
     def _wrench_to_propforces(self, wrench):
@@ -357,5 +360,5 @@ class Quadrotor(BaseModel):
 
         end_t = time.time_ns()
         time_taken = (end_t - start_t) * 1e-9
-        print("Took (%.4f)s for simulating (%.4f)s" % (time_taken, self.t))
+        _logger.debug("Took (%.4f)s for simulating (%.4f)s", time_taken, self.t)
         return

@@ -6,6 +6,10 @@ import xml.etree.ElementTree as ET
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
+from ..logging import get_logger
+
+_logger = get_logger(__name__)
+
 
 class MujocoAssetCreator:
     """Adapted from IsaacGymEnvs
@@ -40,7 +44,7 @@ class MujocoAssetCreator:
 
         xmlstr = minidom.parseString(ET.tostring(self.root)).toprettyxml(indent="   ")
         if verbose:
-            print(xmlstr)
+            _logger.debug("Generated XML:\n%s", xmlstr)
         with open(filename, "w") as f:
             f.write(xmlstr)
         return

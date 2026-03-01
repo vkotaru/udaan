@@ -3,6 +3,7 @@
 Requires mujoco and mujoco-python-viewer packages.
 Install with: pip install udaan[mujoco]
 """
+
 import os
 
 import mujoco
@@ -10,6 +11,9 @@ import mujoco_viewer
 import numpy as np
 
 from ... import _FOLDER_PATH
+from ...utils.logging import get_logger
+
+_logger = get_logger(__name__)
 
 DEFAULT_SIZE = 480
 
@@ -30,7 +34,7 @@ class MujocoModel:
         return
 
     def _initialize_simulation(self):
-        print(f"Loading model from {self.full_path}")
+        _logger.info("Loading model from %s", self.full_path)
         self.model = mujoco.MjModel.from_xml_path(self.full_path)
         self.data = mujoco.MjData(self.model)
 

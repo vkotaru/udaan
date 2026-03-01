@@ -3,8 +3,11 @@ import time
 import numpy as np
 import numpy.matlib
 
+from ...utils.logging import get_logger
 from ..base import BaseModel
 from ..mujoco import MujocoModel
+
+_logger = get_logger(__name__)
 
 
 class MultiQuadrotorCSPointmass(BaseModel):
@@ -110,7 +113,7 @@ class MultiQuadrotorCSPointmass(BaseModel):
         self._wrench_max = np.concatenate([np.array([self._max_thrust]), self._max_torque])
         self._feasible_min_input = np.matlib.repmat(self._wrench_min, self.nQ, 1).flatten()
         self._feasible_max_input = np.matlib.repmat(self._wrench_max, self.nQ, 1).flatten()
-        print("Mujoco model loaded")
+        _logger.info("MuJoCo model loaded")
         return
 
     def step(self, u):
@@ -217,5 +220,5 @@ class MultiQuadrotorCSPointmass(BaseModel):
             thrust_vecs = self.quad_position_control()
             self.step(thrust_vecs)
         end_t = time.time_ns()
-        print("Took (%.4f)s for simulating (%.4f)s" % (float(end_t - start_t) * 1e-9, self.t))
+        _logger.debug("Took (%.4f)s for simulating (%.4f)s", float(end_t - start_t) * 1e-9, self.t)
         pass
