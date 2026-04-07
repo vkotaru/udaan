@@ -48,3 +48,11 @@ class BaseModel:
 
     def get_state_size(self):
         return self._n_state
+
+
+from .quadrotor import Quadrotor
+from .quadrotor_cspayload import QuadrotorCSPayload
+from .floating_pointmass import FloatingPointmass
+from .s2_pendulum import S2Pendulum
+from .pointmass_suspended_payload import PointmassSuspendedPayload
+from .multi_pointmass_suspended_payload import MultiPointmassSuspendedPayload

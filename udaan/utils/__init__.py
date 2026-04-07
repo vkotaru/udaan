@@ -7,6 +7,10 @@ and logging infrastructure.
 from .geometry import *
 from .logging import LoggerMixin, get_logger, setup_logging
 from .printout import bcolors, printc, printc_fail, printc_ok, printc_warn
+from . import assets
+from .assets import xml_model_generator
+from . import trajectory
+from .flat2state import Flat2State
 
 __all__ = [
     # Logging
@@ -19,4 +23,11 @@ __all__ = [
     "printc_warn",
     "printc_fail",
     "printc_ok",
+    # Assets
+    "assets",
+    "xml_model_generator",
+    # Trajectory
+    "trajectory",
+    # Flat2State
+    "Flat2State",
 ]
