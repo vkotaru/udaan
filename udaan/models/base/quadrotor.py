@@ -187,7 +187,7 @@ class Quadrotor(BaseModel):
         return
 
     def _zoh(self, thrust, torque):
-        accel = -self._ge3 + thrust * self.state.orientation @ self._e3
+        accel = -self._ge3 + (thrust / self._mass) * self.state.orientation @ self._e3
         self.state.position += (
             self.state.velocity * self.sim_timestep + 0.5 * accel * self.sim_timestep**2
         )

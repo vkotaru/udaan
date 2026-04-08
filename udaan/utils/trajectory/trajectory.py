@@ -154,7 +154,7 @@ class PolyTraj5(SmoothTraj):
         self._t = lambda s: np.array([1.0, s, s**2, s**3, s**4, s**5])
 
     def solve_params(self, p0, v0, a0, p1, v1, a1):
-        b = np.array([[p1 - p0 - v0 - 0.5 * a0 * a0], [v1 - v0 - a0], [a1 - a0]])
+        b = np.array([[p1 - p0 - v0 - 0.5 * a0], [v1 - v0 - a0], [a1 - a0]])
         A = np.array([[1.0, 1.0, 1.0], [3.0, 4.0, 5.0], [6.0, 12.0, 20.0]])
         x = np.linalg.pinv(A) @ b
         return x
@@ -192,7 +192,7 @@ class PolyTraj5(SmoothTraj):
             [self._v0, self._a0, 3.0 * a3, 4.0 * a4, 5.0 * a5, np.zeros(3)]
         )
         self._acc_params = np.array(
-            [self._a0, 6.0 * a3, 12.0 * a4, 20.0 * a3, np.zeros(3), np.zeros(3)]
+            [self._a0, 6.0 * a3, 12.0 * a4, 20.0 * a5, np.zeros(3), np.zeros(3)]
         )
 
 
@@ -277,16 +277,16 @@ class CrazyTrajectory(Trajectory):
         )
         dx = np.array(
             [
-                self.ax * np.sin(w1 * t) * w1,
-                self.ay * np.cos(w2 * t) * w2,
-                -self.az * np.sin(w3 * t) * w3,
+                self.ax * np.sin(w1 * t + self.phix) * w1,
+                self.ay * np.cos(w2 * t + self.phiy) * w2,
+                -self.az * np.sin(w3 * t + self.phiz) * w3,
             ]
         )
         d2x = np.array(
             [
-                self.ax * np.cos(w1 * t) * w1 * w1,
-                -self.ay * np.sin(w2 * t) * w2 * w2,
-                -self.az * np.cos(w3 * t) * w3 * w3,
+                self.ax * np.cos(w1 * t + self.phix) * w1 * w1,
+                -self.ay * np.sin(w2 * t + self.phiy) * w2 * w2,
+                -self.az * np.cos(w3 * t + self.phiz) * w3 * w3,
             ]
         )
         return x, dx, d2x

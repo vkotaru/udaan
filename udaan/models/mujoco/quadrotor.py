@@ -30,15 +30,15 @@ class Quadrotor(base.Quadrotor):
 
         # loading mujoco model
         self._mjMdl = MujocoModel("quadrotor_mj.xml", render=self.render)
-        self._mj_quad_body_index = 1
+        self._mj_quad_index = 1
         if self._force_type == base.Quadrotor.FORCE_TYPE.PROP_FORCES:
             self._ctrl_index = 0
         else:
             self._ctrl_index = 4
 
         # read inertial parameters from mujoco model
-        self.mass = copy.deepcopy(self._mjMdl.model.body_mass[self._mj_quad_body_index])
-        self.inertia = copy.deepcopy(self._mjMdl.model.body_inertia[self._mj_quad_body_index])
+        self.mass = copy.deepcopy(self._mjMdl.model.body_mass[self._mj_quad_index])
+        self.inertia = copy.deepcopy(self._mjMdl.model.body_inertia[self._mj_quad_index])
 
         # reinitialize controllers after loading mujoco model & params
         self._init_default_controllers()
@@ -50,7 +50,7 @@ class Quadrotor(base.Quadrotor):
     @base.Quadrotor.mass.setter
     def mass(self, m):
         super(Quadrotor, self.__class__).mass.fset(self, m)
-        self._mjMdl.model.body_mass[self._mj_quad_body_index] = m
+        self._mjMdl.model.body_mass[self._mj_quad_index] = m
         return
 
     @base.Quadrotor.inertia.setter
@@ -58,7 +58,7 @@ class Quadrotor(base.Quadrotor):
         super(Quadrotor, self.__class__).inertia.fset(self, I)
         if I.ndim == 2:
             I = np.diag(I)
-        self._mjMdl.model.body_inertia[self._mj_quad_body_index] = I
+        self._mjMdl.model.body_inertia[self._mj_quad_index] = I
         return
 
     def _parse_input(self):

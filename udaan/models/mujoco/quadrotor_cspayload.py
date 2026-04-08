@@ -76,9 +76,9 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
             self._step_iter, self._nFrames = self._nFrames, self._step_iter
 
         # TODO make it configurable or read from xml
-        self.mQ = 1.0  # kg
-        self.mL = 0.16  # kg
-        self.l = 1.0  # m
+        self._quad_mass = 1.0  # kg
+        self._payload_mass = 0.16  # kg
+        self._cable_length = 1.0  # m
         if self.verbose:
             utils.printc_ok("Mujoco model loaded")
         return
@@ -95,10 +95,10 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
         self._mj_payload_vel_index = 6
         self._mj_payload_omega_index = 9
 
-        self._mj_cable_tendon_index = 0
+        self._mj_cable_index = 0
 
-        self._mj_quad_body_index = 1
-        self._mj_payload_body_index = 2
+        self._mj_quad_index = 1
+        self._mj_payload_index = 2
         return
 
     def __init_nlink_model(self):
@@ -108,9 +108,9 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
         self._mj_quad_vel_index = 0
         self._mj_quad_omega_index = 3
 
-        self._mj_payload_body_index = 27
+        self._mj_payload_index = 27
         self._mj_data__payload_pos_prev = np.zeros(3)
-        self._mj_data__payload_vel_not_initialized = False
+        self._mj_data__payload_vel_initialized = False
         return
 
     def __init_composite_model(self):
@@ -129,33 +129,32 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
     @base.QuadrotorCSPayload.qrotor_mass.setter
     def qrotor_mass(self, value):
         super(QuadrotorCSPayload, self.__class__).qrotor_mass.fset(self, value)
-        self._mjMdl.model.body_mass[self._mj_quad_body_index] = value
-        return
+        if self._mj_quad_index is not None:
+            self._mjMdl.model.body_mass[self._mj_quad_index] = value
 
     @base.QuadrotorCSPayload.qrotor_inertia.setter
     def qrotor_inertia(self, value):
         super(QuadrotorCSPayload, self.__class__).qrotor_inertia.fset(self, value)
-        if value.ndim == 2:
-            value = np.diag(value)
-        self._mjMdl.model.body_inertia[self._mj_quad_body_index] = value
-        return
+        if self._mj_quad_index is not None:
+            if value.ndim == 2:
+                value = np.diag(value)
+            self._mjMdl.model.body_inertia[self._mj_quad_index] = value
 
     @base.QuadrotorCSPayload.cable_length.setter
     def cable_length(self, value):
         super(QuadrotorCSPayload, self.__class__).cable_length.fset(self, value)
-        if self._model_type == self.MODEL_TYPE.TENDON:
-            self._mjMdl.model.tendon_length0[self._mj_cable_tendon_index] = value
-            self._mjMdl.model.tendon_limited[self._mj_cable_tendon_index] = True
-            self._mjMdl.model.tendon_range[self._mj_cable_tendon_index][1] = value
-            self._mjMdl.model.tendon_lengthspring[self._mj_cable_tendon_index] = value
+        if self._mj_cable_index is not None:
+            self._mjMdl.model.tendon_length0[self._mj_cable_index] = value
+            self._mjMdl.model.tendon_limited[self._mj_cable_index] = True
+            self._mjMdl.model.tendon_range[self._mj_cable_index][1] = value
+            self._mjMdl.model.tendon_lengthspring[self._mj_cable_index] = value
             mujoco.mj_tendon(self._mjMdl.model, self._mjMdl.data)
-        return
 
     @base.QuadrotorCSPayload.payload_mass.setter
     def payload_mass(self, value):
         super(QuadrotorCSPayload, self.__class__).payload_mass.fset(self, value)
-        self._mjMdl.model.body_mass[self._mj_payload_body_index] = value
-        return
+        if self._mj_payload_index is not None:
+            self._mjMdl.model.body_mass[self._mj_payload_index] = value
 
     def reset(self, **kwargs):
         """reset state and time"""
@@ -174,8 +173,9 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
         return
 
     def __reset_tendon_model(self):
-        quat_Q = np.array([1.0, 0.0, 0.0, 0.0])  # quadrotor attitude (w, x, y, z)
-        _qQ = utils.sp_rot.from_matrix(self.state.orientation).as_quat()
+        from scipy.spatial.transform import Rotation as sp_rot
+
+        _qQ = sp_rot.from_matrix(self.state.orientation).as_quat()
         quat_Q = np.array([_qQ[3], _qQ[0], _qQ[1], _qQ[2]])
 
         self._mjMdl.data.qpos[
@@ -333,12 +333,12 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
             self._mj_quad_omega_index : self._mj_quad_omega_index + 3
         ]
 
-        self._mj_data__payload_pos = self._mjMdl.data.xpos[self._mj_payload_body_index]
+        self._mj_data__payload_pos = self._mjMdl.data.xpos[self._mj_payload_index]
         self._mj_data__payload_vel = (
             self._mj_data__payload_pos - self._mj_data__payload_pos_prev
         ) / self._mjMdl.model.opt.timestep
-        if not self._mj_data__payload_vel_not_initialized:
+        if not self._mj_data__payload_vel_initialized:
             self._mj_data__payload_vel = np.zeros(3)
-            self._mj_data__payload_vel_not_initialized = True
+            self._mj_data__payload_vel_initialized = True
         self._mj_data__payload_pos_prev = self._mj_data__payload_pos
         return

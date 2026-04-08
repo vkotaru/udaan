@@ -1,8 +1,9 @@
+import copy
 import time
 
 import numpy as np
-import numpy.matlib
 
+from ... import manif
 from ...utils.logging import get_logger
 from ..base import BaseModel
 from ..mujoco import MujocoModel
@@ -11,11 +12,7 @@ _logger = get_logger(__name__)
 
 
 class MultiQuadrotorCSPointmass(BaseModel):
-    """_summary_
-
-    Args:
-        BaseModel (_type_): _description_
-    """
+    """Multi-quadrotor with cable-suspended pointmass payload (MuJoCo)."""
 
     class State:
         class Quadrotor:
@@ -27,15 +24,13 @@ class MultiQuadrotorCSPointmass(BaseModel):
                 self.quaternion = np.array([1.0, 0.0, 0.0, 0.0])  # w, x, y, z
                 for key, value in kwargs.items():
                     setattr(self, key, value)
-                return
 
             def reset(self):
                 self.rotation = np.eye(3)
                 self.angvel = np.zeros(3)
                 self.position = np.zeros(3)
                 self.velocity = np.zeros(3)
-                self.quaternion = np.array([1.0, 0.0, 0.0, 0.0])  # w, x, y, z
-                return
+                self.quaternion = np.array([1.0, 0.0, 0.0, 0.0])
 
         class Cable:
             def __init__(self, **kwargs):
@@ -45,14 +40,12 @@ class MultiQuadrotorCSPointmass(BaseModel):
                 self.length = 1.0
                 for key, value in kwargs.items():
                     setattr(self, key, value)
-                return
 
             def reset(self):
                 self.q = np.array([0.0, 0.0, -1.0])
                 self.omega = np.zeros(3)
                 self.dq = np.zeros(3)
                 self.length = 1.0
-                return
 
         def __init__(self, nQ: int, **kwargs):
             self.num_quadrotors = nQ
@@ -60,37 +53,24 @@ class MultiQuadrotorCSPointmass(BaseModel):
             self.cables = [self.Cable() for _ in range(nQ)]
             self.load_position = np.zeros(3)
             self.load_velocity = np.zeros(3)
-            return
 
         def reset(self):
             for quad in self.quads:
                 quad.reset()
             self.load_position = np.zeros(3)
             self.load_velocity = np.zeros(3)
-            return
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if "num_quadrotors" in kwargs:
-            self.nQ = kwargs["num_quadrotors"]
-        else:
-            self.nQ = 3
-
+        self.nQ = kwargs.get("num_quadrotors", 3)
         self.state = MultiQuadrotorCSPointmass.State(nQ=self.nQ)
 
-        # mujoco model param handling
-        self._mjMdl = None
-        self._mj_quad_index = None
-        self._mj_payload_index = None
-        self._mj_cable_index = None
+        # mujoco model
         self._mj_render = self.render
-
         # TODO Create the xml file as required at runtime.
         self._mjMdl = MujocoModel(model_path="multi_quad_pointmass.xml", render=self._mj_render)
 
-        self._attitude_zoh = False
-        if "attitude_zoh" in kwargs:
-            self._attitude_zoh = kwargs["attitude_zoh"]
+        self._attitude_zoh = kwargs.get("attitude_zoh", False)
 
         self._mjDt = 1.0 / 500.0
         self._step_iter = int(self.sim_timestep / self._mjDt)
@@ -98,8 +78,8 @@ class MultiQuadrotorCSPointmass(BaseModel):
         if self._attitude_zoh:
             self._step_iter, self._nFrames = self._nFrames, self._step_iter
 
-        self.mQ = np.array([0.99] * self.nQ)
-        self.mL = 0.15
+        self._quad_masses = np.array([0.99] * self.nQ)
+        self._payload_mass = 0.15
         self._inertia_matrix = np.array(
             [[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]]
         )  # TODO using same inertia matrix for all quadrotors
@@ -111,56 +91,50 @@ class MultiQuadrotorCSPointmass(BaseModel):
         self._prop_max_force = 10.0
         self._wrench_min = np.concatenate([np.array([self._min_thrust]), self._min_torque])
         self._wrench_max = np.concatenate([np.array([self._max_thrust]), self._max_torque])
-        self._feasible_min_input = np.matlib.repmat(self._wrench_min, self.nQ, 1).flatten()
-        self._feasible_max_input = np.matlib.repmat(self._wrench_max, self.nQ, 1).flatten()
+        self._feasible_min_input = np.tile(self._wrench_min, self.nQ)
+        self._feasible_max_input = np.tile(self._wrench_max, self.nQ)
         _logger.info("MuJoCo model loaded")
-        return
+
+        self._init_state = None
 
     def step(self, u):
         for _ in range(self._step_iter):
             u_clamped = np.clip(u, self._feasible_min_input, self._feasible_max_input)
-            # set control
-            self._mjMdl.data.ctrl[self._ctrl_index : self._ctrl_index + 4] = u_clamped
+            self._mjMdl.data.ctrl[:] = u_clamped
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             self._query_latest_state()
-        return
 
     def reset(self, **kwargs):
         """reset state and time"""
         self.t = 0.0
-        self._reset_to_default_state()
+        self._mjMdl.reset()
         if "xL" in kwargs:
             for i in range(self.nQ + 1):
-                self.mjMdl.data.qpos[i * 7 : i * 7 + 3] += kwargs["xL"]
+                self._mjMdl.data.qpos[i * 7 : i * 7 + 3] += kwargs["xL"]
 
         self._query_latest_state()
-        return
-
-    def _reset_to_default_state(self):
-        self._mjMdl.reset()
-        return
+        self._init_state = copy.deepcopy(self.state)
 
     def _query_latest_state(self):
         for i in range(self.nQ):
-            self._state.quads[i].position = self.mjMdl.data.qpos[7 * i : 7 * i + 3]
-            _quat = self.mjMdl.data.qpos[7 * i + 3 : 7 * i + 7]
-            self._state.quads[i].quaternion = _quat
-            self._state.quads[i].rotation = self.mjMdl._quat2rot(_quat)
-            self._state.quads[i].velocity = self.mjMdl.data.qvel[6 * i : 6 * i + 3]
-            self._state.quads[i].angvel = self.mjMdl.data.qvel[6 * i + 3 : 6 * i + 6]
+            self.state.quads[i].position = self._mjMdl.data.qpos[7 * i : 7 * i + 3]
+            _quat = self._mjMdl.data.qpos[7 * i + 3 : 7 * i + 7]
+            self.state.quads[i].quaternion = _quat
+            self.state.quads[i].rotation = self._mjMdl._quat2rot(_quat)
+            self.state.quads[i].velocity = self._mjMdl.data.qvel[6 * i : 6 * i + 3]
+            self.state.quads[i].angvel = self._mjMdl.data.qvel[6 * i + 3 : 6 * i + 6]
 
-        self._state.load_position = self.mjMdl.data.qpos[7 * self.nQ : 7 * self.nQ + 3]
-        self._state.load_velocity = self.mjMdl.data.qvel[6 * self.nQ : 6 * self.nQ + 3]
+        self.state.load_position = self._mjMdl.data.qpos[7 * self.nQ : 7 * self.nQ + 3]
+        self.state.load_velocity = self._mjMdl.data.qvel[6 * self.nQ : 6 * self.nQ + 3]
 
         for i in range(self.nQ):
-            p = self._state.load_position - self._state.quads[i].position
-            self._state.cables[i].length = np.linalg.norm(p)
-            self._state.cables[i].q = p / self._state.cables[i].length
-            self._state.cables[i].dq = self._state.load_velocity - self._state.quads[i].velocity
-            self._state.cables[i].omega = np.cross(
-                self._state.cables[i].q, self._state.cables[i].dq
+            p = self.state.load_position - self.state.quads[i].position
+            self.state.cables[i].length = np.linalg.norm(p)
+            self.state.cables[i].q = p / self.state.cables[i].length
+            self.state.cables[i].dq = self.state.load_velocity - self.state.quads[i].velocity
+            self.state.cables[i].omega = np.cross(
+                self.state.cables[i].q, self.state.cables[i].dq
             )
-        return
 
     def quad_position_control(self):
         """quadrotor position control"""
@@ -169,10 +143,10 @@ class MultiQuadrotorCSPointmass(BaseModel):
             kp = np.array([4.1, 4.1, 8.1])
             kd = 1.5 * np.array([2.0, 2.0, 6.0])
 
-            ex = self._state.quads[i].position - self._init_state.quads[i].position
-            ev = self._state.quads[i].velocity - np.zeros(3)
+            ex = self.state.quads[i].position - self._init_state.quads[i].position
+            ev = self.state.quads[i].velocity - np.zeros(3)
             Fpd = -kp * ex - kd * ev
-            Fff = (self.mQ[i] + self.mL) * (self.g * self.e3)
+            Fff = (self._quad_masses[i] + self._payload_mass) * (self._g * self._e3)
             thrust_vec[3 * i : 3 * i + 3] = Fpd + Fff
 
         return thrust_vec
@@ -192,8 +166,8 @@ class MultiQuadrotorCSPointmass(BaseModel):
                 np.expand_dims(b3c, axis=1),
             ]
         )
-        R = self._state.quads[i].rotation
-        Omega = self._state.quads[i].angvel
+        R = self.state.quads[i].rotation
+        Omega = self.state.quads[i].angvel
         Omegad = np.zeros(3)  # TODO add differential flatness
         dOmegad = np.zeros(3)  # TODO add differential flatness
 
@@ -207,9 +181,7 @@ class MultiQuadrotorCSPointmass(BaseModel):
 
         M = -kR * eR - kOm * eOmega + np.cross(Omega, self._inertia_matrix @ Omega)
         M += -1 * self._inertia_matrix @ (manif.hat(Omega) @ R.T @ Rd @ Omegad - R.T @ Rd @ dOmegad)
-        # ignoring this for since Omegad is zero
         f = thrust_force.dot(R[:, 2])
-        # print(f,M)
         return np.hstack([f, M])
 
     def simulate(self, tf, **kwargs):
@@ -221,4 +193,3 @@ class MultiQuadrotorCSPointmass(BaseModel):
             self.step(thrust_vecs)
         end_t = time.time_ns()
         _logger.debug("Took (%.4f)s for simulating (%.4f)s", float(end_t - start_t) * 1e-9, self.t)
-        pass
