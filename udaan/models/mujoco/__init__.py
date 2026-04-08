@@ -17,13 +17,14 @@ _logger = get_logger(__name__)
 
 
 class _GlfwViewer:
-    """Lightweight GLFW-based MuJoCo viewer (no third-party viewer dependency)."""
+    """Lightweight GLFW-based MuJoCo viewer with mouse interaction."""
 
     def __init__(self, model, data, width=1200, height=900, title="udaan"):
         import glfw
 
         self._model = model
         self._data = data
+        self._glfw = glfw
 
         if not glfw.init():
             raise RuntimeError("Failed to initialize GLFW")
@@ -40,19 +41,84 @@ class _GlfwViewer:
         self._context = mujoco.MjrContext(model, mujoco.mjtFontScale.mjFONTSCALE_150)
         self._camera = mujoco.MjvCamera()
         self._option = mujoco.MjvOption()
+        self._perturb = mujoco.MjvPerturb()
 
         mujoco.mjv_defaultCamera(self._camera)
         mujoco.mjv_defaultOption(self._option)
+        mujoco.mjv_defaultPerturb(self._perturb)
 
-        self._camera.trackbodyid = 0
-        self._camera.distance = model.stat.extent * 2.0
-        self._camera.lookat[0] += 0.5
-        self._camera.lookat[1] += 0.5
-        self._camera.lookat[2] += 0.5
-        self._camera.elevation = -40
-        self._camera.azimuth = 0
+        self._camera.type = mujoco.mjtCamera.mjCAMERA_FREE
+        self._camera.distance = max(model.stat.extent * 4.0, 5.0)
+        self._camera.lookat[0] = 0.0
+        self._camera.lookat[1] = 0.0
+        self._camera.lookat[2] = 1.5
+        self._camera.elevation = -30
+        self._camera.azimuth = 135
+
+        # Mouse interaction state
+        self._button_left = False
+        self._button_right = False
+        self._button_middle = False
+        self._last_mouse_x = 0.0
+        self._last_mouse_y = 0.0
+
+        # Register GLFW callbacks
+        glfw.set_mouse_button_callback(self._window, self._mouse_button_callback)
+        glfw.set_cursor_pos_callback(self._window, self._mouse_move_callback)
+        glfw.set_scroll_callback(self._window, self._scroll_callback)
+        glfw.set_key_callback(self._window, self._key_callback)
 
         self._last_render_time = 0.0
+
+    def _mouse_button_callback(self, window, button, action, mods):
+        import glfw
+
+        pressed = action == glfw.PRESS
+        if button == glfw.MOUSE_BUTTON_LEFT:
+            self._button_left = pressed
+        elif button == glfw.MOUSE_BUTTON_RIGHT:
+            self._button_right = pressed
+        elif button == glfw.MOUSE_BUTTON_MIDDLE:
+            self._button_middle = pressed
+
+        x, y = self._glfw.get_cursor_pos(window)
+        self._last_mouse_x = x
+        self._last_mouse_y = y
+
+    def _mouse_move_callback(self, window, xpos, ypos):
+        dx = xpos - self._last_mouse_x
+        dy = ypos - self._last_mouse_y
+        self._last_mouse_x = xpos
+        self._last_mouse_y = ypos
+
+        if not (self._button_left or self._button_right or self._button_middle):
+            return
+
+        width, height = self._glfw.get_window_size(window)
+
+        if self._button_right:
+            action = mujoco.mjtMouse.mjMOUSE_MOVE_V
+        elif self._button_left:
+            action = mujoco.mjtMouse.mjMOUSE_ROTATE_V
+        elif self._button_middle:
+            action = mujoco.mjtMouse.mjMOUSE_ZOOM
+        else:
+            return
+
+        mujoco.mjv_moveCamera(
+            self._model, action, dx / width, dy / height, self._scene, self._camera
+        )
+
+    def _scroll_callback(self, window, xoffset, yoffset):
+        mujoco.mjv_moveCamera(
+            self._model, mujoco.mjtMouse.mjMOUSE_ZOOM, 0, -0.05 * yoffset, self._scene, self._camera
+        )
+
+    def _key_callback(self, window, key, scancode, action, mods):
+        import glfw
+
+        if action == glfw.PRESS and key in (glfw.KEY_ESCAPE, glfw.KEY_Q):
+            glfw.set_window_should_close(window, True)
 
     @property
     def cam(self):
@@ -64,7 +130,10 @@ class _GlfwViewer:
         if glfw.window_should_close(self._window):
             return
 
-        # Throttle to ~60fps
+        # Always process events so window responds to close/input
+        glfw.poll_events()
+
+        # Throttle rendering to ~60fps
         now = time.monotonic()
         if now - self._last_render_time < 1.0 / 60.0:
             return
@@ -72,12 +141,37 @@ class _GlfwViewer:
 
         viewport = mujoco.MjrRect(0, 0, *glfw.get_framebuffer_size(self._window))
         mujoco.mjv_updateScene(
-            self._model, self._data, self._option, None, self._camera,
-            mujoco.mjtCatBit.mjCAT_ALL, self._scene,
+            self._model,
+            self._data,
+            self._option,
+            self._perturb,
+            self._camera,
+            mujoco.mjtCatBit.mjCAT_ALL,
+            self._scene,
         )
         mujoco.mjr_render(viewport, self._scene, self._context)
+
+        # Overlay sim time top-right
+        time_str = f"t = {self._data.time:.2f}s"
+        mujoco.mjr_overlay(
+            mujoco.mjtFont.mjFONT_NORMAL,
+            mujoco.mjtGridPos.mjGRID_TOPRIGHT,
+            viewport,
+            time_str,
+            "",
+            self._context,
+        )
+
         glfw.swap_buffers(self._window)
-        glfw.poll_events()
+
+    def hold(self):
+        """Keep window open until user closes it. Press ESC or Q to quit."""
+        import glfw
+
+        while self._window and not glfw.window_should_close(self._window):
+            self.render()
+            glfw.wait_events_timeout(1.0 / 60.0)
+        self.close()
 
     def close(self):
         import glfw
@@ -151,6 +245,11 @@ class MujocoModel:
     def reset(self):
         mujoco.mj_resetData(self.model, self.data)
         self._wall_start = None
+
+    def wait_for_close(self):
+        """Keep the viewer open until the user closes the window."""
+        if self.render and self._viewer is not None:
+            self._viewer.hold()
 
     def add_marker_at(self, p, size=None, rgba=None, label=""):
         """Visual markers not yet supported with built-in viewer."""
