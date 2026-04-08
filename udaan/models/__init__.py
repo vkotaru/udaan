@@ -2,11 +2,10 @@
 
 Provides quadrotor and payload models with multiple backend support:
 - base: Analytical dynamics (always available)
-- mujoco: MuJoCo physics (optional, requires `pip install udaan[mujoco]`)
-- bullet: PyBullet physics (optional, requires `pip install udaan[bullet]`)
+- mujoco: MuJoCo physics (requires mujoco package)
 """
 
-from . import base, bullet
+from . import base
 
 # MuJoCo is optional
 try:
@@ -22,4 +21,4 @@ except ImportError:
     mujoco = None  # type: ignore
     MUJOCO_AVAILABLE = False
 
-__all__ = ["base", "bullet", "mujoco", "MUJOCO_AVAILABLE"]
+__all__ = ["base", "mujoco", "MUJOCO_AVAILABLE"]
