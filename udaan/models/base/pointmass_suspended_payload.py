@@ -1,8 +1,8 @@
 import numpy as np
 import scipy.linalg
 
-from ..base import BaseModel
 from ... import manif
+from ..base import BaseModel
 
 
 class PointmassSuspendedPayload(BaseModel):
@@ -13,7 +13,7 @@ class PointmassSuspendedPayload(BaseModel):
     -> n_state=12, n_action=3
     """
 
-    class State(object):
+    class State:
         def __init__(self):
             self.payload_position = np.zeros(3)
             self.payload_velocity = np.zeros(3)
@@ -53,9 +53,7 @@ class PointmassSuspendedPayload(BaseModel):
 
     @property
     def quadrotor_position(self):
-        return (
-            self.state.payload_position - self.cable_length * self.state.cable_attitude
-        )
+        return self.state.payload_position - self.cable_length * self.state.cable_attitude
 
     @property
     def quadrotor_velocity(self):
@@ -79,17 +77,15 @@ class PointmassSuspendedPayload(BaseModel):
             * q
         )
 
-        self.state.payload_position += (
-            dt * self.state.payload_velocity + 0.5 * net_accel * dt * dt
-        )
+        self.state.payload_position += dt * self.state.payload_velocity + 0.5 * net_accel * dt * dt
         self.state.payload_velocity += dt * net_accel
 
         # S2 update for cable attitude via SO(3) exponential map
         self.state.cable_attitude = scipy.linalg.expm(manif.hat(om * dt)) @ q
         # angular velocity update
-        self.state.cable_ang_velocity = om + (
-            dt / (self.mQ * self.cable_length)
-        ) * np.cross(-q, force)
+        self.state.cable_ang_velocity = om + (dt / (self.mQ * self.cable_length)) * np.cross(
+            -q, force
+        )
 
     def step(self, action):
         self._zoh(action)
@@ -109,10 +105,8 @@ class PointmassSuspendedPayload(BaseModel):
         return
 
     def get_rand_init_state(self, rand=False):
-        if rand:
-            init_pos = -5.0 + 10 * np.random.rand(3)
-        else:
-            init_pos = np.zeros(3)
+        rng = np.random.default_rng()
+        init_pos = -5.0 + 10 * rng.random(3) if rand else np.zeros(3)
         return {
             "payload_position": init_pos,
             "payload_velocity": np.zeros(3),

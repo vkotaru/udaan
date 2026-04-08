@@ -106,8 +106,10 @@ class QuadrotorCSPayload(BaseModel):
         return
 
     def _init_default_controllers(self):
-        self._att_controller = control.QuadAttGeoPD(inertia=self._quad_inertia)
-        self._payload_controller = control.QuadCSPayloadController()
+        self._att_controller = control.quadrotor.GeometricAttitudeController(
+            inertia=self._quad_inertia
+        )
+        self._payload_controller = control.quadrotor_cspayload.QuadCSPayloadController()
 
     @property
     def qrotor_mass(self) -> float:
@@ -165,10 +167,7 @@ class QuadrotorCSPayload(BaseModel):
         Jinv = self._quad_inertia_inv
 
         fRe3 = thrust * self.state.orientation @ self._e3
-        payload_accel = (
-            -self._ge3
-            + ((np.dot(q, fRe3) - mQ * l * np.dot(dq, dq)) / (mQ + mL)) * q
-        )
+        payload_accel = -self._ge3 + ((np.dot(q, fRe3) - mQ * l * np.dot(dq, dq)) / (mQ + mL)) * q
 
         # payload position dynamics
         self.state.payload_position += self.state.payload_velocity * h + 0.5 * payload_accel * h**2
@@ -262,10 +261,14 @@ class QuadrotorCSPayload(BaseModel):
 
         # if only position is given, set payload position accordingly
         if "position" in kwargs:
-            self.state.payload_position = kwargs["position"] + self._cable_length * self.state.cable_attitude
+            self.state.payload_position = (
+                kwargs["position"] + self._cable_length * self.state.cable_attitude
+            )
         # if only payload position is given, set position accordingly
         elif "payload_position" in kwargs:
-            self.state.position = kwargs["payload_position"] - self._cable_length * self.state.cable_attitude
+            self.state.position = (
+                kwargs["payload_position"] - self._cable_length * self.state.cable_attitude
+            )
 
         return
 

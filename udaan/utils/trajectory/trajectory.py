@@ -1,11 +1,12 @@
 import math
-import numpy as np
 import warnings
+
+import numpy as np
 
 PI = math.pi
 
 
-class Trajectory(object):
+class Trajectory:
     def __init__(self):
         self._tf = 10
 
@@ -56,9 +57,7 @@ class SmoothTraj5(SmoothTraj):
 
     def compute_traj_params(self):
         a = self._xf - self._x0
-        self._pos_params = np.array(
-            [self._x0, np.zeros(3), np.zeros(3), 10 * a, -15 * a, 6 * a]
-        )
+        self._pos_params = np.array([self._x0, np.zeros(3), np.zeros(3), 10 * a, -15 * a, 6 * a])
         self._vel_params = np.array(
             [
                 np.zeros(3),
@@ -132,9 +131,7 @@ class SmoothSineTraj(SmoothTraj):
             warnings.warn("cannot have t < 0")
             return self._x0, np.zeros(3), np.zeros(3)
         else:
-            x = self._pos_offset + self._pos_amp * np.sin(
-                t * np.pi / self._tf - np.pi / 2
-            )
+            x = self._pos_offset + self._pos_amp * np.sin(t * np.pi / self._tf - np.pi / 2)
             v = self._vel_amp * np.cos(t * np.pi / self._tf - np.pi / 2)
             a = self._acc_amp * np.sin(t * np.pi / self._tf - np.pi / 2)
             return x, v, a
@@ -143,9 +140,7 @@ class SmoothSineTraj(SmoothTraj):
 class PolyTraj5(SmoothTraj):
     """5th-order polynomial with arbitrary boundary conditions."""
 
-    def __init__(
-        self, x0, xf, tf, v0=np.zeros(3), vf=np.zeros(3), a0=np.zeros(3), af=np.zeros(3)
-    ):
+    def __init__(self, x0, xf, tf, v0=np.zeros(3), vf=np.zeros(3), a0=np.zeros(3), af=np.zeros(3)):
         self._v0 = v0
         self._vf = vf
         self._a0 = a0
@@ -188,9 +183,7 @@ class PolyTraj5(SmoothTraj):
             a3[i], a4[i], a5[i] = p[0][0], p[1][0], p[2][0]
 
         self._pos_params = np.array([self._x0, self._v0, 0.5 * self._a0, a3, a4, a5])
-        self._vel_params = np.array(
-            [self._v0, self._a0, 3.0 * a3, 4.0 * a4, 5.0 * a5, np.zeros(3)]
-        )
+        self._vel_params = np.array([self._v0, self._a0, 3.0 * a3, 4.0 * a4, 5.0 * a5, np.zeros(3)])
         self._acc_params = np.array(
             [self._a0, 6.0 * a3, 12.0 * a4, 20.0 * a5, np.zeros(3), np.zeros(3)]
         )
@@ -213,9 +206,7 @@ class CircularTraj(Trajectory):
         self._cost = lambda t: np.cos(self._th0 + self._w * t)
         self._x = lambda t: (
             self._center
-            + np.array(
-                [self._radius * self._cost(t), self._radius * self._sint(t), 0.0]
-            )
+            + np.array([self._radius * self._cost(t), self._radius * self._sint(t), 0.0])
         )
         self._dx = lambda t: np.array(
             [
@@ -293,7 +284,7 @@ class CrazyTrajectory(Trajectory):
 
 
 def setpoint(t, sp=np.array([0.0, 0.0, 1.0])):
-    traj = dict()
+    traj = {}
     traj["x"] = sp
     traj["dx"] = np.zeros(3)
     traj["d2x"] = np.zeros(3)
@@ -305,16 +296,12 @@ def setpoint(t, sp=np.array([0.0, 0.0, 1.0])):
 
 
 def circleXY(t, r=1, c=np.zeros(3), w=0.1 * PI):
-    traj = dict()
+    traj = {}
     traj["x"] = c + r * np.array([math.cos(w * t), math.sin(w * t), 0])
     traj["dx"] = r * np.array([-1 * w * math.sin(w * t), w * math.cos(w * t), 0])
-    traj["d2x"] = r * np.array(
-        [-1 * w**2 * math.cos(w * t), -1 * w**2 * math.sin(w * t), 0]
-    )
+    traj["d2x"] = r * np.array([-1 * w**2 * math.cos(w * t), -1 * w**2 * math.sin(w * t), 0])
     traj["d3x"] = r * np.array([w**3 * math.sin(w * t), -1 * w**3 * math.cos(w * t), 0])
     traj["d4x"] = r * np.array([w**4 * math.cos(w * t), w**4 * math.sin(w * t), 0])
     traj["d5x"] = r * np.array([-(w**5) * math.sin(w * t), w**5 * math.cos(w * t), 0])
-    traj["d6x"] = r * np.array(
-        [-(w**6) * math.cos(w * t), -(w**6) * math.sin(w * t), 0]
-    )
+    traj["d6x"] = r * np.array([-(w**6) * math.cos(w * t), -(w**6) * math.sin(w * t), 0])
     return traj

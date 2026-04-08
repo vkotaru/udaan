@@ -52,3 +52,7 @@ class PDController(Controller):
         de = ds - dsd
         u = -self._gains.kp * e - self._gains.kd * de + d2sd
         return u
+
+
+from . import quadrotor as quadrotor  # noqa: E402
+from . import quadrotor_cspayload as quadrotor_cspayload  # noqa: E402

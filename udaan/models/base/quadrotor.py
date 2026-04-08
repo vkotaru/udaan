@@ -143,7 +143,7 @@ class Quadrotor(BaseModel):
     def _init_default_controllers(self):
         self._att_controller = control.quadrotor.GeometricAttitudeController(inertia=self.inertia)
         self._pos_controller = control.quadrotor.PositionPDController(mass=self.mass)
-        self._prop_controller = control.quadrotor.DirectPropllerForceController(
+        self._prop_controller = control.quadrotor.DirectPropellerForceController(
             mass=self.mass, inertia=self.inertia
         )
         return

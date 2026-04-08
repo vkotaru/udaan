@@ -1,4 +1,3 @@
-import control as ctrl
 import numpy as np
 
 from ..control import Controller, Gains, PDController
@@ -120,7 +119,7 @@ class GeometricAttitudeController(Controller):
         return f, M
 
 
-class DirectPropllerForceController(Controller):
+class DirectPropellerForceController(Controller):
     def __init__(self, **kwargs):
         super().__init__()
         self.compute_alloc_matrix()
@@ -182,9 +181,6 @@ class PositionL1Controller(PositionPDController):
         self.mrac_position = np.array([0.0, 0.0, 0.0])
         self.mrac_velocity = np.array([0.0, 0.0, 0.0])
 
-        self.delta = np.zeros(3)
-        self.lpf_delta = np.zeros(3)
-
         self.Gamma = np.array([1000.0, 1000.0, 100000.0])
 
         I3, O3 = np.eye(3), np.zeros((3, 3))
@@ -192,6 +188,8 @@ class PositionL1Controller(PositionPDController):
             (np.concatenate((O3, I3), axis=1), np.concatenate((O3, O3), axis=1))
         )
         self.G = np.concatenate((O3, I3)) * (1 / self.mass)
+
+        import control as ctrl
 
         self.K, self.P, _ = ctrl.lqr(self.F, self.G, np.eye(6), np.eye(3) * 1e-2)
         self.yGain = -self.G.T @ self.P

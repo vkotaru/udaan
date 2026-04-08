@@ -1,7 +1,7 @@
 import numpy as np
 
-from ..base import BaseModel
 from ... import manif
+from ..base import BaseModel
 
 
 class S2Pendulum(BaseModel):
@@ -11,7 +11,7 @@ class S2Pendulum(BaseModel):
     -> n_state=6, n_action=3
     """
 
-    class State(object):
+    class State:
         def __init__(self):
             self.attitude = manif.S2(np.array([0.0, 0.0, -1.0]))
             self.angular_velocity = np.zeros(3)
@@ -41,9 +41,9 @@ class S2Pendulum(BaseModel):
         # S2 geodesic update for attitude
         self.state.attitude = q.step(om * dt)
         # angular velocity update
-        dom = -(self._g / self.length) * np.cross(
-            self.state.attitude, self._e3
-        ) + torque / (self.mass * self.length**2)
+        dom = -(self._g / self.length) * np.cross(self.state.attitude, self._e3) + torque / (
+            self.mass * self.length**2
+        )
         self.state.angular_velocity = om + dom * dt
 
     def step(self, action):
@@ -61,8 +61,9 @@ class S2Pendulum(BaseModel):
 
     def get_rand_init_state(self, rand=True):
         if rand:
-            phi = -np.pi + 2 * np.pi * np.random.randn(1)
-            th = np.pi * np.random.rand(1)
+            rng = np.random.default_rng()
+            phi = -np.pi + 2 * np.pi * rng.standard_normal(1)
+            th = np.pi * rng.random(1)
             init_att = manif.S2.fromEuler(phi[0], th[0])
         else:
             init_att = manif.S2(np.array([1.0, 0.0, 0.0]))

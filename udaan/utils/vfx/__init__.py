@@ -1,6 +1,3 @@
-import signal
-import sys
-
 import numpy as np
 import vpython as vp
 
@@ -33,19 +30,6 @@ class VFXHandler:
         self.axes = None
         self.create_env()
         self._rate = rate
-
-        self.kill_loop = False
-
-        # signal.signal(signal.SIGINT, self.handler)
-        # self.thread = threading.Thread(target=self.run, args=())
-        # self.thread.start()
-        # self.thread.join()
-        pass
-
-    def handler(self, signal, frame):
-        _logger.info("Ctrl-C.... Exiting")
-        self.kill_loop = True
-        sys.exit(0)
 
     def create_env(self):
         self.axes = []
@@ -89,11 +73,6 @@ class VFXHandler:
     def reset(self):
         self.delete_env()
         self.create_env()
-
-    def run(self):
-        while not self.kill_loop:
-            vp.rate(self._rate)
-            signal.pause()
 
     def add_model(self, name, model):
         self._models[name] = model
