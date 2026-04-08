@@ -132,4 +132,10 @@ class BoundingBox(Model):
         self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymax, orig[2] + zmin))
         for p in self.points:
             self.bndry.append(p)
-        pass
+
+
+__all__ = [
+    "VFXHandler",
+    "Model",
+    "BoundingBox",
+]

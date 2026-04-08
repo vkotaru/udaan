@@ -32,5 +32,9 @@ class S2(np.ndarray):
             return np.cross(other, self)
 
     @staticmethod
-    def fromEuler(phi=0.0, th=0.0, psi=0.0):
+    def from_spherical(phi=0.0, th=0.0):
+        """Point on S2 from spherical coordinates (azimuth phi, polar th)."""
         return np.array([np.cos(phi) * np.sin(th), np.sin(phi) * np.sin(th), np.cos(th)])
+
+    # backward compat
+    fromEuler = from_spherical

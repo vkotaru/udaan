@@ -33,6 +33,11 @@ class RotationMatrix:
     def __call__(self, b3, b1):
         b3_b1d = np.cross(b3, b1)
         norm_b3_b1d = np.linalg.norm(b3_b1d)
+        if norm_b3_b1d < 1e-10:
+            # b3 parallel to b1, fall back to perpendicular axis
+            b1 = self._e2 if abs(np.dot(b3, self._e1)) > 0.9 else self._e1
+            b3_b1d = np.cross(b3, b1)
+            norm_b3_b1d = np.linalg.norm(b3_b1d)
         b1 = (-1 / norm_b3_b1d) * np.cross(b3, b3_b1d)
         b2 = np.cross(b3, b1)
         R = np.hstack(
