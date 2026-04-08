@@ -23,7 +23,7 @@ def rodrigues_expm(vector):
     if abs(th) <= 1e-4:
         return np.eye(3)
     else:
-        return np.eye(3) + K * np.sin(th) + (1 - np.cos(th)) * K @ K
+        return np.eye(3) + (np.sin(th) / th) * K + ((1 - np.cos(th)) / th**2) * (K @ K)
 
 
 def expm_taylor_expansion(M, order=2):
