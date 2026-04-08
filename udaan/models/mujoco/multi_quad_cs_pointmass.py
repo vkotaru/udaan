@@ -103,6 +103,7 @@ class MultiQuadrotorCSPointmass(BaseModel):
             self._mjMdl.data.ctrl[:] = u_clamped
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             self._query_latest_state()
+        self.t = self._mjMdl.data.time
 
     def reset(self, **kwargs):
         """reset state and time"""

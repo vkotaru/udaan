@@ -103,6 +103,7 @@ class Quadrotor(base.Quadrotor):
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state
             self._query_latest_state()
+            self.t = self._mjMdl.data.time
             # add tracking marker
             if self._mjMdl.render:
                 # self.add_reference_marker(self.xQd)

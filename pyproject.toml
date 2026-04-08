@@ -42,6 +42,7 @@ dependencies = [
     "scipy>=1.10",
     "matplotlib>=3.7",
     "mujoco>=3.0",
+    "typer>=0.9",
 ]
 
 [project.optional-dependencies]
@@ -71,6 +72,9 @@ rl = [
     "stable-baselines3>=2.0",
 ]
 all = ["udaan[mujoco,bullet,dev,docs,rl]"]
+
+[project.scripts]
+udaan = "udaan.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/vkotaru/udaan"

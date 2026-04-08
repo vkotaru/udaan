@@ -241,7 +241,7 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
                             color=[1.0, 1.0, 0.0, 1.0],
                         )
 
-        return
+        self.t = self._mjMdl.data.time
 
     def _query_latest_state(self):
         # NOTE: it is very important to copy the data from mujoco data
