@@ -14,6 +14,11 @@ try:
 
     MUJOCO_AVAILABLE = True
 except ImportError:
+    import logging as _logging
+
+    _logging.getLogger(__name__).info(
+        "MuJoCo not available. Install with: pip install udaan[mujoco]"
+    )
     mujoco = None  # type: ignore
     MUJOCO_AVAILABLE = False
 

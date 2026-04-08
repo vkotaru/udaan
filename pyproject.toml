@@ -41,12 +41,12 @@ dependencies = [
     "numpy>=1.24",
     "scipy>=1.10",
     "matplotlib>=3.7",
+    "mujoco>=3.0",
 ]
 
 [project.optional-dependencies]
 mujoco = [
     "mujoco>=3.0",
-    "mujoco-python-viewer>=0.1",
 ]
 bullet = [
     "pybullet>=3.2",

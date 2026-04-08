@@ -51,9 +51,9 @@ class QuadCSPayloadController(PDController):
         err_dq = dq - np.cross(np.cross(qd, dqd), q)
 
         Fpd = -self._gain_cable.kp * err_q - self._gain_cable.kd * err_dq
-        Fff = (mQ * l) * np.dot(q, np.cross(qd, dqd)) * np.cross(q, dq) + (
-            mQ * l
-        ) * np.cross(np.cross(qd, d2qd), q)
+        Fff = (mQ * l) * np.dot(q, np.cross(qd, dqd)) * np.cross(q, dq) + (mQ * l) * np.cross(
+            np.cross(qd, d2qd), q
+        )
         Fn = np.dot(A, q) * q
         thrust_force = -Fpd - Fff + Fn
         return thrust_force

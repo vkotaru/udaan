@@ -1,8 +1,8 @@
 import numpy as np
 import scipy.linalg
 
-from ..base import BaseModel
 from ... import manif
+from ..base import BaseModel
 
 
 class MultiPointmassSuspendedPayload(BaseModel):
@@ -13,14 +13,12 @@ class MultiPointmassSuspendedPayload(BaseModel):
     -> n_state = 6 + 6*nQ, n_action = 3*nQ
     """
 
-    class State(object):
+    class State:
         def __init__(self, nQ):
             self._nQ = nQ
             self.payload_position = np.zeros(3)
             self.payload_velocity = np.zeros(3)
-            self.cable_attitudes = np.tile(
-                np.array([0.0, 0.0, -1.0]), (nQ, 1)
-            ).T  # (3, nQ)
+            self.cable_attitudes = np.tile(np.array([0.0, 0.0, -1.0]), (nQ, 1)).T  # (3, nQ)
             self.cable_ang_velocities = np.zeros((3, nQ))
             return
 
@@ -69,23 +67,20 @@ class MultiPointmassSuspendedPayload(BaseModel):
             u_para.append(qqT @ ui)
             u_perp.append((np.eye(3) - qqT) @ ui)
             accel_rhs += (
-                u_para[i]
-                - self.mQ[i] * self.cable_lengths[i] * np.dot(om[:, i], om[:, i]) * qi
+                u_para[i] - self.mQ[i] * self.cable_lengths[i] * np.dot(om[:, i], om[:, i]) * qi
             )
 
         net_accel = -self._ge3 + np.linalg.inv(Mq) @ accel_rhs
-        self.state.payload_position += (
-            h * self.state.payload_velocity + 0.5 * net_accel * h * h
-        )
+        self.state.payload_position += h * self.state.payload_velocity + 0.5 * net_accel * h * h
         self.state.payload_velocity += h * net_accel
 
         q_next = []
         om_next = []
         for i in range(self.nQ):
             qi = q[:, i]
-            domi = (1 / self.cable_lengths[i]) * manif.hat(qi) @ (
-                net_accel + self._ge3
-            ) - (1 / (self.cable_lengths[i] * self.mQ[i])) * manif.hat(qi) @ u_perp[i]
+            domi = (1 / self.cable_lengths[i]) * manif.hat(qi) @ (net_accel + self._ge3) - (
+                1 / (self.cable_lengths[i] * self.mQ[i])
+            ) * manif.hat(qi) @ u_perp[i]
             q_next.append(scipy.linalg.expm(manif.hat(om[:, i] * h)) @ qi)
             om_next.append(om[:, i] + domi * h)
 
@@ -98,10 +93,7 @@ class MultiPointmassSuspendedPayload(BaseModel):
         Args:
             action: (3, nQ) force matrix or (3*nQ,) flat vector.
         """
-        if action.ndim == 1:
-            force = action.reshape(3, self.nQ)
-        else:
-            force = action
+        force = action.reshape(3, self.nQ) if action.ndim == 1 else action
 
         for _ in range(self._inner_loop_steps):
             self._zoh(force)
@@ -121,10 +113,8 @@ class MultiPointmassSuspendedPayload(BaseModel):
         return
 
     def get_rand_init_state(self, rand=False):
-        if rand:
-            init_pos = -5.0 + 10 * np.random.rand(3)
-        else:
-            init_pos = np.zeros(3)
+        rng = np.random.default_rng()
+        init_pos = -5.0 + 10 * rng.random(3) if rand else np.zeros(3)
         return {
             "payload_position": init_pos,
             "payload_velocity": np.zeros(3),

@@ -1,13 +1,13 @@
 """MuJoCo physics backend for Udaan.
 
-Requires mujoco and mujoco-python-viewer packages.
-Install with: pip install udaan[mujoco]
+Requires mujoco package.
+Install with: pip install udaan
 """
 
 import os
+import time
 
 import mujoco
-import mujoco_viewer
 import numpy as np
 
 from ... import _FOLDER_PATH
@@ -15,7 +15,82 @@ from ...utils.logging import get_logger
 
 _logger = get_logger(__name__)
 
-DEFAULT_SIZE = 480
+
+class _GlfwViewer:
+    """Lightweight GLFW-based MuJoCo viewer (no third-party viewer dependency)."""
+
+    def __init__(self, model, data, width=1200, height=900, title="udaan"):
+        import glfw
+
+        self._model = model
+        self._data = data
+
+        if not glfw.init():
+            raise RuntimeError("Failed to initialize GLFW")
+
+        self._window = glfw.create_window(width, height, title, None, None)
+        if not self._window:
+            glfw.terminate()
+            raise RuntimeError("Failed to create GLFW window")
+
+        glfw.make_context_current(self._window)
+        glfw.swap_interval(1)
+
+        self._scene = mujoco.MjvScene(model, maxgeom=10000)
+        self._context = mujoco.MjrContext(model, mujoco.mjtFontScale.mjFONTSCALE_150)
+        self._camera = mujoco.MjvCamera()
+        self._option = mujoco.MjvOption()
+
+        mujoco.mjv_defaultCamera(self._camera)
+        mujoco.mjv_defaultOption(self._option)
+
+        self._camera.trackbodyid = 0
+        self._camera.distance = model.stat.extent * 2.0
+        self._camera.lookat[0] += 0.5
+        self._camera.lookat[1] += 0.5
+        self._camera.lookat[2] += 0.5
+        self._camera.elevation = -40
+        self._camera.azimuth = 0
+
+        self._last_render_time = 0.0
+
+    @property
+    def cam(self):
+        return self._camera
+
+    def render(self):
+        import glfw
+
+        if glfw.window_should_close(self._window):
+            return
+
+        # Throttle to ~60fps
+        now = time.monotonic()
+        if now - self._last_render_time < 1.0 / 60.0:
+            return
+        self._last_render_time = now
+
+        viewport = mujoco.MjrRect(0, 0, *glfw.get_framebuffer_size(self._window))
+        mujoco.mjv_updateScene(
+            self._model, self._data, self._option, None, self._camera,
+            mujoco.mjtCatBit.mjCAT_ALL, self._scene,
+        )
+        mujoco.mjr_render(viewport, self._scene, self._context)
+        glfw.swap_buffers(self._window)
+        glfw.poll_events()
+
+    def close(self):
+        import glfw
+
+        if self._window:
+            glfw.destroy_window(self._window)
+            glfw.terminate()
+            self._window = None
+
+    def is_alive(self):
+        import glfw
+
+        return self._window is not None and not glfw.window_should_close(self._window)
 
 
 class MujocoModel:
@@ -25,48 +100,32 @@ class MujocoModel:
             raise OSError(f"File {self.full_path} does not exist")
 
         self.render = render
-        self.viewer = None
+        self._viewer = None
 
         self.frame_skip = 1
         self._initialize_simulation()
-
-        self.viewer_setup()
-        return
 
     def _initialize_simulation(self):
         _logger.info("Loading model from %s", self.full_path)
         self.model = mujoco.MjModel.from_xml_path(self.full_path)
         self.data = mujoco.MjData(self.model)
-
-        # mujoco py not implemented
-        # following for future reference
-        # ---------------------------------
-        # mj_path = mujoco_py.utils.discover_mujoco()
-        # # xml_path = os.path.join(mj_path, 'model', 'humanoid.xml')
-        # model = mujoco_py.load_model_from_path(self.full_path)
-        # sim = mujoco_py.MjSim(model)
-        # sim.forward()
+        self._wall_start = None
 
         if self.render:
-            self.viewer = mujoco_viewer.MujocoViewer(self.model, self.data)
-        return
+            self._viewer = _GlfwViewer(self.model, self.data)
 
     def _step_mujoco_simulation(self, n_frames=1):
         mujoco.mj_step(self.model, self.data, n_frames)
-        if self.render:
-            self.viewer.render()
-            self.viewer.add_marker(
-                pos=[0, 0, 0],
-                size=[0.025, 0.025, 0.025],
-                rgba=[0, 0, 0.1, 0.8],
-                type=mujoco.mjtGeom.mjGEOM_SPHERE,
-                label="origin",
-            )
-            # try:
-            #     self.viewer.render()
-            # except Exception as e:
-            #     print(e)
-        return
+        if self.render and self._viewer is not None:
+            # Sync simulation to real-time
+            if self._wall_start is None:
+                self._wall_start = time.monotonic()
+            sim_time = self.data.time
+            wall_elapsed = time.monotonic() - self._wall_start
+            sleep_time = sim_time - wall_elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            self._viewer.render()
 
     def _quat2rot(self, q):
         return np.array(
@@ -91,54 +150,19 @@ class MujocoModel:
 
     def reset(self):
         mujoco.mj_resetData(self.model, self.data)
-        return
+        self._wall_start = None
 
-    def viewer_setup(self):
-        if self.render:
-            self.viewer.cam.trackbodyid = 0  # id of the body to track ()
-            self.viewer.cam.distance = (
-                self.model.stat.extent * 2.0
-            )  # how much you "zoom in", model.stat.extent is
-            # the max limits of the arena
-            self.viewer.cam.lookat[
-                0
-            ] += 0.5  # x,y,z offset from the object (works if trackbodyid=-1)
-            self.viewer.cam.lookat[1] += 0.5
-            self.viewer.cam.lookat[2] += 0.5
-            self.viewer.cam.elevation = (
-                -40  # camera rotation around the axis in the plane going through the frame
-            )
-            # origin (if 0 you just see a line)
-            self.viewer.cam.azimuth = 0  # camera rotation around the camera's vertical axis
-
-    def add_marker_at(self, p, size=[0.05, 0.05, 0.05], rgba=[1, 0, 0, 0.75], label=""):
-        if self.render:
-            self.viewer.add_marker(
-                pos=p,
-                size=size,
-                rgba=rgba,
-                type=mujoco.mjtGeom.mjGEOM_BOX,
-                label=label,
-            )
-        return
+    def add_marker_at(self, p, size=None, rgba=None, label=""):
+        """Visual markers not yet supported with built-in viewer."""
+        pass
 
     def add_arrow_at(self, p, R, s, label="", color=None):
-        if color is None:
-            color = [1, 0, 0, 0.75]
-        if self.render:
-            self.viewer.add_marker(
-                pos=p,
-                mat=R,
-                size=s,
-                rgba=color,
-                type=mujoco.mjtGeom.mjGEOM_ARROW,
-                label=label,
-            )
-        return
+        """Visual markers not yet supported with built-in viewer."""
+        pass
 
 
-from .quadrotor import Quadrotor
-from .quadrotor_cspayload import QuadrotorCSPayload
-from .multi_quad_cs_pointmass import MultiQuadrotorCSPointmass
-from .quadrotor_comparison import QuadrotorComparison
-from .multi_quad_rigidbody import MultiQuadRigidbody
+from .multi_quad_cs_pointmass import MultiQuadrotorCSPointmass as MultiQuadrotorCSPointmass
+from .multi_quad_rigidbody import MultiQuadRigidbody as MultiQuadRigidbody
+from .quadrotor import Quadrotor as Quadrotor
+from .quadrotor_comparison import QuadrotorComparison as QuadrotorComparison
+from .quadrotor_cspayload import QuadrotorCSPayload as QuadrotorCSPayload

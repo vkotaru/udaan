@@ -132,9 +132,7 @@ class MultiQuadrotorCSPointmass(BaseModel):
             self.state.cables[i].length = np.linalg.norm(p)
             self.state.cables[i].q = p / self.state.cables[i].length
             self.state.cables[i].dq = self.state.load_velocity - self.state.quads[i].velocity
-            self.state.cables[i].omega = np.cross(
-                self.state.cables[i].q, self.state.cables[i].dq
-            )
+            self.state.cables[i].omega = np.cross(self.state.cables[i].q, self.state.cables[i].dq)
 
     def quad_position_control(self):
         """quadrotor position control"""

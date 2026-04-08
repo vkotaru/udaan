@@ -10,7 +10,7 @@ class FloatingPointmass(BaseModel):
     State: position (3), velocity (3) -> n_state=6, n_action=3
     """
 
-    class State(object):
+    class State:
         def __init__(self):
             self.position = np.zeros(3)
             self.velocity = np.zeros(3)
@@ -50,8 +50,6 @@ class FloatingPointmass(BaseModel):
         return
 
     def get_rand_init_state(self, rand=True):
-        if rand:
-            init_pos = -5 + 10 * np.random.rand(3)
-        else:
-            init_pos = np.zeros(3)
+        rng = np.random.default_rng()
+        init_pos = -5 + 10 * rng.random(3) if rand else np.zeros(3)
         return {"position": init_pos, "velocity": np.zeros(3)}

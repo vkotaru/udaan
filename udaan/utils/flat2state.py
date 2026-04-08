@@ -1,8 +1,9 @@
 import numpy as np
+
 from ..manif import vee
 
 
-class Flat2State(object):
+class Flat2State:
     """Differential flatness maps for quadrotor and quadrotor-payload systems."""
 
     @staticmethod
@@ -44,15 +45,11 @@ class Flat2State(object):
 
         dfb3 = np.dot(mQ, daxQ) - dTp
         dnorm_fb3 = np.divide(fb3.dot(dfb3), norm_fb3)
-        db3 = np.divide(
-            np.multiply(dfb3, norm_fb3) - np.multiply(fb3, dnorm_fb3), norm_fb3**2.0
-        )
+        db3 = np.divide(np.multiply(dfb3, norm_fb3) - np.multiply(fb3, dnorm_fb3), norm_fb3**2.0)
         db3_b1d = np.cross(db3, b1d) + np.cross(b3, db1d)
         dnorm_b3_b1d = np.divide(b3_b1d.dot(db3_b1d), norm_b3_b1d)
         db1 = np.divide(
-            -np.cross(db3, b3_b1d)
-            - np.cross(b3, db3_b1d)
-            - np.multiply(b1, dnorm_b3_b1d),
+            -np.cross(db3, b3_b1d) - np.cross(b3, db3_b1d) - np.multiply(b1, dnorm_b3_b1d),
             norm_b3_b1d,
         )
         db2 = np.cross(db3, b1) + np.cross(b3, db1)
@@ -76,10 +73,7 @@ class Flat2State(object):
             norm_fb3**4.0,
         )
         d2b3_b1d = (
-            np.cross(d2b3, b1d)
-            + np.cross(db3, db1d)
-            + np.cross(db3, db1d)
-            + np.cross(b3, d2b1d)
+            np.cross(d2b3, b1d) + np.cross(db3, db1d) + np.cross(db3, db1d) + np.cross(b3, d2b1d)
         )
         d2norm_b3_b1d = np.divide(
             np.dot(db3_b1d.dot(db3_b1d) + b3_b1d.dot(d2b3_b1d), norm_b3_b1d)
@@ -99,14 +93,9 @@ class Flat2State(object):
             - np.dot(np.dot(db1, norm_b3_b1d), dnorm_b3_b1d),
             norm_b3_b1d**2.0,
         )
-        d2b2 = (
-            np.cross(d2b3, b1)
-            + np.cross(db3, db1)
-            + np.cross(db3, db1)
-            + np.cross(b3, d2b1)
-        )
+        d2b2 = np.cross(d2b3, b1) + np.cross(db3, db1) + np.cross(db3, db1) + np.cross(b3, d2b1)
         d2R = np.array(np.vstack((d2b1, d2b2, d2b3)))
-        dOmega = vee((np.dot(dR, dR.conj().T) + np.dot(d2R, R.conj().T)))
+        dOmega = vee(np.dot(dR, dR.conj().T) + np.dot(d2R, R.conj().T))
         M = np.dot(J, dOmega) + np.cross(Omega, np.dot(J, Omega))
 
         s = {}
