@@ -11,7 +11,7 @@ _logger = get_logger(__name__)
 
 class VFXHandler:
     def __init__(self, title="visuals", rate=200):
-        self._title = "floating_models::" + title
+        self._title = "udaan::" + title
         self.scene = vp.canvas(
             title=self._title,
             width=1080,  # 1920
@@ -80,8 +80,8 @@ class VFXHandler:
 
     def delete_env(self):
         self.axes[0].render = False
-        self.axes[0].render = False
-        self.axes[0].render = False
+        self.axes[1].render = False
+        self.axes[2].render = False
         # del self.axes
         # del self.nozzle
         return
@@ -131,7 +131,7 @@ class BoundingBox(Model):
     ):
         super().__init__(name)
         self.orig = orig
-        self.bndry = vp.curve(color=colors[color], radius=0.01)
+        self.bndry = vp.curve(color=getattr(vp.color, color), radius=0.01)
         self.points = []
         self.points.append(vp.vector(orig[0] + xmin, orig[1] + ymin, orig[2] + zmin))
         self.points.append(vp.vector(orig[0] + xmax, orig[1] + ymin, orig[2] + zmin))

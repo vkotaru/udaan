@@ -64,7 +64,7 @@ For this repository, please cite the following:
 author = {Kotaru, Prasanth},
 title = {{Udaan: Python mujoco based models and controllers for quadcopter cable-suspended payload systems.}},
 url = {https://github.com/vkotaru/udaan},
-version = {v0.0.1}
+version = {v1.0.0}
 }
 ```
 

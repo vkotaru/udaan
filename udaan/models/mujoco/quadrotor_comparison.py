@@ -74,8 +74,8 @@ class QuadrotorComparison(base.BaseModel):
             self.plant.inertia = I
             self._mjMdl.model.body_inertia[self._mj_plant_body_idx] = I
         else:
-            self.reference.mass = I
-            self._mjMdl.model.body_mass[self._mj_reference_body_idx] = I
+            self.reference.inertia = I
+            self._mjMdl.model.body_inertia[self._mj_reference_body_idx] = I
         return
 
     def reset(self, **kwargs):

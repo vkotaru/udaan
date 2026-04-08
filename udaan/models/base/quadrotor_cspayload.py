@@ -12,7 +12,7 @@ _logger = get_logger(__name__)
 
 
 class QuadrotorCSPayload(BaseModel):
-    """Quadrotor with cable suspended paylaod model."""
+    """Quadrotor with cable-suspended payload model."""
 
     class INPUT_TYPE(enum.Enum):
         CMD_WRENCH = 0  # thrust [N] (scalar), torque [Nm] (3x1) : (4x1)
@@ -55,11 +55,13 @@ class QuadrotorCSPayload(BaseModel):
         self.state = QuadrotorCSPayload.State()
 
         # system parameters
-        self.mQ = 0.9  # kg
-        self.JQ = np.array([[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]])  # kg m^2
-        self.JQinv = np.linalg.inv(self.JQ)
-        self.mL = 0.2  # kg
-        self.l = 1.0  # m
+        self._quad_mass = 0.9  # kg
+        self._quad_inertia = np.array(
+            [[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]]
+        )  # kg m^2
+        self._quad_inertia_inv = np.linalg.inv(self._quad_inertia)
+        self._payload_mass = 0.2  # kg
+        self._cable_length = 1.0  # m
 
         self._min_thrust = 0.0
         self._max_thrust = 20.0
@@ -98,35 +100,33 @@ class QuadrotorCSPayload(BaseModel):
         if self.render:
             from ...utils import vfx
 
-            self._vfx = vfx.QuadrotorCSPayloadVFX(l=self.l)
+            self._vfx = vfx.QuadrotorCSPayloadVFX(l=self._cable_length)
 
         self._init_default_controllers()
         return
 
     def _init_default_controllers(self):
-        self._att_controller = control.QuadAttGeoPD(inertia=self.qrotor_inertia)
+        self._att_controller = control.QuadAttGeoPD(inertia=self._quad_inertia)
         self._payload_controller = control.QuadCSPayloadController()
-        # self._prop_controller = control.QuadPropForceController(mass=self.mass, inertia=self.inertia)
-        return
 
     @property
     def qrotor_mass(self) -> float:
-        return self.mQ
+        return self._quad_mass
 
     @qrotor_mass.setter
     def qrotor_mass(self, value: float):
-        self.mQ = value
+        self._quad_mass = value
 
     @property
     def qrotor_inertia(self) -> np.ndarray:
-        return self.JQ
+        return self._quad_inertia
 
     @qrotor_inertia.setter
     def qrotor_inertia(self, value: np.ndarray):
         if value.ndim == 1:
             value = np.diag(value)
-        self.JQ = value
-        self.JQinv = np.linalg.inv(self.JQ)
+        self._quad_inertia = value
+        self._quad_inertia_inv = np.linalg.inv(self._quad_inertia)
 
     @property
     def payload_mass(self) -> float:
@@ -138,11 +138,11 @@ class QuadrotorCSPayload(BaseModel):
 
     @property
     def cable_length(self) -> float:
-        return self.l
+        return self._cable_length
 
     @cable_length.setter
     def cable_length(self, value: float):
-        self.l = value
+        self._cable_length = value
 
     def _zoh(self, thrust: float, torque: np.ndarray):
         """Zero-order hold on the system equations of motion
@@ -158,10 +158,16 @@ class QuadrotorCSPayload(BaseModel):
         q = self.state.cable_attitude
         h = self.sim_timestep
 
+        mQ = self._quad_mass
+        mL = self._payload_mass
+        l = self._cable_length
+        J = self._quad_inertia
+        Jinv = self._quad_inertia_inv
+
         fRe3 = thrust * self.state.orientation @ self._e3
         payload_accel = (
             -self._ge3
-            + ((np.dot(q, fRe3) - self.mQ * self.l * np.dot(dq, dq)) / (self.mQ + self.mL)) * q
+            + ((np.dot(q, fRe3) - mQ * l * np.dot(dq, dq)) / (mQ + mL)) * q
         )
 
         # payload position dynamics
@@ -169,19 +175,19 @@ class QuadrotorCSPayload(BaseModel):
         self.state.payload_velocity += payload_accel * h
         # cable attitude dynamics
         self.state.cable_attitude = expm(utils.hat(h * self.state.cable_ang_velocity)) @ q
-        domega = -np.cross(q, fRe3) / (self.mQ * self.l)
+        domega = -np.cross(q, fRe3) / (mQ * l)
         self.state.cable_ang_velocity += h * domega
         # quadrotor attitude dynamics
         self.state.orientation = self.state.orientation @ expm(
             utils.hat(self.state.angular_velocity * h)
         )
-        ang_vel_dot = self.JQinv @ (
-            torque - np.cross(self.state.angular_velocity, self.JQ @ self.state.angular_velocity)
+        ang_vel_dot = Jinv @ (
+            torque - np.cross(self.state.angular_velocity, J @ self.state.angular_velocity)
         )
         self.state.angular_velocity += ang_vel_dot * h
         # Update quadrotor position & velocity
-        self.state.position = self.state.payload_position - self.l * self.state.cable_attitude
-        self.state.velocity = self.state.payload_velocity - self.l * self.state.dq()
+        self.state.position = self.state.payload_position - l * self.state.cable_attitude
+        self.state.velocity = self.state.payload_velocity - l * self.state.dq()
         return
 
     def _parse_input(self, input):
@@ -256,10 +262,10 @@ class QuadrotorCSPayload(BaseModel):
 
         # if only position is given, set payload position accordingly
         if "position" in kwargs:
-            self.state.payload_position = kwargs["position"] + self.l * self.state.cable_attitude
+            self.state.payload_position = kwargs["position"] + self._cable_length * self.state.cable_attitude
         # if only payload position is given, set position accordingly
-        if "payload_position" in kwargs:
-            self.state.position = kwargs["payload_position"] - self.l * self.state.cable_attitude
+        elif "payload_position" in kwargs:
+            self.state.position = kwargs["payload_position"] - self._cable_length * self.state.cable_attitude
 
         return
 
@@ -270,8 +276,7 @@ class QuadrotorCSPayload(BaseModel):
         start_t = time.time_ns()
         while self.t < tf:
             if self._input_type == QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES:
-                raise NotImplementedError("TODO: Implement")
-                u = self._prop_controller.compute(self.t, self.state)
+                raise NotImplementedError("Propeller force input not yet supported")
             else:
                 u = self._payload_controller.compute(self.t, self.state)
             self.step(u)
