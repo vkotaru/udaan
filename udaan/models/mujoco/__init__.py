@@ -265,3 +265,12 @@ from .multi_quad_rigidbody import MultiQuadRigidbody as MultiQuadRigidbody
 from .quadrotor import Quadrotor as Quadrotor
 from .quadrotor_comparison import QuadrotorComparison as QuadrotorComparison
 from .quadrotor_cspayload import QuadrotorCSPayload as QuadrotorCSPayload
+
+__all__ = [
+    "MujocoModel",
+    "MultiQuadrotorCSPointmass",
+    "MultiQuadRigidbody",
+    "Quadrotor",
+    "QuadrotorComparison",
+    "QuadrotorCSPayload",
+]
