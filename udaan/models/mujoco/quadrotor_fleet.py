@@ -202,6 +202,8 @@ class QuadrotorFleet(base.BaseModel):
         """Run simulation with each quadrotor using its own controllers."""
         self.reset(**kwargs)
         self._update_legend()
+        log_interval = kwargs.get("log_interval", 1.0)
+        next_log = log_interval
 
         while self.t < tf:
             u = np.zeros(4 * self.nQ)
@@ -216,5 +218,25 @@ class QuadrotorFleet(base.BaseModel):
                 u[4 * i : 4 * i + 4] = [f, *M]
             self.step(u)
 
+            if self.t >= next_log:
+                self._log_state()
+                next_log += log_interval
+
+        self._log_state()
+
         if self.render and self._mjMdl._viewer is not None:
             self._mjMdl.wait_for_close()
+
+    def _log_state(self):
+        """Log each quadrotor's state at DEBUG level."""
+        lines = [f"t={self.t:.2f}s"]
+        for i in range(self.nQ):
+            s = self.quadrotors[i].state
+            ctrl = self.quadrotors[i].attitude_controller
+            pos_str = np.array2string(s.position, precision=3, suppress_small=True)
+            line = f"  quad{i}: pos={pos_str}"
+            if hasattr(ctrl, "sigma_hat"):
+                sigma_str = np.array2string(ctrl.sigma_hat, precision=3, suppress_small=True)
+                line += f" σ̂={sigma_str}"
+            lines.append(line)
+        _logger.debug("\n".join(lines))
