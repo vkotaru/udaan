@@ -69,6 +69,7 @@ class _GlfwViewer:
         glfw.set_key_callback(self._window, self._key_callback)
 
         self._last_render_time = 0.0
+        self._overlay_text = ""
 
     def _mouse_button_callback(self, window, button, action, mods):
         import glfw
@@ -162,6 +163,17 @@ class _GlfwViewer:
             self._context,
         )
 
+        # Overlay legend top-left (if set)
+        if self._overlay_text:
+            mujoco.mjr_overlay(
+                mujoco.mjtFont.mjFONT_NORMAL,
+                mujoco.mjtGridPos.mjGRID_TOPLEFT,
+                viewport,
+                self._overlay_text,
+                "",
+                self._context,
+            )
+
         glfw.swap_buffers(self._window)
 
     def hold(self):
@@ -251,6 +263,11 @@ class MujocoModel:
         if self.render and self._viewer is not None:
             self._viewer.hold()
 
+    def set_overlay(self, text):
+        """Set overlay text displayed in the top-left corner."""
+        if self._viewer is not None:
+            self._viewer._overlay_text = text
+
     def add_marker_at(self, p, size=None, rgba=None, label=""):
         """Visual markers not yet supported with built-in viewer."""
         pass
@@ -265,6 +282,7 @@ from .multi_quad_rigidbody import MultiQuadRigidbody as MultiQuadRigidbody
 from .quadrotor import Quadrotor as Quadrotor
 from .quadrotor_comparison import QuadrotorComparison as QuadrotorComparison
 from .quadrotor_cspayload import QuadrotorCSPayload as QuadrotorCSPayload
+from .quadrotor_fleet import QuadrotorFleet as QuadrotorFleet
 
 __all__ = [
     "MujocoModel",
@@ -273,4 +291,5 @@ __all__ = [
     "Quadrotor",
     "QuadrotorComparison",
     "QuadrotorCSPayload",
+    "QuadrotorFleet",
 ]
