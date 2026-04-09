@@ -19,12 +19,18 @@ _logger = get_logger(__name__)
 class _GlfwViewer:
     """Lightweight GLFW-based MuJoCo viewer with mouse interaction."""
 
-    def __init__(self, model, data, width=1200, height=900, title="udaan"):
+    def __init__(self, model, data, width=1200, height=900, title="udaan", record=None):
+        if record:
+            width, height = 640, 480
         import glfw
 
         self._model = model
         self._data = data
         self._glfw = glfw
+        self._record_path = record
+        self._frames = [] if record else None
+        self._record_every = 4  # capture every Nth rendered frame
+        self._render_count = 0
 
         if not glfw.init():
             raise RuntimeError("Failed to initialize GLFW")
@@ -47,12 +53,10 @@ class _GlfwViewer:
         mujoco.mjv_defaultOption(self._option)
         mujoco.mjv_defaultPerturb(self._perturb)
 
-        self._camera.type = mujoco.mjtCamera.mjCAMERA_FREE
-        self._camera.distance = max(model.stat.extent * 4.0, 5.0)
-        self._camera.lookat[0] = 0.0
-        self._camera.lookat[1] = 0.0
-        self._camera.lookat[2] = 1.5
-        self._camera.elevation = -30
+        self._camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+        self._camera.trackbodyid = 1
+        self._camera.distance = max(model.stat.extent * 1.5, 1.5)
+        self._camera.elevation = -20
         self._camera.azimuth = 135
 
         # Mouse interaction state
@@ -176,6 +180,32 @@ class _GlfwViewer:
 
         glfw.swap_buffers(self._window)
 
+        # Capture frame for recording (every Nth frame to reduce overhead)
+        if self._frames is not None:
+            self._render_count += 1
+            if self._render_count % self._record_every == 0:
+                width, height = glfw.get_framebuffer_size(self._window)
+                rgb = np.empty((height, width, 3), dtype=np.uint8)
+                mujoco.mjr_readPixels(rgb, None, viewport, self._context)
+                self._frames.append(np.flipud(rgb))
+
+    def save_recording(self):
+        """Save captured frames to file (GIF or MP4)."""
+        if not self._frames or not self._record_path:
+            return
+        import imageio.v3 as iio
+
+        path = self._record_path
+        frames = list(self._frames)
+        self._frames = []  # Prevent double-save
+        _logger.info("Saving %d frames to %s", len(frames), path)
+
+        if path.endswith(".gif"):
+            iio.imwrite(path, frames, duration=1000 // 15, loop=0)
+        else:
+            iio.imwrite(path, frames, fps=30)
+        _logger.info("Saved recording to %s", path)
+
     def hold(self):
         """Keep window open until user closes it. Press ESC or Q to quit."""
         import glfw
@@ -188,6 +218,7 @@ class _GlfwViewer:
     def close(self):
         import glfw
 
+        self.save_recording()
         if self._window:
             glfw.destroy_window(self._window)
             glfw.terminate()
@@ -200,12 +231,13 @@ class _GlfwViewer:
 
 
 class MujocoModel:
-    def __init__(self, model_path, render=False):
+    def __init__(self, model_path, render=False, record=None):
         self.full_path = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf", model_path)
         if not os.path.exists(self.full_path):
             raise OSError(f"File {self.full_path} does not exist")
 
         self.render = render
+        self._record = record
         self._viewer = None
 
         self.frame_skip = 1
@@ -218,7 +250,7 @@ class MujocoModel:
         self._wall_start = None
 
         if self.render:
-            self._viewer = _GlfwViewer(self.model, self.data)
+            self._viewer = _GlfwViewer(self.model, self.data, record=self._record)
 
     def _step_mujoco_simulation(self, n_frames=1):
         mujoco.mj_step(self.model, self.data, n_frames)
@@ -259,9 +291,13 @@ class MujocoModel:
         self._wall_start = None
 
     def wait_for_close(self):
-        """Keep the viewer open until the user closes the window."""
+        """Keep the viewer open until the user closes the window.
+        If recording, save and close immediately instead of holding."""
         if self.render and self._viewer is not None:
-            self._viewer.hold()
+            if self._viewer._record_path:
+                self._viewer.close()
+            else:
+                self._viewer.hold()
 
     def set_overlay(self, text):
         """Set overlay text displayed in the top-left corner."""

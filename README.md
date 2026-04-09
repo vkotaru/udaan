@@ -6,6 +6,17 @@ Developed as part of the thesis: *Dynamics and Control for Collaborative Aerial 
 
 > **Note:** The original research code was developed in [vkotaru/floating_models](https://github.com/vkotaru/floating_models). This package (`udaan`) is the cleaned-up, unified public release, refactored with the aid of [Claude](https://claude.ai) under the careful guidance of the author.
 
+<p align="center">
+  <img src=".media/quadrotor.gif" width="250" alt="Quadrotor"/>
+  <img src=".media/quad_payload_tendon.gif" width="250" alt="Quad + Payload (tendon)"/>
+  <img src=".media/quad_payload_links.gif" width="250" alt="Quad + Payload (links)"/>
+</p>
+<p align="center">
+  <img src=".media/multi_quad_pointmass.gif" width="250" alt="Multi-Quad Pointmass"/>
+  <img src=".media/multi_quad_rigid.gif" width="250" alt="Multi-Quad Rigidbody"/>
+  <img src=".media/fleet_l1.gif" width="250" alt="Fleet L1 Comparison"/>
+</p>
+
 ## Installation
 
 ```bash
@@ -22,10 +33,13 @@ pip install -e ".[all]"
 ### CLI
 
 ```bash
-udaan run quadrotor -t 10                     # quadrotor with geometric control
-udaan run quad-payload -t 10 -m tendon        # quadrotor + cable-suspended payload
-udaan run multi-quad -n 3 -t 10               # multi-quadrotor cooperative payload
-udaan run quadrotor -b base --no-render       # base model (no MuJoCo)
+udaan run quadrotor -t 10                             # quadrotor with geometric control
+udaan run quad-payload -t 10 -m tendon                # quadrotor + cable-suspended payload
+udaan run multi-quad -n 3 -t 10                       # multi-quadrotor cooperative payload
+udaan run multi-quad-rigid -t 10                      # multi-quadrotor rigid-body payload
+udaan run fleet --demo l1-comparison -t 10            # L1 vs PD controller comparison
+udaan run fleet --demo gain-sweep -t 10               # PD gain tuning comparison
+udaan run quadrotor -t 5 -r out.gif                   # record to GIF
 ```
 
 ### Python
@@ -38,25 +52,14 @@ mdl = U.models.mujoco.Quadrotor(render=True)
 mdl.simulate(tf=10, position=np.array([1., 1., 0.]))
 ```
 
-## Models
-
-| | Quadrotor | Quadrotor + Payload |
-|---|---|---|
-| **Preview** | <img src=".media/quadrotor_mj.gif" width="200"/> | <img src=".media/quadrotor_cspayload_mj.gif" width="200"/> |
-| **State space** | SE(3) | SE(3) x S2 |
-| **Backends** | Base, MuJoCo | Base, MuJoCo (tendon, links) |
-| **CLI** | `udaan run quadrotor` | `udaan run quad-payload` |
-
-Additional MuJoCo models: multi-quadrotor pointmass payload (`udaan run multi-quad`), multi-quadrotor rigid-body payload, quadrotor comparison (plant vs reference).
-
 <details>
 <summary><strong>Controller roadmap</strong></summary>
 
 | Controller | System | Status | Reference |
 |-----------|--------|--------|-----------|
 | Geometric PD (SE(3)) | Quadrotor | :white_check_mark: Implemented | [Lee, Leok, McClamroch 2010](https://ieeexplore.ieee.org/document/5717652) |
+| Geometric L1 Adaptive (SO(3)) | Quadrotor | :white_check_mark: Implemented | [Kotaru, Wu, Sreenath 2020](https://doi.org/10.1115/1.4045558) |
 | Geometric PD (SE(3) x S2) | Quad + Payload | :white_check_mark: Implemented | [Sreenath, Lee, Kumar 2013](https://ieeexplore.ieee.org/abstract/document/6760219) |
-| L1 Adaptive (SO(3)) | Quadrotor | :white_check_mark: Implemented | [Kotaru, Wu, Sreenath 2020](https://doi.org/10.1115/1.4045558) |
 | Propeller Force Allocation | Quadrotor | :white_check_mark: Implemented | — |
 | Differential Flatness | Quad + Payload | :construction: Partial (flat2state utils) | [Sreenath, Lee, Kumar 2013](https://ieeexplore.ieee.org/abstract/document/6760219) |
 | NLMPC (CasADi) | Quadrotor | :memo: Planned | — |
@@ -92,7 +95,7 @@ MuJoCo-backed physics with GLFW visualization.
 | `QuadrotorCSPayload` | Quad + payload (tendon or links cable model) |
 | `MultiQuadrotorCSPointmass` | N quadrotors, shared point-mass payload |
 | `MultiQuadRigidbody` | N quadrotors, shared rigid-body payload |
-| `QuadrotorComparison` | Side-by-side plant vs reference quadrotor |
+| `QuadrotorFleet` | N independent quadrotors for controller comparison |
 
 ### Manifold Library (`udaan.manif`)
 
