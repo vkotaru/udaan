@@ -1,7 +1,12 @@
+"""Payload position + cable attitude controller.
+
+Sreenath, Lee, Kumar (2013) https://ieeexplore.ieee.org/abstract/document/6760219
+"""
+
 import numpy as np
 
-from ..control import Gains, PDController
-from ..utils import hat
+from ...control import Gains, PDController
+from ...utils import hat
 
 
 class QuadCSPayloadController(PDController):
@@ -23,7 +28,6 @@ class QuadCSPayloadController(PDController):
         t = args[0]
         s = args[1]  # quadrotor payload state
         sd, dsd, d2sd = self.setpoint(t)
-        # TODO add differential flatness
 
         ex = s.payload_position - sd
         ev = s.payload_velocity - dsd
@@ -31,7 +35,6 @@ class QuadCSPayloadController(PDController):
         q = s.cable_attitude
         dq = s.dq()
 
-        # payload position control
         mQ = self._quad_mass
         mL = self._payload_mass
         l = self._cable_length
@@ -46,7 +49,7 @@ class QuadCSPayloadController(PDController):
         qd = qc
         dqd = np.zeros(3)  # TODO update from differential flatness
         d2qd = np.zeros(3)  # TODO update from differential flatness
-        # % calculating errors
+        # calculating errors
         err_q = hat(q) @ hat(q) @ qd
         err_dq = dq - np.cross(np.cross(qd, dqd), q)
 
