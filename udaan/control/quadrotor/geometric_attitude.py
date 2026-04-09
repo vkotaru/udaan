@@ -76,5 +76,5 @@ class GeometricAttitudeController(Controller):
         eOmega = Omega - R.T @ Rd @ Omegad
         M = -self._gains.kp * eR - self._gains.kd * eOmega + np.cross(Omega, self.inertia @ Omega)
         M += -1 * self.inertia @ (hat(Omega) @ R.T @ Rd @ Omegad - R.T @ Rd @ dOmegad)
-        f = thrust_force.dot(R[:, 2]) * self.mass
+        f = thrust_force.dot(R[:, 2])
         return f, M

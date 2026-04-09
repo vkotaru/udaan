@@ -122,6 +122,7 @@ def fleet(
     render: bool = typer.Option(True, help="Enable visualization."),
     num_quads: int = typer.Option(3, "--num-quads", "-n", help="Number of quadrotors."),
     demo: str | None = typer.Option(None, "--demo", "-d", help="Run a preset demo."),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Log quad states during sim."),
     position: str | None = typer.Option(
         None, "--position", "-p", help="Initial position as 'x,y,z'."
     ),
@@ -130,7 +131,12 @@ def fleet(
 
     Available demos: l1-comparison, gain-sweep
     """
+    import logging
+
     import numpy as np
+
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
     import udaan as U
 

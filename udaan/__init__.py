@@ -19,7 +19,7 @@ PACKAGE_DIR = Path(__file__).parent
 from . import control, core, manif, models, utils
 
 # Version
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 __all__ = [
     "core",

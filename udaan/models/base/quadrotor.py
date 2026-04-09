@@ -231,8 +231,8 @@ class Quadrotor(BaseModel):
             self._allocation_matrix[3, i] = self._force2torque_const * d[i]
 
         self._allocation_inv = np.linalg.pinv(self._allocation_matrix)
-        _logger.debug("Allocation matrix:\n%s", self._allocation_matrix)
-        _logger.debug("Allocation inverse:\n%s", self._allocation_inv)
+        # _logger.debug("Allocation matrix:\n%s", self._allocation_matrix)
+        # _logger.debug("Allocation inverse:\n%s", self._allocation_inv)
         return
 
     def _wrench_to_propforces(self, wrench):

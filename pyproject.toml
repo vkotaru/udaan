@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "udaan"
-version = "1.0.0"
+version = "1.0.1"
 description = "Quadrotor dynamics and control for cable-suspended payload systems"
 readme = "README.md"
 license = "BSD-3-Clause"
