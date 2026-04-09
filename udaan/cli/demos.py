@@ -23,7 +23,7 @@ def _l1_comparison_configure(fleet):
     from udaan.control.quadrotor import PositionL1Controller
     from udaan.control.quadrotor.geometric_l1_attitude import GeometricL1AttitudeController
 
-    traj = lambda t: (np.array([0.0, 0.0, 2.0]), np.zeros(3), np.zeros(3))
+    traj = lambda t: (np.array([0.0, 0.0, 1.0]), np.zeros(3), np.zeros(3))
 
     # quad 0 (red): PD + GeomAtt, NO disturbance — reference baseline
     fleet[0].position_controller.setpoint = traj
