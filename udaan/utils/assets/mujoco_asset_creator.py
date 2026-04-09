@@ -21,17 +21,14 @@ class MujocoAssetCreator:
     def __init__(self, name="mujoco_asset"):
         self.name = name
         self.root = ET.Element("mujoco")
-        self.root.attrib["model"] = "Quadcopter"
+        self.root.attrib["model"] = name
+        include = ET.SubElement(self.root, "include")
+        include.attrib["file"] = "scene.xml"
         compiler = ET.SubElement(self.root, "compiler")
         compiler.attrib["angle"] = "degree"
         compiler.attrib["coordinate"] = "local"
         compiler.attrib["inertiafromgeom"] = "true"
-        self.asset()
         self.worldbody = ET.SubElement(self.root, "worldbody")
-
-        self.ground_plane(size=5.0)
-        self.light()
-        return
 
     def save_to(self, filename="mujoco_asset.xml", verbose=False):
         """Save the asset to a file
@@ -109,9 +106,10 @@ class MujocoAssetCreator:
         site1,
         site2,
         range=[0.0, 1.0],
-        width=0.005,
+        width=0.003,
         damping=0.0,
         stiffness=0.0,
+        rgba=[0.9, 0.9, 0.9, 1.0],
     ):
         spatial = ET.SubElement(parent, "spatial")
         spatial.attrib["limited"] = "true"
@@ -119,6 +117,7 @@ class MujocoAssetCreator:
         spatial.attrib["width"] = str(width)
         spatial.attrib["damping"] = str(damping)
         spatial.attrib["stiffness"] = str(stiffness)
+        spatial.attrib["rgba"] = " ".join([str(x) for x in rgba])
         s1 = ET.SubElement(spatial, "site")
         s1.attrib["site"] = site1
         s2 = ET.SubElement(spatial, "site")
@@ -452,7 +451,7 @@ class MujocoAssetCreator:
     def create_quadrotor0(self, parent, name, pos, **kwargs):
         xtype = kwargs["xtype"] if "xtype" in kwargs else True
         alpha = kwargs["alpha"] if "alpha" in kwargs else 1.0
-        rgb = kwargs["rgb"] if "rgb" in kwargs else [0.8, 0.3, 0.3]
+        rgb = kwargs["rgb"] if "rgb" in kwargs else [0.95, 0.45, 0.1]
         unmodeled_dynamics = False
         if "unmodeled_mass" in kwargs:
             unmodeled_dynamics = True
@@ -470,7 +469,7 @@ class MujocoAssetCreator:
             mass=0.75,
             density=1000,
             alpha=alpha,
-            rgb=[0.3, 0.3, 0.8],
+            rgb=[0.15, 0.15, 0.15],
         )
         self.joint(chassis, name + "_root_joint", "free")
 
@@ -494,7 +493,7 @@ class MujocoAssetCreator:
                 size=np.array([l, 0.01, 0.01]),
                 mass=0.01,
                 alpha=alpha,
-                rgb=[0.1, 0.1, 0.1],
+                rgb=[0.4, 0.4, 0.45],
             )
             self.cylinder(
                 chassis,
@@ -515,45 +514,23 @@ class MujocoAssetCreator:
                 mass=unmodeled_mass,
                 density=1000,
                 alpha=alpha,
-                rgb=[0.3, 0.3, 0.8],
+                rgb=[0.85, 0.2, 0.2],
                 pos=unmodeled_mass_loc,
             )
 
-        # Creating actuator sites
+        # Creating actuator sites (invisible)
         self.site(
             chassis,
             name + "_end1",
             pos=np.array([0.0, 0.0, 0.0]),
             type="sphere",
             size=[0.01],
+            rgba=[0, 0, 0, 0],
         )
-        self.site(
-            chassis,
-            name + "_thrust",
-            pos=np.array([0.0, 0.0, 0.0]),
-            rgba=[0.0, 1, 1, alpha],
-        )
-        self.site(
-            chassis,
-            name + "_Mx",
-            pos=np.array([0.0, 0.0, 0.0]),
-            size=np.array([0.06, 0.035, 0.025]),
-            rgba=[0.0, 1, 1, alpha],
-        )
-        self.site(
-            chassis,
-            name + "_My",
-            pos=np.array([0.0, 0.0, 0.0]),
-            size=np.array([0.06, 0.035, 0.025]),
-            rgba=[0.0, 1, 1, alpha],
-        )
-        self.site(
-            chassis,
-            name + "_Mz",
-            pos=np.array([0.0, 0.0, 0.0]),
-            size=np.array([0.06, 0.035, 0.025]),
-            rgba=[0.0, 1, 1, alpha],
-        )
+        self.site(chassis, name + "_thrust", pos=np.array([0.0, 0.0, 0.0]), rgba=[0, 0, 0, 0])
+        self.site(chassis, name + "_Mx", pos=np.array([0.0, 0.0, 0.0]), rgba=[0, 0, 0, 0])
+        self.site(chassis, name + "_My", pos=np.array([0.0, 0.0, 0.0]), rgba=[0, 0, 0, 0])
+        self.site(chassis, name + "_Mz", pos=np.array([0.0, 0.0, 0.0]), rgba=[0, 0, 0, 0])
         # Creating actuators
         actuator = self.actuator(self.root)
         self.motor(

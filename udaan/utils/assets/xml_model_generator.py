@@ -22,8 +22,10 @@ def multi_quad_pointmass(nQ=2, filename="./assets/multi_quad_pointmass.xml", ver
         )
 
     pyld = mjcWriter.body(mjcWriter.worldbody, "pyld", pos=np.array([0.0, 0.0, zL]))
-    mjcWriter.sphere(pyld, "pyld", radius=0.05, rgba=[0.0, 1, 1, 1.0], mass=0.15)
-    mjcWriter.site(pyld, "end2", pos=np.array([0.0, 0.0, 0.0]), type="sphere", size=[0.01])
+    mjcWriter.sphere(pyld, "pyld", radius=0.05, rgb=[0.2, 0.8, 0.4], mass=0.15)
+    mjcWriter.site(
+        pyld, "end2", pos=np.array([0.0, 0.0, 0.0]), type="sphere", size=[0.01], rgba=[0, 0, 0, 0]
+    )
     mjcWriter.joint(pyld, "pyld_joint", type="free")
 
     tendon = mjcWriter.tendon(mjcWriter.root)

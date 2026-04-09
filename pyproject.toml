@@ -49,6 +49,9 @@ dependencies = [
 mujoco = [
     "mujoco>=3.0",
 ]
+l1 = [
+    "control>=0.9",
+]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
@@ -68,7 +71,7 @@ rl = [
     "gymnasium>=0.29",
     "stable-baselines3>=2.0",
 ]
-all = ["udaan[mujoco,dev,docs,rl]"]
+all = ["udaan[mujoco,l1,dev,docs,rl]"]
 
 [project.scripts]
 udaan = "udaan.cli:app"

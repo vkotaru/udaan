@@ -1,14 +1,17 @@
 import copy
+import os
 import time
 
 import numpy as np
 
-from ... import manif
+from ... import _FOLDER_PATH, manif
 from ...utils.logging import get_logger
 from ..base import BaseModel
 from ..mujoco import MujocoModel
 
 _logger = get_logger(__name__)
+
+_MJCF_DIR = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf")
 
 
 class MultiQuadrotorCSPointmass(BaseModel):
@@ -60,15 +63,45 @@ class MultiQuadrotorCSPointmass(BaseModel):
             self.load_position = np.zeros(3)
             self.load_velocity = np.zeros(3)
 
+    @staticmethod
+    def _ensure_xml(nQ):
+        """Return MJCF filename, generating it at runtime if needed."""
+        from ...utils.assets import xml_model_generator
+
+        default_xml = "multi_quad_pointmass.xml"
+        default_path = os.path.join(_MJCF_DIR, default_xml)
+
+        # Check if default XML matches requested nQ
+        if os.path.exists(default_path):
+            import mujoco
+
+            m = mujoco.MjModel.from_xml_path(default_path)
+            existing_nQ = m.nq // 7 - 1
+            if existing_nQ == nQ:
+                return default_xml
+
+        # Generate XML for requested nQ
+        generated_name = f"multi_quad_pointmass_{nQ}q.xml"
+        generated_path = os.path.join(_MJCF_DIR, generated_name)
+        if not os.path.exists(generated_path):
+            _logger.info("Generating MJCF for %d quadrotors: %s", nQ, generated_name)
+            xml_model_generator.multi_quad_pointmass(nQ=nQ, filename=generated_path, verbose=False)
+        return generated_name
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.nQ = kwargs.get("num_quadrotors", 3)
-        self.state = MultiQuadrotorCSPointmass.State(nQ=self.nQ)
+        self.render = kwargs.get("render", False)
 
-        # mujoco model
+        # mujoco model — generate XML at runtime if needed
         self._mj_render = self.render
-        # TODO Create the xml file as required at runtime.
-        self._mjMdl = MujocoModel(model_path="multi_quad_pointmass.xml", render=self._mj_render)
+        xml_path = self._ensure_xml(self.nQ)
+        self._mjMdl = MujocoModel(model_path=xml_path, render=self._mj_render)
+
+        # Verify nQ matches the loaded model
+        n_free_bodies = self._mjMdl.model.nq // 7
+        self.nQ = n_free_bodies - 1
+        self.state = MultiQuadrotorCSPointmass.State(nQ=self.nQ)
 
         self._attitude_zoh = kwargs.get("attitude_zoh", False)
 
@@ -189,6 +222,15 @@ class MultiQuadrotorCSPointmass(BaseModel):
         start_t = time.time_ns()
         while self.t < tf:
             thrust_vecs = self.quad_position_control()
-            self.step(thrust_vecs)
+            # Convert 3D thrust vectors to wrench (thrust + torque) per quad
+            u = np.zeros(4 * self.nQ)
+            for i in range(self.nQ):
+                fi = thrust_vecs[3 * i : 3 * i + 3]
+                wrench = self.compute_attitude_control(i, fi)
+                u[4 * i : 4 * i + 4] = wrench
+            self.step(u)
         end_t = time.time_ns()
         _logger.debug("Took (%.4f)s for simulating (%.4f)s", float(end_t - start_t) * 1e-9, self.t)
+
+        if self._mj_render and self._mjMdl._viewer is not None:
+            self._mjMdl.wait_for_close()

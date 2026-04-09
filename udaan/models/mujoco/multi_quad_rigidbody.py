@@ -70,6 +70,7 @@ class MultiQuadRigidbody(BaseModel):
         super().__init__(**kwargs)
         self.nQ = kwargs.get("nQ", 4)
         self._n_action = 3 * self.nQ
+        self.render = kwargs.get("render", False)
 
         self._mjMdl = MujocoModel(model_path="multi_quad_rigidbody.xml", render=self.render)
 
@@ -202,3 +203,28 @@ class MultiQuadRigidbody(BaseModel):
 
         f = thrust_force.dot(R[:, 2])
         return np.hstack([f, M])
+
+    def quad_position_control(self):
+        """Basic PD hover controller for each quadrotor."""
+        thrust_vec = np.zeros(3 * self.nQ)
+        kp = np.array([4.1, 4.1, 8.1])
+        kd = 1.5 * np.array([2.0, 2.0, 6.0])
+
+        for i in range(self.nQ):
+            ex = self.state.quads[i].position - self._init_state.quads[i].position
+            ev = self.state.quads[i].velocity
+            Fpd = -kp * ex - kd * ev
+            Fff = (self.mQ[i] + self.mL / self.nQ) * self._g * self._e3
+            thrust_vec[3 * i : 3 * i + 3] = Fpd + Fff
+
+        return thrust_vec
+
+    def simulate(self, tf, **kwargs):
+        self.reset(**kwargs)
+
+        while self.t < tf:
+            u = self.quad_position_control()
+            self.step(u)
+
+        if self.render and self._mjMdl._viewer is not None:
+            self._mjMdl.wait_for_close()

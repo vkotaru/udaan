@@ -1,5 +1,9 @@
 MUJOCO_LOG.TXT
 
+# Runtime-generated MJCF files
+udaan/models/assets/mjcf/multi_quad_pointmass_*q.xml
+udaan/models/assets/mjcf/fleet_*.xml
+
 # Folders
 .vscode/
 .idea/
