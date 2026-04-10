@@ -145,10 +145,9 @@ class SO3(np.ndarray):
         return SO3(self @ rodrigues_expm(Omega_dt))
 
     def __sub__(self, other) -> TSO3:
-        """Configuration error between two rotations.
+        """Configuration error: eR = 1/2 vee(Rd^T R - R^T Rd).
 
-        Returns the so(3) error vector: vee(other^T @ self - self^T @ other) / 2.
-        Convention: eR = Rd - R where Rd is the desired rotation.
+        Ref: Lee, Leok, McClamroch 2010, Eq. 9.
         """
         if isinstance(other, np.ndarray) and not isinstance(other, SO3):
             # Delegate to numpy for plain ndarray operands (e.g. R @ R.T - I)
@@ -158,8 +157,8 @@ class SO3(np.ndarray):
                 f"SO3.__sub__ expects an SO3 element, got {type(other).__name__}. "
                 "Use SO3(R) to wrap a rotation matrix."
             )
-        # eR = vee(R^T Rd - Rd^T R) / 2, with self=Rd, other=R
-        err_matrix = np.asarray(other).T @ np.asarray(self) - np.asarray(self).T @ np.asarray(other)
+        # eR = 1/2 vee(Rd^T R - R^T Rd), self=Rd, other=R
+        err_matrix = np.asarray(self).T @ np.asarray(other) - np.asarray(other).T @ np.asarray(self)
         return TSO3(vee(err_matrix) / 2.0)
 
     def __add__(self, tangent) -> SO3:
