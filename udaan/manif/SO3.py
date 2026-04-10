@@ -112,12 +112,22 @@ class SO3(np.ndarray):
         """Inverse rotation (transpose, since R^{-1} = R^T for SO(3))."""
         return SO3(np.asarray(self).T)
 
-    def step(self, Omega=np.zeros(3)):
+    def config_error(self, other: SO3) -> float:
+        """Scalar configuration error: 0.5 * tr(I - other^T @ self).
+
+        Returns 0 when self == other, approaches 2 for 180-degree error.
+        """
+        return 0.5 * np.trace(np.eye(3) - np.asarray(other).T @ np.asarray(self))
+
+    def step(self, Omega_dt=np.zeros(3)):
         """Integrate angular velocity via the exponential map.
 
-        Returns a new SO3 element: R_next = R @ expm(hat(Omega)).
+        Args:
+            Omega_dt: angular velocity scaled by dt (3-vector).
+
+        Returns a new SO3 element: R_next = R @ expm(hat(Omega_dt)).
         """
-        return SO3(self @ rodrigues_expm(Omega))
+        return SO3(self @ rodrigues_expm(Omega_dt))
 
     def __sub__(self, other) -> TSO3:
         """Configuration error between two rotations.
