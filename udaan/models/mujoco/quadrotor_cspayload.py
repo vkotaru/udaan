@@ -3,9 +3,11 @@ import enum
 
 import numpy as np
 
-from ... import utils
+from ...utils.logging import get_logger
 from .. import base
 from ..mujoco import MujocoModel, mujoco
+
+_logger = get_logger(__name__)
 
 
 class QuadrotorCSPayload(base.QuadrotorCSPayload):
@@ -38,10 +40,10 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
                 self._model_type = self.MODEL_TYPE.TENDON
             elif kwargs["model"] == "cable":
                 self._model_type = self.MODEL_TYPE.CABLE
-                utils.printc_fail("Note, cable model has not been validated yet")
+                _logger.warning("Cable model has not been validated yet")
             elif kwargs["model"] == "links":
                 self._model_type = self.MODEL_TYPE.LINKS
-                utils.printc_fail("Note, links model has not been extensively tested yet")
+                _logger.warning("Links model has not been extensively tested yet")
             else:
                 raise ValueError("Invalid model type provided for mujoco quadrotor_cspayload")
 
@@ -80,7 +82,7 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
         self._payload_mass = 0.16  # kg
         self._cable_length = 1.0  # m
         if self.verbose:
-            utils.printc_ok("Mujoco model loaded")
+            _logger.info("Mujoco model loaded")
         return
 
     def _init_tendon_model(self):

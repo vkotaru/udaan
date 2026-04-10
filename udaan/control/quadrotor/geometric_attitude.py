@@ -6,7 +6,10 @@ Lee, Leok, McClamroch (2010) https://ieeexplore.ieee.org/document/5717652
 import numpy as np
 
 from ...control import Controller, Gains
-from ...utils import hat, printc_fail
+from ...utils import hat
+from ...utils.logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class GeometricAttitudeController(Controller):
@@ -22,7 +25,7 @@ class GeometricAttitudeController(Controller):
         if "inertia" in kwargs:
             self.inertia = kwargs["inertia"]
         else:
-            printc_fail("Inertia not provided")
+            _logger.error("Inertia not provided")
         if "mass" in kwargs:
             self.mass = kwargs["mass"]
 

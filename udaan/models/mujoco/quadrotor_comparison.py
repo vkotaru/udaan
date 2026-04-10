@@ -3,7 +3,9 @@ import copy
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
-from ... import utils
+from ...utils.logging import get_logger
+
+_logger = get_logger(__name__)
 from .. import base
 from . import MujocoModel
 
@@ -53,7 +55,7 @@ class QuadrotorComparison(base.BaseModel):
         self.reference._init_default_controllers()
 
         if self.verbose:
-            utils.printc_ok("Mujoco model loaded")
+            _logger.info("Mujoco model loaded")
         return
 
     def set_mass(self, m, plant=True):

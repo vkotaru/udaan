@@ -1,6 +1,8 @@
 import numpy as np
 
-from ... import utils
+from ...utils.logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class BaseModel:
@@ -32,7 +34,7 @@ class BaseModel:
                 else:
                     self.__dict__[key] = value
             else:
-                utils.printc_warn(f"Key {key} not found in environment")
+                _logger.warning(f"Key {key} not found in environment")
 
     def reset(self):
         raise NotImplementedError
