@@ -53,11 +53,6 @@ class InputType(Enum):
     PROP_FORCES = auto()
     ACCELERATION = auto()
 
-    # Aliases for backward compatibility with existing code
-    CMD_WRENCH = WRENCH
-    CMD_PROP_FORCES = PROP_FORCES
-    CMD_ACCEL = ACCELERATION
-
 
 class ForceType(Enum):
     """Force application type on quadrotor body.
