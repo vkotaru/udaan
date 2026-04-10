@@ -11,6 +11,9 @@ __all__ = [
     # manifolds
     "S2",
     "SO3",
-    "RotationMatrix",
+    # tangent spaces
+    "TS2",
+    "TSO3",
+    # utilities
     "Rot2Eul",
 ]

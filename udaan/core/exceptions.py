@@ -61,6 +61,15 @@ class SimulationError(UdaanError):
     """
 
 
+class ManifoldTypeError(UdaanError, TypeError):
+    """Raised when a manifold operation receives an incompatible type.
+
+    Examples:
+        - SO3 + ndarray instead of SO3 + TSO3
+        - S2 - ndarray instead of S2 - S2
+    """
+
+
 class PhysicsBackendError(UdaanError):
     """Raised when there's an issue with the physics backend.
 
