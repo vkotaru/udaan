@@ -1,5 +1,6 @@
 import numpy as np
 
+from ...core.defaults import GRAVITY
 from ...utils.logging import get_logger
 
 _logger = get_logger(__name__)
@@ -7,7 +8,7 @@ _logger = get_logger(__name__)
 
 class BaseModel:
     def __init__(self, **kwargs):
-        self._g = 9.81
+        self._g = GRAVITY
         self._ge3 = np.array([0.0, 0.0, self._g])
         self._e1 = np.array([1.0, 0.0, 0.0])
         self._e2 = np.array([0.0, 1.0, 0.0])

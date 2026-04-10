@@ -3,6 +3,7 @@
 import numpy as np
 
 from ...control import PDController
+from ...core.defaults import DEFAULT_POS_KD, DEFAULT_POS_KP
 
 
 class PositionPDController(PDController):
@@ -12,8 +13,8 @@ class PositionPDController(PDController):
         super().__init__(**kwargs)
         self.mass = 1.0 if "mass" not in kwargs else kwargs["mass"]
 
-        self._gains.kp = np.array([4.1, 4.1, 8.1])
-        self._gains.kd = 1.5 * np.array([2.0, 2.0, 6.0])
+        self._gains.kp = DEFAULT_POS_KP.copy()
+        self._gains.kd = DEFAULT_POS_KD.copy()
 
         self.pos_setpoint = np.array([0.0, 0.0, 0.0])
 

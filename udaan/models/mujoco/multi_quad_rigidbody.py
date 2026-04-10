@@ -3,6 +3,13 @@ import copy
 import numpy as np
 
 from ... import manif
+from ...core.defaults import (
+    DEFAULT_ATT_KD,
+    DEFAULT_ATT_KP,
+    DEFAULT_POS_KD,
+    DEFAULT_POS_KP,
+    DEFAULT_QUAD_INERTIA,
+)
 from ..base import BaseModel
 from ..mujoco import MujocoModel
 
@@ -84,7 +91,7 @@ class MultiQuadRigidbody(BaseModel):
 
         self.mQ = kwargs.get("mQ", [0.75] * self.nQ)
         self.mL = kwargs.get("mL", 1.0)
-        self._inertia_matrix = np.array([[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]])
+        self._inertia_matrix = DEFAULT_QUAD_INERTIA.copy()
 
         self._grasp_map = np.array(
             [[0.5, -0.5, 0.5, 0.5], [0.5, 0.5, -0.5, -0.5], [0.05, 0.05, 0.05, 0.05]]
@@ -195,8 +202,8 @@ class MultiQuadRigidbody(BaseModel):
         eR = np.array([tmp[2, 1], tmp[0, 2], tmp[1, 0]])
         eOmega = Omega - R.T @ Rd @ Omegad
 
-        kR = np.array([2.4, 2.4, 1.35])
-        kOm = np.array([0.35, 0.35, 0.225])
+        kR = DEFAULT_ATT_KP.copy()
+        kOm = DEFAULT_ATT_KD.copy()
 
         M = -kR * eR - kOm * eOmega + np.cross(Omega, self._inertia_matrix @ Omega)
         M += -1 * self._inertia_matrix @ (manif.hat(Omega) @ R.T @ Rd @ Omegad - R.T @ Rd @ dOmegad)
@@ -207,8 +214,8 @@ class MultiQuadRigidbody(BaseModel):
     def quad_position_control(self):
         """Basic PD hover controller for each quadrotor."""
         thrust_vec = np.zeros(3 * self.nQ)
-        kp = np.array([4.1, 4.1, 8.1])
-        kd = 1.5 * np.array([2.0, 2.0, 6.0])
+        kp = DEFAULT_POS_KP.copy()
+        kd = DEFAULT_POS_KD.copy()
 
         for i in range(self.nQ):
             ex = self.state.quads[i].position - self._init_state.quads[i].position
