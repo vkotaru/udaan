@@ -1,5 +1,7 @@
 import numpy as np
 
+from ..core.defaults import GRAVITY
+
 
 class Gains:
     def __init__(self, kp=np.zeros(3), kd=np.zeros(3), ki=np.zeros(3)):
@@ -12,7 +14,7 @@ class Gains:
 class Controller:
     def __init__(self):
         self.freq = 500.0
-        self._g = 9.81
+        self._g = GRAVITY
         self._ge3 = np.array([0.0, 0.0, self._g])
         self._e1 = np.array([1.0, 0.0, 0.0])
         self._e2 = np.array([0.0, 1.0, 0.0])

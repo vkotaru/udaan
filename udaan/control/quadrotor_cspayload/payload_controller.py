@@ -6,22 +6,32 @@ Sreenath, Lee, Kumar (2013) https://ieeexplore.ieee.org/abstract/document/676021
 import numpy as np
 
 from ...control import Gains, PDController
+from ...core.defaults import (
+    DEFAULT_CABLE_LENGTH,
+    DEFAULT_PAYLOAD_CABLE_KD,
+    DEFAULT_PAYLOAD_CABLE_KP,
+    DEFAULT_PAYLOAD_MASS,
+    DEFAULT_PAYLOAD_POS_KD,
+    DEFAULT_PAYLOAD_POS_KP,
+    DEFAULT_QUAD_INERTIA,
+    DEFAULT_QUAD_MASS,
+)
 from ...utils import hat
 
 
 class QuadCSPayloadController(PDController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._gain_pos = Gains(kp=np.array([4.0, 4.0, 8.0]), kd=np.array([3.0, 3.0, 6.0]))
-        self._gain_cable = Gains(kp=np.array([24.0, 24.0, 24.0]), kd=np.array([8.0, 8.0, 8.0]))
+        self._gain_pos = Gains(kp=DEFAULT_PAYLOAD_POS_KP.copy(), kd=DEFAULT_PAYLOAD_POS_KD.copy())
+        self._gain_cable = Gains(
+            kp=DEFAULT_PAYLOAD_CABLE_KP.copy(), kd=DEFAULT_PAYLOAD_CABLE_KD.copy()
+        )
 
-        self._quad_mass = 0.9  # kg
-        self._quad_inertia = np.array(
-            [[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]]
-        )  # kg m^2
+        self._quad_mass = DEFAULT_QUAD_MASS
+        self._quad_inertia = DEFAULT_QUAD_INERTIA.copy()
         self._quad_inertia_inv = np.linalg.inv(self._quad_inertia)
-        self._payload_mass = 0.2  # kg
-        self._cable_length = 1.0  # m
+        self._payload_mass = DEFAULT_PAYLOAD_MASS
+        self._cable_length = DEFAULT_CABLE_LENGTH
 
     def compute(self, *args):
         """payload position control"""

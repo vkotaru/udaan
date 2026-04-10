@@ -3,6 +3,7 @@
 import numpy as np
 
 from ...control import Controller
+from ...core.defaults import DEFAULT_ARM_LENGTH, DEFAULT_FORCE_CONSTANT, DEFAULT_TORQUE_CONSTANT
 from .geometric_attitude import GeometricAttitudeController
 from .position_pd import PositionPDController
 
@@ -25,11 +26,11 @@ class DirectPropellerForceController(Controller):
                   /   \                 |
             (2)CCW     CW(3)           z.------> x
         """
-        self._force_constant = 4.104890333e-6
-        self._torque_constant = 1.026e-07
+        self._force_constant = DEFAULT_FORCE_CONSTANT
+        self._torque_constant = DEFAULT_TORQUE_CONSTANT
         self._force2torque_const = self._torque_constant / self._force_constant
 
-        l = 0.2
+        l = DEFAULT_ARM_LENGTH
         ang = [np.pi / 4.0, 3 * np.pi / 4.0, 5 * np.pi / 4.0, 7 * np.pi / 4.0]
         d = [-1.0, 1.0, -1.0, 1.0]
 

@@ -1,5 +1,6 @@
 import numpy as np
 
+from ..core.defaults import GRAVITY
 from ..manif import vee
 
 
@@ -25,7 +26,7 @@ class Flat2State:
                     [0.000005445855427, 0.000020951458431, 0.009806225007686],
                 ]
             )
-        g = 9.80655
+        g = GRAVITY
         e1 = np.array([1.0, 0.0, 0.0])
         e3 = np.array([0.0, 0.0, 1.0])
 
@@ -132,7 +133,7 @@ class Flat2State:
 
     @staticmethod
     def compute_q_vectors(aL, daL, d2aL, d3aL, d4aL, mQ=0.85, mL=0.05):
-        g = 9.80655
+        g = GRAVITY
         e3 = np.array([0.0, 0.0, 1.0])
 
         Tp = -np.dot(mL, (aL + np.dot(g, e3)))

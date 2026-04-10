@@ -6,6 +6,7 @@ Lee, Leok, McClamroch (2010) https://ieeexplore.ieee.org/document/5717652
 import numpy as np
 
 from ...control import Controller, Gains
+from ...core.defaults import DEFAULT_ATT_KD, DEFAULT_ATT_KP
 from ...utils import hat
 from ...utils.logging import get_logger
 
@@ -16,7 +17,7 @@ class GeometricAttitudeController(Controller):
     """Geometric tracking control of a quadrotor UAV on SE(3)."""
 
     def __init__(self, **kwargs):
-        self._gains = Gains(kp=np.array([2.4, 2.4, 1.35]), kd=np.array([0.35, 0.35, 0.225]))
+        self._gains = Gains(kp=DEFAULT_ATT_KP.copy(), kd=DEFAULT_ATT_KD.copy())
 
         self._inertia = np.eye(3)
         self._inertia_inv = np.eye(3)

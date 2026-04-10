@@ -5,6 +5,13 @@ import time
 import numpy as np
 
 from ... import _FOLDER_PATH, manif
+from ...core.defaults import (
+    DEFAULT_ATT_KD,
+    DEFAULT_ATT_KP,
+    DEFAULT_POS_KD,
+    DEFAULT_POS_KP,
+    DEFAULT_QUAD_INERTIA,
+)
 from ...utils.logging import get_logger
 from ..base import BaseModel
 from ..mujoco import MujocoModel
@@ -113,9 +120,7 @@ class MultiQuadrotorCSPointmass(BaseModel):
 
         self._quad_masses = np.array([0.99] * self.nQ)
         self._payload_mass = 0.15
-        self._inertia_matrix = np.array(
-            [[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]]
-        )  # TODO using same inertia matrix for all quadrotors
+        self._inertia_matrix = DEFAULT_QUAD_INERTIA.copy()
         self._min_thrust = 0.0
         self._max_thrust = 20.0
         self._min_torque = np.array([-5.0, -5.0, -2.0])
@@ -172,8 +177,8 @@ class MultiQuadrotorCSPointmass(BaseModel):
         """quadrotor position control"""
         thrust_vec = np.zeros(3 * self.nQ)
         for i in range(self.nQ):
-            kp = np.array([4.1, 4.1, 8.1])
-            kd = 1.5 * np.array([2.0, 2.0, 6.0])
+            kp = DEFAULT_POS_KP.copy()
+            kd = DEFAULT_POS_KD.copy()
 
             ex = self.state.quads[i].position - self._init_state.quads[i].position
             ev = self.state.quads[i].velocity - np.zeros(3)
@@ -208,8 +213,8 @@ class MultiQuadrotorCSPointmass(BaseModel):
         eR = np.array([tmp[2, 1], tmp[0, 2], tmp[1, 0]])  # vee-map
         eOmega = Omega - R.T @ Rd @ Omegad
 
-        kR = np.array([2.4, 2.4, 1.35])
-        kOm = np.array([0.35, 0.35, 0.225])
+        kR = DEFAULT_ATT_KP.copy()
+        kOm = DEFAULT_ATT_KD.copy()
 
         M = -kR * eR - kOm * eOmega + np.cross(Omega, self._inertia_matrix @ Omega)
         M += -1 * self._inertia_matrix @ (manif.hat(Omega) @ R.T @ Rd @ Omegad - R.T @ Rd @ dOmegad)

@@ -4,6 +4,13 @@ import numpy as np
 from scipy.linalg import expm
 
 from ... import control, utils
+from ...core.defaults import (
+    DEFAULT_ARM_LENGTH,
+    DEFAULT_FORCE_CONSTANT,
+    DEFAULT_QUAD_INERTIA,
+    DEFAULT_QUAD_MASS,
+    DEFAULT_TORQUE_CONSTANT,
+)
 from ...core.types import ForceType, InputType
 from ...utils.logging import get_logger
 from ..base import BaseModel
@@ -52,10 +59,8 @@ class Quadrotor(BaseModel):
         self.state = Quadrotor.State()
 
         # system parameters
-        self._mass = 0.9  # kg
-        self._inertia = np.array(
-            [[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]]
-        )  # kg m^2
+        self._mass = DEFAULT_QUAD_MASS
+        self._inertia = DEFAULT_QUAD_INERTIA.copy()
         self._inertia_inv = np.linalg.inv(self._inertia)
 
         self._min_thrust = 0.5
@@ -169,8 +174,8 @@ class Quadrotor(BaseModel):
         return
 
     def _actuation_params(self):
-        self._force_constant = 4.104890333e-6
-        self._torque_constant = 1.026e-07
+        self._force_constant = DEFAULT_FORCE_CONSTANT
+        self._torque_constant = DEFAULT_TORQUE_CONSTANT
         self._force2torque_const = self._torque_constant / self._force_constant
 
     def _compute_allocation_matrix(self):
@@ -185,7 +190,7 @@ class Quadrotor(BaseModel):
             (2)CCW     CW(3)           z.------> x
         """
         self._actuation_params()
-        l = 0.2  # 0.175  # arm length
+        l = DEFAULT_ARM_LENGTH
         ang = [np.pi / 4.0, 3 * np.pi / 4.0, 5 * np.pi / 4.0, 7 * np.pi / 4.0]
         d = [-1.0, 1.0, -1.0, 1.0]
 

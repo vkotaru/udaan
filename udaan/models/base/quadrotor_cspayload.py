@@ -4,6 +4,12 @@ import numpy as np
 from scipy.linalg import expm
 
 from ... import control, utils
+from ...core.defaults import (
+    DEFAULT_CABLE_LENGTH,
+    DEFAULT_PAYLOAD_MASS,
+    DEFAULT_QUAD_INERTIA,
+    DEFAULT_QUAD_MASS,
+)
 from ...core.types import InputType
 from ...utils.logging import get_logger
 from . import BaseModel
@@ -52,13 +58,11 @@ class QuadrotorCSPayload(BaseModel):
         self.state = QuadrotorCSPayload.State()
 
         # system parameters
-        self._quad_mass = 0.9  # kg
-        self._quad_inertia = np.array(
-            [[0.0023, 0.0, 0.0], [0.0, 0.0023, 0.0], [0.0, 0.0, 0.004]]
-        )  # kg m^2
+        self._quad_mass = DEFAULT_QUAD_MASS
+        self._quad_inertia = DEFAULT_QUAD_INERTIA.copy()
         self._quad_inertia_inv = np.linalg.inv(self._quad_inertia)
-        self._payload_mass = 0.2  # kg
-        self._cable_length = 1.0  # m
+        self._payload_mass = DEFAULT_PAYLOAD_MASS
+        self._cable_length = DEFAULT_CABLE_LENGTH
 
         self._min_thrust = 0.0
         self._max_thrust = 20.0
