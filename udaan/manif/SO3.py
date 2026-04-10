@@ -10,7 +10,12 @@ class TSO3(np.ndarray):
     """Element of the Lie algebra so(3) — tangent vector to SO(3).
 
     Subclasses np.ndarray (3-vector) representing angular velocity or
-    rotation error. Supports scalar multiplication and the hat map to so(3).
+    rotation error. Supports:
+        w1 - w2  -> TSO3   (tangent vector difference)
+        w1 + w2  -> TSO3   (tangent vector sum)
+        w * s    -> TSO3   (scalar multiplication)
+        w.hat()  -> 3x3    (skew-symmetric matrix in so(3))
+        w.transport(R_from, R_to) -> TSO3  (frame transport)
     """
 
     def __new__(cls, vector=np.zeros(3)):
@@ -30,6 +35,16 @@ class TSO3(np.ndarray):
     def norm(self) -> float:
         """Magnitude of the tangent vector."""
         return float(np.linalg.norm(self))
+
+    def __sub__(self, other) -> TSO3:
+        if not isinstance(other, TSO3):
+            return NotImplemented
+        return TSO3(np.asarray(self) - np.asarray(other))
+
+    def __add__(self, other) -> TSO3:
+        if not isinstance(other, TSO3):
+            return NotImplemented
+        return TSO3(np.asarray(self) + np.asarray(other))
 
     def transport(self, R_from: SO3, R_to: SO3) -> TSO3:
         """Transport this tangent vector from R_from's body frame to R_to's.

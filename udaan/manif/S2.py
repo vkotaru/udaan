@@ -10,7 +10,11 @@ class TS2(np.ndarray):
     """Tangent vector to the 2-sphere S2.
 
     Subclasses np.ndarray (3-vector) representing angular velocity or
-    configuration error on the sphere. Supports scalar multiplication.
+    configuration error on the sphere. Supports:
+        v1 - v2  -> TS2   (tangent vector difference)
+        v1 + v2  -> TS2   (tangent vector sum)
+        v * s    -> TS2   (scalar multiplication)
+        v.transport(q) -> TS2  (project onto tangent space at q)
     """
 
     def __new__(cls, vector=np.zeros(3)):
@@ -26,6 +30,26 @@ class TS2(np.ndarray):
     def norm(self) -> float:
         """Magnitude of the tangent vector."""
         return float(np.linalg.norm(self))
+
+    def __sub__(self, other) -> TS2:
+        if not isinstance(other, TS2):
+            return NotImplemented
+        return TS2(np.asarray(self) - np.asarray(other))
+
+    def __add__(self, other) -> TS2:
+        if not isinstance(other, TS2):
+            return NotImplemented
+        return TS2(np.asarray(self) + np.asarray(other))
+
+    def transport(self, q: S2) -> TS2:
+        """Transport this tangent vector to the tangent space at q.
+
+        Computes -hat(q)^2 @ self, which projects self onto T_q S2
+        with the correct sign so that eω = ω - ωd.transport(q), so that
+        eω = ω + q × (q × ωd).
+        """
+        q_arr = np.asarray(q)
+        return TS2(-hat(q_arr) @ hat(q_arr) @ np.asarray(self))
 
     def __repr__(self) -> str:
         return f"TS2({np.array2string(np.asarray(self), precision=4)})"
