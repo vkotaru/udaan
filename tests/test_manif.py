@@ -327,14 +327,49 @@ class TestTSO3Transport:
         np.testing.assert_allclose(result.vector, expected, atol=1e-10)
 
     def test_angular_velocity_error_pattern(self):
-        """eOm = Om - Omd.transport(Rd, R) should work."""
+        """eOm = Om - Omd.transport(Rd, R) should work with operator."""
         Om = TSO3(np.array([0.1, 0.2, 0.3]))
         Omd = TSO3(np.array([0.05, 0.1, 0.15]))
         R = SO3(rodrigues_expm(np.array([0.1, 0.0, 0.0])))
         Rd = SO3(rodrigues_expm(np.array([0.1, 0.0, 0.0])))
         # Same rotation -> transport is identity -> eOm = Om - Omd
-        eOm = TSO3(Om.vector - Omd.transport(Rd, R).vector)
+        eOm = Om - Omd.transport(Rd, R)
+        assert isinstance(eOm, TSO3)
         np.testing.assert_allclose(eOm.vector, Om.vector - Omd.vector, atol=1e-10)
+
+
+class TestTS2Transport:
+    def test_transport_returns_ts2(self):
+        v = TS2(np.array([0.1, 0.2, 0.3]))
+        q = S2(np.array([0.0, 0.0, 1.0]))
+        result = v.transport(q)
+        assert isinstance(result, TS2)
+
+    def test_transport_matches_neg_hat_squared(self):
+        """transport(q) should equal -hat(q)^2 @ v."""
+        v = TS2(np.array([1.0, -0.5, 0.2]))
+        q = S2(np.array([0.0, 0.0, 1.0]))
+        result = v.transport(q)
+        expected = -hat(np.asarray(q)) @ hat(np.asarray(q)) @ v.vector
+        np.testing.assert_allclose(result.vector, expected, atol=1e-15)
+
+    def test_tangent_to_e3_projects_xy(self):
+        """Transport to e3 should preserve the tangent plane components."""
+        v = TS2(np.array([1.0, 2.0, 3.0]))
+        q = S2(np.array([0.0, 0.0, 1.0]))
+        result = v.transport(q)
+        # -hat(e3)^2 @ v = [vx, vy, 0]
+        np.testing.assert_allclose(result.vector, [1.0, 2.0, 0.0], atol=1e-15)
+
+    def test_angular_velocity_error_pattern(self):
+        """eω = ω - ωd.transport(q) should work with operator."""
+        omega = TS2(np.array([0.1, 0.2, 0.0]))
+        omega_d = TS2(np.array([0.05, 0.1, 0.0]))
+        q = S2(np.array([0.0, 0.0, 1.0]))
+        # eω = ω - ωd.transport(q), at e3 transport is identity for tangent vectors
+        e_omega = omega - omega_d.transport(q)
+        assert isinstance(e_omega, TS2)
+        np.testing.assert_allclose(e_omega.vector, [0.05, 0.1, 0.0], atol=1e-15)
 
 
 class TestTS2AsNdarray:
