@@ -5,7 +5,7 @@
 repos:
   # Ruff - Fast Python linter and formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.6
+    rev: v0.15.9
     hooks:
       - id: ruff
         # Only check staged files, don't block on existing issues
