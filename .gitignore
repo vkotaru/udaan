@@ -4,6 +4,10 @@ MUJOCO_LOG.TXT
 udaan/models/assets/mjcf/multi_quad_pointmass_*q.xml
 udaan/models/assets/mjcf/fleet_*.xml
 
+# Temporary files
+tmp/
+scripts/
+
 # Folders
 .vscode/
 .idea/

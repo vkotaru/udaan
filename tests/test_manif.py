@@ -403,11 +403,11 @@ class TestSO3Operators:
         assert eR.vector.shape == (3,)
 
     def test_sub_matches_lee2010_formula(self):
-        """SO3.__sub__ should match 1/2 vee(Rd^T R - R^T Rd) (Lee 2010, Eq. 9)."""
+        """R - Rd should match 1/2 vee(Rd^T R - R^T Rd) (Lee 2010, Eq. 9)."""
         Rd = SO3(rodrigues_expm(np.array([0.3, -0.2, 0.5])))
         R = SO3(rodrigues_expm(np.array([0.1, 0.1, 0.1])))
-        eR = Rd - R
-        # Lee 2010 convention: eR = 1/2 vee(Rd^T R - R^T Rd)
+        eR = R - Rd
+        # Lee 2010: eR = 1/2 vee(Rd^T R - R^T Rd)
         eR_lee = vee(np.array(Rd).T @ np.array(R) - np.array(R).T @ np.array(Rd)) / 2.0
         np.testing.assert_allclose(eR.vector, eR_lee, atol=1e-10)
 
@@ -439,13 +439,12 @@ class TestSO3Operators:
         np.testing.assert_allclose(np.array(R2), np.array(R), atol=1e-10)
 
     def test_roundtrip_small_angle(self):
-        """R2 - R (Lee convention) gives the error from R2 toward R, i.e., -w."""
+        """R - Rd gives eR ≈ -w for small w, where Rd = R @ exp(w)."""
         R = SO3(rodrigues_expm(np.array([0.5, 0.3, 0.1])))
         w = np.array([0.001, -0.002, 0.003])
-        R2 = R + TSO3(w)
-        # Lee convention: Rd - R = 1/2 vee(Rd^T R - R^T Rd)
-        # When Rd = R2 = R @ exp(w), eR ≈ -w for small w
-        eR = R2 - R
+        Rd = R + TSO3(w)  # Rd = R @ exp(w)
+        # eR = R - Rd = 1/2 vee(Rd^T R - R^T Rd) ≈ -w for small w
+        eR = R - Rd
         np.testing.assert_allclose(eR.vector, -w, atol=1e-4)
 
     def test_sub_plain_ndarray_delegates_to_numpy(self):

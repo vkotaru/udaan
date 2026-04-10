@@ -138,6 +138,7 @@ ignore = [
     "SIM118", # use key in dict
     "SIM401", # dict.get instead of if-else
     "UP031",  # printf format (will clean up incrementally)
+    "TCH001", # missing type hints
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -199,6 +200,7 @@ markers = [
     "mujoco: requires mujoco installation",
     "bullet: requires pybullet installation",
     "benchmark: performance benchmarks",
+    "integration: integration tests (simulate full trajectories)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
