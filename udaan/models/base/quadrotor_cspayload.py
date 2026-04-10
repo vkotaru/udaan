@@ -192,7 +192,7 @@ class QuadrotorCSPayload(BaseModel):
                 self.t, (self.state.orientation, self.state.angular_velocity), input
             )
         elif self._input_type == QuadrotorCSPayload.INPUT_TYPE.PROP_FORCES:
-            utils.printc_warn("TODO: Incorrect implementation verify")
+            _logger.warning("TODO: Incorrect implementation verify")
             wrench = self._propforces_to_wrench(input)
             thrust, torque = wrench[0], wrench[1:]
         else:

@@ -45,10 +45,34 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(f"udaan.{name}")
 
 
+class _ColoredFormatter(logging.Formatter):
+    """Formatter that adds ANSI colors to log level names."""
+
+    COLORS = {
+        logging.DEBUG: "\033[90m",  # gray
+        logging.INFO: "\033[92m",  # green
+        logging.WARNING: "\033[93m",  # yellow
+        logging.ERROR: "\033[91m",  # red
+        logging.CRITICAL: "\033[1;91m",  # bold red
+    }
+    RESET = "\033[0m"
+
+    def format(self, record: logging.LogRecord) -> str:
+        color = self.COLORS.get(record.levelno, "")
+        record.levelname = f"{color}{record.levelname}{self.RESET}"
+        return super().format(record)
+
+
+def _supports_color(stream: Any) -> bool:
+    """Check if the output stream supports ANSI colors."""
+    return hasattr(stream, "isatty") and stream.isatty()
+
+
 def setup_logging(
     level: int = logging.INFO,
     format_string: str | None = None,
     stream: Any = None,
+    color: bool | None = None,
 ) -> None:
     """Configure logging for interactive use.
 
@@ -59,11 +83,12 @@ def setup_logging(
         level: Logging level (default: INFO).
         format_string: Custom format string. If None, uses default format.
         stream: Output stream (default: sys.stdout).
+        color: Enable colored output. None = auto-detect from terminal.
 
     Example:
         >>> import logging
         >>> from udaan.utils.logging import setup_logging
-        >>> setup_logging()  # Enable INFO level
+        >>> setup_logging()  # Enable INFO level with colors
         >>> setup_logging(level=logging.DEBUG)  # Enable debug
     """
     if format_string is None:
@@ -72,8 +97,14 @@ def setup_logging(
     if stream is None:
         stream = sys.stdout
 
+    if color is None:
+        color = _supports_color(stream)
+
     handler = logging.StreamHandler(stream)
-    handler.setFormatter(logging.Formatter(format_string))
+    if color:
+        handler.setFormatter(_ColoredFormatter(format_string))
+    else:
+        handler.setFormatter(logging.Formatter(format_string))
 
     _root_logger.addHandler(handler)
     _root_logger.setLevel(level)

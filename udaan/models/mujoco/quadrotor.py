@@ -3,9 +3,11 @@ import copy
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
-from ... import utils
+from ...utils.logging import get_logger
 from .. import base
 from ..mujoco import MujocoModel
+
+_logger = get_logger(__name__)
 
 
 class Quadrotor(base.Quadrotor):
@@ -44,7 +46,7 @@ class Quadrotor(base.Quadrotor):
         self._init_default_controllers()
 
         if self.verbose:
-            utils.printc_ok("Mujoco model loaded")
+            _logger.info("Mujoco model loaded")
         return
 
     @base.Quadrotor.mass.setter
