@@ -1,65 +1,159 @@
-import numpy as np
-import scipy.linalg
+from __future__ import annotations
 
-from .utils import hat
+import numpy as np
+
+from ..core.exceptions import ManifoldTypeError
+from .utils import hat, rodrigues_expm, vee
+
+
+class TSO3(np.ndarray):
+    """Element of the Lie algebra so(3) — tangent vector to SO(3).
+
+    Subclasses np.ndarray (3-vector) representing angular velocity or
+    rotation error. Supports scalar multiplication and the hat map to so(3).
+    """
+
+    def __new__(cls, vector=np.zeros(3)):
+        obj = np.asarray(vector, dtype=float).view(cls)
+        return obj
+
+    @property
+    def vector(self) -> np.ndarray:
+        """Raw 3-vector as a plain np.ndarray."""
+        return np.asarray(self)
+
+    def hat(self) -> np.ndarray:
+        """Return the 3x3 skew-symmetric matrix in so(3)."""
+        return hat(np.asarray(self))
+
+    @property
+    def norm(self) -> float:
+        """Magnitude of the tangent vector."""
+        return float(np.linalg.norm(self))
+
+    def transport(self, R_from: SO3, R_to: SO3) -> TSO3:
+        """Transport this tangent vector from R_from's body frame to R_to's.
+
+        Computes R_to^T @ R_from @ self, which maps an angular velocity (self)
+        expressed in R_from's frame into R_to's frame.
+
+        Example:
+            eOm = Om - Omd.transport(Rd, R)  # angular velocity error
+        """
+        return TSO3(np.asarray(R_to).T @ np.asarray(R_from) @ np.asarray(self))
+
+    def __repr__(self) -> str:
+        return f"TSO3({np.array2string(np.asarray(self), precision=4)})"
 
 
 class SO3(np.ndarray):
+    """Rotation matrix on the Special Orthogonal group SO(3).
+
+    Subclasses np.ndarray so it can be used directly in matrix algebra.
+    Supports:
+        R1 - R2  -> TSO3   (configuration error in the Lie algebra)
+        R + w    -> SO3    (exponential map step, w is a TSO3)
+    """
+
     def __new__(cls, R=np.eye(3)):
-        # Input array is an already formed ndarray instance
-        # We first cast to be our class type
         obj = np.asarray(R).view(cls)
-        # add the new attribute to the created instance
         obj.R = np.array(R, dtype=float)
-        # Finally, we must return the newly created object:
         return obj
 
-    def step(
-        self,
-        Omega=np.zeros(
-            3,
-        ),
-    ):
-        return SO3(self @ scipy.linalg.expm(hat(Omega)))
+    @staticmethod
+    def from_angle_axis(eta: np.ndarray) -> SO3:
+        """Construct SO3 from an angle-axis vector via the exponential map.
 
+        Args:
+            eta: 3-vector whose direction is the rotation axis and
+                 magnitude is the rotation angle (radians).
+        """
+        return SO3(rodrigues_expm(eta))
 
-class RotationMatrix:
-    def __init__(self):
-        self._e3 = np.array([0.0, 0.0, 1.0])
-        self._e2 = np.array([0.0, 1.0, 0.0])
-        self._e1 = np.array([1.0, 0.0, 0.0])
-        return
+    @staticmethod
+    def from_two_vectors(b3: np.ndarray, b1: np.ndarray) -> SO3:
+        """Construct SO3 from a primary axis (b3) and a heading hint (b1).
 
-    def __call__(self, b3, b1):
-        b3_b1d = np.cross(b3, b1)
-        norm_b3_b1d = np.linalg.norm(b3_b1d)
-        if norm_b3_b1d < 1e-10:
+        Builds an orthonormal frame [b1', b2, b3] where b3 is preserved
+        exactly, b1' is the closest vector to b1 orthogonal to b3, and
+        b2 = b3 x b1'. Handles the singularity when b3 is parallel to b1.
+
+        This is the standard construction for desired attitude from thrust
+        direction (b3) and heading direction (b1).
+        """
+        _e1 = np.array([1.0, 0.0, 0.0])
+        _e2 = np.array([0.0, 1.0, 0.0])
+
+        b3_b1 = np.cross(b3, b1)
+        norm_b3_b1 = np.linalg.norm(b3_b1)
+        if norm_b3_b1 < 1e-10:
             # b3 parallel to b1, fall back to perpendicular axis
-            b1 = self._e2 if abs(np.dot(b3, self._e1)) > 0.9 else self._e1
-            b3_b1d = np.cross(b3, b1)
-            norm_b3_b1d = np.linalg.norm(b3_b1d)
-        b1 = (-1 / norm_b3_b1d) * np.cross(b3, b3_b1d)
+            b1 = _e2 if abs(np.dot(b3, _e1)) > 0.9 else _e1
+            b3_b1 = np.cross(b3, b1)
+            norm_b3_b1 = np.linalg.norm(b3_b1)
+        b1 = (-1 / norm_b3_b1) * np.cross(b3, b3_b1)
         b2 = np.cross(b3, b1)
-        R = np.hstack(
-            [
-                np.expand_dims(b1, axis=1),
-                np.expand_dims(b2, axis=1),
-                np.expand_dims(b3, axis=1),
-            ]
-        )
-        return R
+        return SO3(np.column_stack([b1, b2, b3]))
 
-    def tilt(
-        self,
-        ang_vec=np.zeros(
-            3,
-        ),
-    ):
-        R = scipy.linalg.expm(hat(ang_vec))
-        return R @ self._e3
+    @staticmethod
+    def from_tilt_yaw(tilt: np.ndarray, yaw: float) -> SO3:
+        """Construct SO3 from a tilt vector and a yaw angle.
 
-    def yaw(self, theta=0.0):
-        return np.array([np.cos(theta), np.sin(theta), 0.0])
+        Args:
+            tilt: 3-vector (angle-axis) applied to the upright orientation.
+                  The resulting b3 axis is expm(hat(tilt)) @ e3.
+            yaw: heading angle in radians. b1 hint is [cos(yaw), sin(yaw), 0].
+        """
+        b3 = rodrigues_expm(tilt) @ np.array([0.0, 0.0, 1.0])
+        b1 = np.array([np.cos(yaw), np.sin(yaw), 0.0])
+        return SO3.from_two_vectors(b3, b1)
+
+    def inv(self) -> SO3:
+        """Inverse rotation (transpose, since R^{-1} = R^T for SO(3))."""
+        return SO3(np.asarray(self).T)
+
+    def step(self, Omega=np.zeros(3)):
+        """Integrate angular velocity via the exponential map.
+
+        Returns a new SO3 element: R_next = R @ expm(hat(Omega)).
+        """
+        return SO3(self @ rodrigues_expm(Omega))
+
+    def __sub__(self, other) -> TSO3:
+        """Configuration error between two rotations.
+
+        Returns the so(3) error vector: vee(other^T @ self - self^T @ other) / 2.
+        Convention: eR = Rd - R where Rd is the desired rotation.
+        """
+        if isinstance(other, np.ndarray) and not isinstance(other, SO3):
+            # Delegate to numpy for plain ndarray operands (e.g. R @ R.T - I)
+            return NotImplemented
+        if not isinstance(other, SO3):
+            raise ManifoldTypeError(
+                f"SO3.__sub__ expects an SO3 element, got {type(other).__name__}. "
+                "Use SO3(R) to wrap a rotation matrix."
+            )
+        # eR = vee(R^T Rd - Rd^T R) / 2, with self=Rd, other=R
+        err_matrix = np.asarray(other).T @ np.asarray(self) - np.asarray(self).T @ np.asarray(other)
+        return TSO3(vee(err_matrix) / 2.0)
+
+    def __add__(self, tangent) -> SO3:
+        """Exponential map step: R_next = R @ expm(hat(tangent.vector)).
+
+        Args:
+            tangent: TSO3 element (e.g., TSO3(Omega * dt)).
+        """
+        if isinstance(tangent, np.ndarray) and not isinstance(tangent, TSO3):
+            return NotImplemented
+        if not isinstance(tangent, TSO3):
+            raise ManifoldTypeError(
+                f"SO3.__add__ expects a TSO3 tangent vector, got {type(tangent).__name__}. "
+                "Use TSO3(omega * dt) to wrap an angular velocity vector."
+            )
+        return SO3(np.asarray(self) @ rodrigues_expm(np.asarray(tangent)))
+
+    def __repr__(self) -> str:
+        return f"SO3(\n{np.array2string(np.asarray(self), precision=4)}\n)"
 
 
 def Rot2Eul(R):

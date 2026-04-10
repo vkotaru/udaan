@@ -3,11 +3,12 @@
 import numpy as np
 import pytest
 
+from udaan.core.exceptions import ManifoldTypeError
 from udaan.manif import (
     S2,
     SO3,
+    TSO3,
     Rot2Eul,
-    RotationMatrix,
     expm_taylor_expansion,
     hat,
     rodrigues_expm,
@@ -93,23 +94,48 @@ class TestSO3:
         np.testing.assert_allclose(np.array(R2), np.array(R), atol=1e-10)
 
 
-class TestRotationMatrix:
-    def test_basic_call(self):
-        rm = RotationMatrix()
-        b3 = np.array([0, 0, 1.0])
-        b1 = np.array([1.0, 0, 0])
-        R = rm(b3, b1)
+class TestSO3FromTwoVectors:
+    def test_basic(self):
+        R = SO3.from_two_vectors(np.array([0, 0, 1.0]), np.array([1.0, 0, 0]))
+        assert isinstance(R, SO3)
         assert R.shape == (3, 3)
-        np.testing.assert_allclose(R @ R.T, np.eye(3), atol=1e-10)
+        np.testing.assert_allclose(np.array(R) @ np.array(R).T, np.eye(3), atol=1e-10)
+
+    def test_b3_preserved(self):
+        """The third column of R should be b3."""
+        b3 = np.array([0, 0, 1.0])
+        R = SO3.from_two_vectors(b3, np.array([1.0, 0, 0]))
+        np.testing.assert_allclose(np.array(R)[:, 2], b3, atol=1e-10)
 
     def test_parallel_vectors_guard(self):
         """b3 parallel to b1 should not crash."""
-        rm = RotationMatrix()
-        b3 = np.array([1.0, 0, 0])
-        b1 = np.array([1.0, 0, 0])
-        R = rm(b3, b1)
+        R = SO3.from_two_vectors(np.array([1.0, 0, 0]), np.array([1.0, 0, 0]))
         assert R.shape == (3, 3)
-        np.testing.assert_allclose(np.linalg.det(R), 1.0, atol=1e-10)
+        np.testing.assert_allclose(np.linalg.det(np.array(R)), 1.0, atol=1e-10)
+
+    def test_arbitrary_direction(self):
+        b3 = np.array([1.0, 1.0, 1.0]) / np.sqrt(3)
+        R = SO3.from_two_vectors(b3, np.array([1.0, 0, 0]))
+        np.testing.assert_allclose(np.array(R) @ np.array(R).T, np.eye(3), atol=1e-10)
+        np.testing.assert_allclose(np.array(R)[:, 2], b3, atol=1e-10)
+
+
+class TestSO3FromTiltYaw:
+    def test_zero_tilt_zero_yaw(self):
+        """No tilt, no yaw -> identity."""
+        R = SO3.from_tilt_yaw(np.zeros(3), 0.0)
+        np.testing.assert_allclose(np.array(R), np.eye(3), atol=1e-10)
+
+    def test_returns_so3(self):
+        R = SO3.from_tilt_yaw(np.array([0.1, 0.2, 0.0]), 0.5)
+        assert isinstance(R, SO3)
+        np.testing.assert_allclose(np.array(R) @ np.array(R).T, np.eye(3), atol=1e-10)
+
+    def test_pure_yaw(self):
+        """Pure yaw of 90 degrees, no tilt."""
+        R = SO3.from_tilt_yaw(np.zeros(3), np.pi / 2)
+        # b3 should still be e3 (no tilt)
+        np.testing.assert_allclose(np.array(R)[:, 2], [0, 0, 1], atol=1e-10)
 
 
 class TestRot2Eul:
@@ -154,3 +180,208 @@ class TestS2:
     def test_from_spherical_pole(self):
         q = S2.from_spherical(phi=0.0, th=0.0)
         np.testing.assert_allclose(q, np.array([0.0, 0.0, 1.0]), atol=1e-10)
+
+
+class TestTSO3:
+    def test_creation(self):
+        w = TSO3(np.array([1.0, 2.0, 3.0]))
+        np.testing.assert_allclose(w.vector, [1.0, 2.0, 3.0])
+
+    def test_hat_map(self):
+        w = TSO3(np.array([1.0, 2.0, 3.0]))
+        H = w.hat()
+        assert H.shape == (3, 3)
+        np.testing.assert_allclose(H, -H.T, atol=1e-15)
+        np.testing.assert_allclose(H, hat(w.vector), atol=1e-15)
+
+    def test_norm(self):
+        w = TSO3(np.array([3.0, 4.0, 0.0]))
+        assert w.norm == pytest.approx(5.0)
+
+    def test_scalar_mul(self):
+        w = TSO3(np.array([1.0, 2.0, 3.0]))
+        w2 = w * 2.0
+        np.testing.assert_allclose(w2.vector, [2.0, 4.0, 6.0])
+
+    def test_rmul(self):
+        w = TSO3(np.array([1.0, 2.0, 3.0]))
+        w2 = 0.5 * w
+        np.testing.assert_allclose(w2.vector, [0.5, 1.0, 1.5])
+
+    def test_neg(self):
+        w = TSO3(np.array([1.0, -2.0, 3.0]))
+        w2 = -w
+        np.testing.assert_allclose(w2.vector, [-1.0, 2.0, -3.0])
+
+    def test_repr(self):
+        w = TSO3(np.array([1.0, 2.0, 3.0]))
+        assert "TSO3" in repr(w)
+
+
+class TestSO3Inv:
+    def test_inv_is_transpose(self):
+        R = SO3(rodrigues_expm(np.array([0.3, -0.2, 0.5])))
+        R_inv = R.inv()
+        np.testing.assert_allclose(np.array(R_inv), np.array(R).T, atol=1e-15)
+
+    def test_inv_returns_so3(self):
+        R = SO3(rodrigues_expm(np.array([0.1, 0.2, 0.3])))
+        assert isinstance(R.inv(), SO3)
+
+    def test_R_times_inv_is_identity(self):
+        R = SO3(rodrigues_expm(np.array([0.5, -0.3, 0.1])))
+        np.testing.assert_allclose(np.array(R) @ np.array(R.inv()), np.eye(3), atol=1e-10)
+
+    def test_identity_inv_is_identity(self):
+        R = SO3()
+        np.testing.assert_allclose(np.array(R.inv()), np.eye(3), atol=1e-15)
+
+
+class TestSO3FromAngleAxis:
+    def test_zero_gives_identity(self):
+        R = SO3.from_angle_axis(np.zeros(3))
+        np.testing.assert_allclose(np.array(R), np.eye(3), atol=1e-10)
+
+    def test_90deg_z(self):
+        R = SO3.from_angle_axis(np.array([0, 0, np.pi / 2]))
+        expected = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]], dtype=float)
+        np.testing.assert_allclose(np.array(R), expected, atol=1e-10)
+
+    def test_returns_so3(self):
+        R = SO3.from_angle_axis(np.array([0.1, 0.2, 0.3]))
+        assert isinstance(R, SO3)
+        np.testing.assert_allclose(np.array(R) @ np.array(R).T, np.eye(3), atol=1e-10)
+
+
+class TestTSO3AsNdarray:
+    def test_is_ndarray(self):
+        w = TSO3(np.array([1.0, 2.0, 3.0]))
+        assert isinstance(w, np.ndarray)
+
+    def test_shape(self):
+        w = TSO3(np.array([1.0, 2.0, 3.0]))
+        assert w.shape == (3,)
+
+    def test_vector_property(self):
+        w = TSO3(np.array([1.0, 2.0, 3.0]))
+        np.testing.assert_allclose(w.vector, [1.0, 2.0, 3.0])
+
+    def test_numpy_ops_work(self):
+        """TSO3 can be used in numpy operations like a regular array."""
+        w = TSO3(np.array([1.0, 2.0, 3.0]))
+        result = np.dot(w, w)
+        assert result == pytest.approx(14.0)
+
+
+class TestTSO3Transport:
+    def test_identity_transport_is_identity(self):
+        """Transport from I to I leaves the vector unchanged."""
+        Om = TSO3(np.array([1.0, 2.0, 3.0]))
+        result = Om.transport(SO3(), SO3())
+        np.testing.assert_allclose(result.vector, Om.vector, atol=1e-15)
+
+    def test_transport_returns_tso3(self):
+        Om = TSO3(np.array([0.1, 0.2, 0.3]))
+        R_from = SO3(rodrigues_expm(np.array([0.5, 0.0, 0.0])))
+        R_to = SO3(rodrigues_expm(np.array([0.0, 0.3, 0.0])))
+        result = Om.transport(R_from, R_to)
+        assert isinstance(result, TSO3)
+
+    def test_transport_matches_manual(self):
+        """transport(R_from, R_to) should equal R_to^T @ R_from @ Om."""
+        Om = TSO3(np.array([1.0, -0.5, 0.2]))
+        Rd = SO3(rodrigues_expm(np.array([0.3, -0.2, 0.5])))
+        R = SO3(rodrigues_expm(np.array([0.1, 0.1, 0.1])))
+        result = Om.transport(Rd, R)
+        expected = np.array(R).T @ np.array(Rd) @ Om.vector
+        np.testing.assert_allclose(result.vector, expected, atol=1e-10)
+
+    def test_angular_velocity_error_pattern(self):
+        """eOm = Om - Omd.transport(Rd, R) should work."""
+        Om = TSO3(np.array([0.1, 0.2, 0.3]))
+        Omd = TSO3(np.array([0.05, 0.1, 0.15]))
+        R = SO3(rodrigues_expm(np.array([0.1, 0.0, 0.0])))
+        Rd = SO3(rodrigues_expm(np.array([0.1, 0.0, 0.0])))
+        eOm = TSO3(Om.vector - Omd.transport(Rd, R).vector)
+        np.testing.assert_allclose(eOm.vector, Om.vector - Omd.vector, atol=1e-10)
+
+
+class TestSO3Operators:
+    def test_sub_identity_is_zero(self):
+        """R - R should give zero error."""
+        R = SO3(rodrigues_expm(np.array([0.3, 0.2, 0.1])))
+        eR = R - R
+        assert isinstance(eR, TSO3)
+        np.testing.assert_allclose(eR.vector, np.zeros(3), atol=1e-10)
+
+    def test_sub_returns_tso3(self):
+        R1 = SO3(rodrigues_expm(np.array([0.1, 0.0, 0.0])))
+        R2 = SO3()
+        eR = R1 - R2
+        assert isinstance(eR, TSO3)
+        assert eR.vector.shape == (3,)
+
+    def test_sub_matches_manual_formula(self):
+        """SO3.__sub__ should match vee(R^T Rd - Rd^T R) / 2."""
+        Rd = SO3(rodrigues_expm(np.array([0.3, -0.2, 0.5])))
+        R = SO3(rodrigues_expm(np.array([0.1, 0.1, 0.1])))
+        eR = Rd - R
+        eR_manual = vee(np.array(R).T @ np.array(Rd) - np.array(Rd).T @ np.array(R)) / 2.0
+        np.testing.assert_allclose(eR.vector, eR_manual, atol=1e-10)
+
+    def test_add_returns_so3(self):
+        R = SO3()
+        w = TSO3(np.array([0.01, 0.02, 0.03]))
+        R2 = R + w
+        assert isinstance(R2, SO3)
+        assert R2.shape == (3, 3)
+
+    def test_add_preserves_orthogonality(self):
+        R = SO3(rodrigues_expm(np.array([0.5, 0.3, 0.1])))
+        w = TSO3(np.array([0.1, -0.05, 0.2]))
+        R2 = R + w
+        np.testing.assert_allclose(np.array(R2) @ np.array(R2).T, np.eye(3), atol=1e-10)
+        np.testing.assert_allclose(np.linalg.det(np.array(R2)), 1.0, atol=1e-10)
+
+    def test_add_matches_step(self):
+        """R + TSO3(omega) should match R.step(omega)."""
+        R = SO3(rodrigues_expm(np.array([0.5, 0.3, 0.1])))
+        omega = np.array([0.1, -0.05, 0.2])
+        R_step = R.step(omega)
+        R_add = R + TSO3(omega)
+        np.testing.assert_allclose(np.array(R_add), np.array(R_step), atol=1e-10)
+
+    def test_add_zero_is_identity_op(self):
+        R = SO3(rodrigues_expm(np.array([0.5, 0.3, 0.1])))
+        R2 = R + TSO3(np.zeros(3))
+        np.testing.assert_allclose(np.array(R2), np.array(R), atol=1e-10)
+
+    def test_roundtrip_small_angle(self):
+        """(R + w) - R should approximately recover w for small w."""
+        R = SO3(rodrigues_expm(np.array([0.5, 0.3, 0.1])))
+        w = np.array([0.001, -0.002, 0.003])
+        R2 = R + TSO3(w)
+        eR = R2 - R
+        np.testing.assert_allclose(eR.vector, w, atol=1e-4)
+
+    def test_sub_plain_ndarray_delegates_to_numpy(self):
+        """SO3 - ndarray should fall through to numpy element-wise subtraction."""
+        R = SO3()
+        result = R - np.eye(3)
+        np.testing.assert_allclose(result, np.zeros((3, 3)), atol=1e-15)
+
+    def test_sub_non_array_raises_manifold_error(self):
+        R = SO3()
+        with pytest.raises(ManifoldTypeError, match="SO3.__sub__ expects an SO3 element"):
+            R - "invalid"
+
+    def test_add_plain_ndarray_delegates_to_numpy(self):
+        """SO3 + ndarray should fall through to numpy element-wise addition."""
+        R = SO3()
+        result = R + np.eye(3)
+        np.testing.assert_allclose(result, 2 * np.eye(3), atol=1e-15)
+
+    def test_add_non_array_raises_manifold_error(self):
+        R = SO3()
+        with pytest.raises(ManifoldTypeError, match="SO3.__add__ expects a TSO3 tangent vector"):
+            R + "invalid"
