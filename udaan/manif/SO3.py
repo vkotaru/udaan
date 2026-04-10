@@ -23,6 +23,11 @@ class TSO3(np.ndarray):
         return obj
 
     @property
+    def arr(self) -> np.ndarray:
+        """Plain numpy array (strips type wrapper)."""
+        return np.asarray(self)
+
+    @property
     def vector(self) -> np.ndarray:
         """Raw 3-vector as a plain np.ndarray."""
         return np.asarray(self)
@@ -58,7 +63,7 @@ class TSO3(np.ndarray):
         return TSO3(np.asarray(R_to).T @ np.asarray(R_from) @ np.asarray(self))
 
     def __repr__(self) -> str:
-        return f"TSO3({np.array2string(np.asarray(self), precision=4)})"
+        return f"TSO3({np.array2string(np.asarray(self), precision=4, separator=', ')})"
 
 
 class SO3(np.ndarray):
@@ -66,14 +71,37 @@ class SO3(np.ndarray):
 
     Subclasses np.ndarray so it can be used directly in matrix algebra.
     Supports:
+        R1 @ R2  -> SO3    (group composition, if both SO3)
+        R @ v    -> ndarray (rotate a vector)
         R1 - R2  -> TSO3   (configuration error in the Lie algebra)
         R + w    -> SO3    (exponential map step, w is a TSO3)
+        R.T      -> SO3    (transpose, preserves type)
     """
 
     def __new__(cls, R=np.eye(3)):
         obj = np.asarray(R).view(cls)
         obj.R = np.array(R, dtype=float)
         return obj
+
+    @property
+    def T(self) -> SO3:
+        """Transpose (same as inverse for SO3)."""
+        return SO3(np.asarray(self).T)
+
+    def __matmul__(self, other):
+        """SO3 @ SO3 -> SO3, SO3 @ ndarray -> ndarray."""
+        if isinstance(other, SO3):
+            return SO3(np.asarray(self) @ np.asarray(other))
+        return np.asarray(self) @ np.asarray(other)
+
+    def __rmatmul__(self, other):
+        """ndarray @ SO3 -> ndarray."""
+        return np.asarray(other) @ np.asarray(self)
+
+    @property
+    def arr(self) -> np.ndarray:
+        """Plain numpy array (strips type wrapper)."""
+        return np.asarray(self)
 
     @staticmethod
     def from_angle_axis(eta: np.ndarray) -> SO3:
@@ -158,7 +186,7 @@ class SO3(np.ndarray):
                 "Use SO3(R) to wrap a rotation matrix."
             )
         # eR = 1/2 vee(Rd^T R - R^T Rd), self=Rd, other=R
-        err_matrix = np.asarray(self).T @ np.asarray(other) - np.asarray(other).T @ np.asarray(self)
+        err_matrix = np.asarray(other).T @ np.asarray(self) - np.asarray(self).T @ np.asarray(other)
         return TSO3(vee(err_matrix) / 2.0)
 
     def __add__(self, tangent) -> SO3:
@@ -177,7 +205,8 @@ class SO3(np.ndarray):
         return SO3(np.asarray(self) @ rodrigues_expm(np.asarray(tangent)))
 
     def __repr__(self) -> str:
-        return f"SO3(\n{np.array2string(np.asarray(self), precision=4)}\n)"
+        rows = [np.array2string(row, precision=4, separator=", ") for row in np.asarray(self)]
+        return f"SO3([{rows[0]}, {rows[1]}, {rows[2]}])"
 
 
 def Rot2Eul(R):

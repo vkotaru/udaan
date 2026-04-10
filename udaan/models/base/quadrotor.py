@@ -1,9 +1,8 @@
 import time
 
 import numpy as np
-from scipy.linalg import expm
 
-from ... import control, utils
+from ... import control
 from ...core.defaults import (
     DEFAULT_ARM_LENGTH,
     DEFAULT_FORCE_CONSTANT,
@@ -11,7 +10,8 @@ from ...core.defaults import (
     DEFAULT_QUAD_MASS,
     DEFAULT_TORQUE_CONSTANT,
 )
-from ...core.types import ForceType, InputType
+from ...core.types import ForceType, InputType, Vec3
+from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
 from ..base import BaseModel
 
@@ -41,17 +41,17 @@ class Quadrotor(BaseModel):
 
     class State:
         def __init__(self):
-            self.position = np.zeros(3)
-            self.velocity = np.zeros(3)
-            self.orientation = np.eye(3)
-            self.angular_velocity = np.zeros(3)
+            self.position: Vec3 = np.zeros(3)
+            self.velocity: Vec3 = np.zeros(3)
+            self.orientation: SO3 = SO3()
+            self.angular_velocity: TSO3 = TSO3()
             return
 
         def reset(self):
-            self.position = np.zeros(3)
-            self.velocity = np.zeros(3)
-            self.orientation = np.eye(3)
-            self.angular_velocity = np.zeros(3)
+            self.position: Vec3 = np.zeros(3)
+            self.velocity: Vec3 = np.zeros(3)
+            self.orientation: SO3 = SO3()
+            self.angular_velocity: TSO3 = TSO3()
             return
 
     def __init__(self, **kwargs):
@@ -163,9 +163,7 @@ class Quadrotor(BaseModel):
             self.state.velocity * self.sim_timestep + 0.5 * accel * self.sim_timestep**2
         )
         self.state.velocity += accel * self.sim_timestep
-        self.state.orientation = self.state.orientation @ expm(
-            utils.hat(torque) * self.sim_timestep
-        )
+        self.state.orientation.step(self.state.angular_velocity * self.sim_timestep)
         ang_vel_dot = self._inertia_inv @ (
             torque
             - np.cross(self.state.angular_velocity, self._inertia @ self.state.angular_velocity)
@@ -326,6 +324,22 @@ class Quadrotor(BaseModel):
                 thrust = np.clip(thrust, self._min_thrust, self._max_thrust)
                 torque = np.clip(torque, -self._max_torque, self._max_torque)
                 u = np.array([thrust, *torque])
+
+            if self.verbose >= 2:
+                from ...manif import Rot2Eul
+
+                rpy = np.degrees(Rot2Eul(np.asarray(self.state.orientation)))
+                wrench = self._repackage_input(u)
+                _logger.debug(
+                    "t=%.4f pos=%s vel=%s rpy=%s Om=%s f=%.4f M=%s",
+                    self.t,
+                    np.array2string(self.state.position, precision=4),
+                    np.array2string(self.state.velocity, precision=4),
+                    np.array2string(rpy, precision=2),
+                    np.array2string(np.asarray(self.state.angular_velocity), precision=4),
+                    wrench[0],
+                    np.array2string(wrench[1:], precision=4),
+                )
 
             self.step(u)
 

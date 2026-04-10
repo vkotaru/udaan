@@ -33,13 +33,19 @@ def quadrotor(
     backend: str = typer.Option(
         "mujoco", "--backend", "-b", help="Physics backend: mujoco or base."
     ),
+    verbose: int = typer.Option(0, "--verbose", "-v", help="Verbosity level (0-2)."),
     record: str | None = _record_option,
     position: str | None = typer.Option(
         None, "--position", "-p", help="Initial position as 'x,y,z'."
     ),
 ):
     """Simulate a quadrotor with geometric SE(3) control."""
+    import logging
+
     import numpy as np
+
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
     import udaan as U
 
@@ -47,7 +53,7 @@ def quadrotor(
 
     x0 = parse_vec(position, default=np.array([1.0, 1.0, 0.0]))
     mdl_module = getattr(U.models, backend)
-    mdl = mdl_module.Quadrotor(render=render)
+    mdl = mdl_module.Quadrotor(render=render, verbose=verbose)
     _setup_recording(mdl, record)
     typer.echo(f"Running quadrotor ({backend}) for {time}s ...")
     mdl.simulate(tf=time, position=x0)

@@ -22,6 +22,11 @@ class TS2(np.ndarray):
         return obj
 
     @property
+    def arr(self) -> np.ndarray:
+        """Plain numpy array (strips type wrapper)."""
+        return np.asarray(self)
+
+    @property
     def vector(self) -> np.ndarray:
         """Raw 3-vector as a plain np.ndarray."""
         return np.asarray(self)
@@ -52,7 +57,7 @@ class TS2(np.ndarray):
         return TS2(-hat(q_arr) @ hat(q_arr) @ np.asarray(self))
 
     def __repr__(self) -> str:
-        return f"TS2({np.array2string(np.asarray(self), precision=4)})"
+        return f"TS2({np.array2string(np.asarray(self), precision=4, separator=', ')})"
 
 
 class S2(np.ndarray):
@@ -68,6 +73,11 @@ class S2(np.ndarray):
         obj = np.asarray(q).view(cls)
         obj.q = np.array(q, dtype=float)
         return obj
+
+    @property
+    def arr(self) -> np.ndarray:
+        """Plain numpy array (strips type wrapper)."""
+        return np.asarray(self)
 
     def step(self, omega_dt=np.zeros(3)):
         """Geodesic step on S2 via the exponential map.
@@ -127,7 +137,7 @@ class S2(np.ndarray):
         return S2(rodrigues_expm(np.asarray(tangent)) @ np.asarray(self))
 
     def __repr__(self) -> str:
-        return f"S2({np.array2string(np.asarray(self), precision=4)})"
+        return f"S2({np.array2string(np.asarray(self), precision=4, separator=', ')})"
 
     @staticmethod
     def from_spherical(phi=0.0, th=0.0):

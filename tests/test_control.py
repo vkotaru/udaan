@@ -48,28 +48,34 @@ class TestPositionPDController:
 
 class TestGeometricAttitudeController:
     def test_output_shape(self):
+        from udaan.manif import SO3, TSO3
+
         inertia = np.diag([0.01, 0.01, 0.02])
         ctrl = GeometricAttitudeController(inertia=inertia)
-        R = np.eye(3)
-        Omega = np.zeros(3)
+        R = SO3()
+        Omega = TSO3()
         thrust_force = np.array([0.0, 0.0, 9.81])
         f, M = ctrl.compute(0.0, (R, Omega), thrust_force)
         assert np.isscalar(f) or f.shape == ()
         assert M.shape == (3,)
 
     def test_hover_gives_gravity_thrust(self):
+        from udaan.manif import SO3, TSO3
+
         mass = 1.0
         inertia = np.diag([0.01, 0.01, 0.02])
         ctrl = GeometricAttitudeController(mass=mass, inertia=inertia)
         thrust_force = np.array([0.0, 0.0, 9.81])
-        f, M = ctrl.compute(0.0, (np.eye(3), np.zeros(3)), thrust_force)
+        f, M = ctrl.compute(0.0, (SO3(), TSO3()), thrust_force)
         assert f > 0
 
 
 class TestDirectPropellerForceController:
     def test_output_shape(self):
+        from udaan.manif import SO3, TSO3
+
         ctrl = DirectPropellerForceController(mass=1.0, inertia=np.diag([0.01, 0.01, 0.02]))
-        state = (np.zeros(3), np.zeros(3), np.eye(3), np.zeros(3))
+        state = (np.zeros(3), np.zeros(3), SO3(), TSO3())
         u = ctrl.compute(0.0, state)
         assert u.shape == (4,)
 

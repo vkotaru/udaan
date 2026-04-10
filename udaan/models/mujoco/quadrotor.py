@@ -3,6 +3,7 @@ import copy
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
+from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
 from .. import base
 from ..mujoco import MujocoModel
@@ -129,8 +130,8 @@ class Quadrotor(base.Quadrotor):
 
         self.state.position = np.array(pos)
         self.state.velocity = np.array(vel)
-        self.state.orientation = self._mjMdl._quat2rot(q)
-        self.state.angular_velocity = np.array(ang_vel)
+        self.state.orientation = SO3(self._mjMdl._quat2rot(q))
+        self.state.angular_velocity = TSO3(np.array(ang_vel))
         return
 
     def add_reference_marker(self, x):
