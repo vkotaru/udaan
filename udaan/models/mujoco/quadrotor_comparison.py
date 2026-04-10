@@ -135,9 +135,9 @@ class QuadrotorComparison(base.BaseModel):
             u_reference = u[4:8]
             # set control
             self._mjMdl.data.ctrl[self._plant_ctrl_index : self._plant_ctrl_index + 4] = u_plant
-            self._mjMdl.data.ctrl[
-                self._reference_ctrl_index : self._reference_ctrl_index + 4
-            ] = u_reference
+            self._mjMdl.data.ctrl[self._reference_ctrl_index : self._reference_ctrl_index + 4] = (
+                u_reference
+            )
             # mujoco simulation
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state

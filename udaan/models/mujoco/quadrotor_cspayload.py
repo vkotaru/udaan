@@ -180,36 +180,36 @@ class QuadrotorCSPayload(base.QuadrotorCSPayload):
         _qQ = sp_rot.from_matrix(self.state.orientation).as_quat()
         quat_Q = np.array([_qQ[3], _qQ[0], _qQ[1], _qQ[2]])
 
-        self._mjMdl.data.qpos[
-            self._mj_quad_pos_index : self._mj_quad_pos_index + 3
-        ] = self.state.position
+        self._mjMdl.data.qpos[self._mj_quad_pos_index : self._mj_quad_pos_index + 3] = (
+            self.state.position
+        )
         self._mjMdl.data.qpos[self._mj_quad_quat_index : self._mj_quad_quat_index + 4] = quat_Q
-        self._mjMdl.data.qvel[
-            self._mj_quad_vel_index : self._mj_quad_vel_index + 3
-        ] = self.state.velocity  # quadrotor velocity
-        self._mjMdl.data.qvel[
-            self._mj_quad_omega_index : self._mj_quad_omega_index + 3
-        ] = self.state.angular_velocity  # quadrotor angular velocity
+        self._mjMdl.data.qvel[self._mj_quad_vel_index : self._mj_quad_vel_index + 3] = (
+            self.state.velocity
+        )  # quadrotor velocity
+        self._mjMdl.data.qvel[self._mj_quad_omega_index : self._mj_quad_omega_index + 3] = (
+            self.state.angular_velocity
+        )  # quadrotor angular velocity
 
-        self._mjMdl.data.qpos[
-            self._mj_payload_pos_index : self._mj_payload_pos_index + 3
-        ] = self.state.payload_position
-        self._mjMdl.data.qpos[
-            self._mj_payload_quat_index : self._mj_payload_quat_index + 4
-        ] = np.array([1.0, 0.0, 0.0, 0.0])  # point mass payload, this is obsolete
-        self._mjMdl.data.qvel[
-            self._mj_payload_vel_index : self._mj_payload_vel_index + 3
-        ] = self.state.payload_velocity  # payload velocity
-        self._mjMdl.data.qvel[
-            self._mj_payload_omega_index : self._mj_payload_omega_index + 3
-        ] = np.zeros(3)  # payload angular velocity, always zero
+        self._mjMdl.data.qpos[self._mj_payload_pos_index : self._mj_payload_pos_index + 3] = (
+            self.state.payload_position
+        )
+        self._mjMdl.data.qpos[self._mj_payload_quat_index : self._mj_payload_quat_index + 4] = (
+            np.array([1.0, 0.0, 0.0, 0.0])
+        )  # point mass payload, this is obsolete
+        self._mjMdl.data.qvel[self._mj_payload_vel_index : self._mj_payload_vel_index + 3] = (
+            self.state.payload_velocity
+        )  # payload velocity
+        self._mjMdl.data.qvel[self._mj_payload_omega_index : self._mj_payload_omega_index + 3] = (
+            np.zeros(3)
+        )  # payload angular velocity, always zero
 
         return
 
     def _reset_nlink_model(self):
-        self._mjMdl.data.qpos[
-            self._mj_quad_pos_index : self._mj_quad_pos_index + 3
-        ] = self.state.position
+        self._mjMdl.data.qpos[self._mj_quad_pos_index : self._mj_quad_pos_index + 3] = (
+            self.state.position
+        )
         return
 
     def _reset_composite_model(self):
