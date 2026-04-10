@@ -35,19 +35,17 @@ class QuadrotorComparison(base.BaseModel):
 
         # loading mujoco model
         self._mjMdl = MujocoModel(filename, render=self.render)
-        self._mj_plant_body_idx = 1
-        self._mj_reference_body_idx = 2
-        self._mj_plant_ctrl_idx = 0
-        self._mj_reference_ctrl_idx = 4
+        self._plant_body_index = 1
+        self._reference_body_index = 2
+        self._plant_ctrl_index = 0
+        self._reference_ctrl_index = 4
 
         # read inertial parameters from mujoco model
-        self.plant.mass = copy.deepcopy(self._mjMdl.model.body_mass[self._mj_plant_body_idx])
-        self.plant.inertia = copy.deepcopy(self._mjMdl.model.body_inertia[self._mj_plant_body_idx])
-        self.reference.mass = copy.deepcopy(
-            self._mjMdl.model.body_mass[self._mj_reference_body_idx]
-        )
+        self.plant.mass = copy.deepcopy(self._mjMdl.model.body_mass[self._plant_body_index])
+        self.plant.inertia = copy.deepcopy(self._mjMdl.model.body_inertia[self._plant_body_index])
+        self.reference.mass = copy.deepcopy(self._mjMdl.model.body_mass[self._reference_body_index])
         self.reference.inertia = copy.deepcopy(
-            self._mjMdl.model.body_inertia[self._mj_reference_body_idx]
+            self._mjMdl.model.body_inertia[self._reference_body_index]
         )
 
         # reinitialize controllers after loading mujoco model & params
@@ -61,10 +59,10 @@ class QuadrotorComparison(base.BaseModel):
     def set_mass(self, m, plant=True):
         if plant:
             self.plant.mass = m
-            self._mjMdl.model.body_mass[self._mj_plant_body_idx] = m
+            self._mjMdl.model.body_mass[self._plant_body_index] = m
         else:
             self.reference.mass = m
-            self._mjMdl.model.body_mass[self._mj_reference_body_idx] = m
+            self._mjMdl.model.body_mass[self._reference_body_index] = m
         return
 
     def set_inertia(self, I, plant=True):
@@ -72,10 +70,10 @@ class QuadrotorComparison(base.BaseModel):
             I = np.diag(I)
         if plant:
             self.plant.inertia = I
-            self._mjMdl.model.body_inertia[self._mj_plant_body_idx] = I
+            self._mjMdl.model.body_inertia[self._plant_body_index] = I
         else:
             self.reference.inertia = I
-            self._mjMdl.model.body_inertia[self._mj_reference_body_idx] = I
+            self._mjMdl.model.body_inertia[self._reference_body_index] = I
         return
 
     def reset(self, **kwargs):
@@ -134,10 +132,10 @@ class QuadrotorComparison(base.BaseModel):
             u_plant = u[0:4]
             u_reference = u[4:8]
             # set control
-            self._mjMdl.data.ctrl[self._mj_plant_ctrl_idx : self._mj_plant_ctrl_idx + 4] = u_plant
-            self._mjMdl.data.ctrl[self._mj_reference_ctrl_idx : self._mj_reference_ctrl_idx + 4] = (
-                u_reference
-            )
+            self._mjMdl.data.ctrl[self._plant_ctrl_index : self._plant_ctrl_index + 4] = u_plant
+            self._mjMdl.data.ctrl[
+                self._reference_ctrl_index : self._reference_ctrl_index + 4
+            ] = u_reference
             # mujoco simulation
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             # update state

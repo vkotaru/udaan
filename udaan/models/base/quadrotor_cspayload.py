@@ -1,10 +1,10 @@
-import enum
 import time
 
 import numpy as np
 from scipy.linalg import expm
 
 from ... import control, utils
+from ...core.types import InputType
 from ...utils.logging import get_logger
 from . import BaseModel
 
@@ -14,10 +14,7 @@ _logger = get_logger(__name__)
 class QuadrotorCSPayload(BaseModel):
     """Quadrotor with cable-suspended payload model."""
 
-    class INPUT_TYPE(enum.Enum):
-        CMD_WRENCH = 0  # thrust [N] (scalar), torque [Nm] (3x1) : (4x1)
-        CMD_PROP_FORCES = 1  # propeller forces [N] (4x1)
-        CMD_ACCEL = 2  # acceleration [m/s^2] (3x1)
+    INPUT_TYPE = InputType
 
     class State:
         def __init__(self, l=1):
@@ -72,7 +69,7 @@ class QuadrotorCSPayload(BaseModel):
         self._wrench_min = np.concatenate([np.array([self._min_thrust]), self._min_torque])
         self._wrench_max = np.concatenate([np.array([self._max_thrust]), self._max_torque])
 
-        self._input_type = QuadrotorCSPayload.INPUT_TYPE.CMD_ACCEL
+        self._input_type = QuadrotorCSPayload.INPUT_TYPE.ACCELERATION
         self._n_action = 4
         self._step_freq = 500.0
         self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
@@ -82,17 +79,17 @@ class QuadrotorCSPayload(BaseModel):
             self.sim_timestep = kwargs["sim_timestep"]
         if "input" in kwargs:
             if kwargs["input"] == "prop_forces":
-                self._input_type = QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES
+                self._input_type = QuadrotorCSPayload.INPUT_TYPE.PROP_FORCES
                 self._n_action = 4
                 self._step_freq = 500.0
                 self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
             elif kwargs["input"] == "accel":
-                self._input_type = QuadrotorCSPayload.INPUT_TYPE.CMD_ACCEL
+                self._input_type = QuadrotorCSPayload.INPUT_TYPE.ACCELERATION
                 self._n_action = 3
                 self._step_freq = 100.0
                 self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
             else:
-                self._input_type = QuadrotorCSPayload.INPUT_TYPE.CMD_WRENCH
+                self._input_type = QuadrotorCSPayload.INPUT_TYPE.WRENCH
                 self._n_action = 4
                 self._step_freq = 500.0
                 self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
@@ -190,11 +187,11 @@ class QuadrotorCSPayload(BaseModel):
         return
 
     def _parse_input(self, input):
-        if self._input_type == QuadrotorCSPayload.INPUT_TYPE.CMD_ACCEL:
+        if self._input_type == QuadrotorCSPayload.INPUT_TYPE.ACCELERATION:
             thrust, torque = self._att_controller.compute(
                 self.t, (self.state.orientation, self.state.angular_velocity), input
             )
-        elif self._input_type == QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES:
+        elif self._input_type == QuadrotorCSPayload.INPUT_TYPE.PROP_FORCES:
             utils.printc_warn("TODO: Incorrect implementation verify")
             wrench = self._propforces_to_wrench(input)
             thrust, torque = wrench[0], wrench[1:]
@@ -278,7 +275,7 @@ class QuadrotorCSPayload(BaseModel):
 
         start_t = time.time_ns()
         while self.t < tf:
-            if self._input_type == QuadrotorCSPayload.INPUT_TYPE.CMD_PROP_FORCES:
+            if self._input_type == QuadrotorCSPayload.INPUT_TYPE.PROP_FORCES:
                 raise NotImplementedError("Propeller force input not yet supported")
             else:
                 u = self._payload_controller.compute(self.t, self.state)

@@ -1,10 +1,10 @@
-import enum
 import time
 
 import numpy as np
 from scipy.linalg import expm
 
 from ... import control, utils
+from ...core.types import ForceType, InputType
 from ...utils.logging import get_logger
 from ..base import BaseModel
 
@@ -29,42 +29,8 @@ class Quadrotor(BaseModel):
         _type_: _description_
     """
 
-    class INPUT_TYPE(enum.Enum):
-        """Input type to the quadrotor.
-
-        CMD_WRENCH: thrust [N] (scalar), torque [Nm] (3x1) : (4x1) enables
-        the user to directly specify the thrust and torque to be applied on
-        the quadrotor rigidbody.
-        CMD_PROP_FORCES: propeller forces [N] (4x1) enables the user to define
-        the forces applied at the four propeller locations.
-        CMD_ACCEL: acceleration [m/s^2] (3x1) enables the user to define the
-        position acceleration of the quadrotor and an attitude control is
-        used internally to convert the acceleration to WRENCH/PROP_FORCES
-        based on FORCE_TYPE.
-
-        Args:
-            enum (_type_): _description_
-        """
-
-        CMD_WRENCH = 0  # thrust [N] (scalar), torque [Nm] (3x1) : (4x1)
-        CMD_PROP_FORCES = 1  # propeller forces [N] (4x1)
-        CMD_ACCEL = 2  # acceleration [m/s^2] (3x1)
-
-    class FORCE_TYPE(enum.Enum):
-        """Type of force to apply on the quadrotor rigidbody.
-        WRENCH: wrench (thrust [N], torque [Nm]) applies a thrust along the
-        perpendicular to the quadrotor body and a torque around the center of
-        mass of the quadrotor in the body frame.
-
-        PROP_FORCES: propeller forces [N] (4x1) applies forces at the four
-        propeller locations, the forces are perpendicular to the quadrotor frame.
-
-        Args:
-            enum (_type_): _description_
-        """
-
-        WRENCH = 0
-        PROP_FORCES = 1
+    INPUT_TYPE = InputType
+    FORCE_TYPE = ForceType
 
     class State:
         def __init__(self):
@@ -101,7 +67,7 @@ class Quadrotor(BaseModel):
         self._wrench_min = np.array([self._min_thrust, *self._min_torque])
         self._wrench_max = np.array([self._max_thrust, *self._max_torque])
 
-        self._input_type = Quadrotor.INPUT_TYPE.CMD_ACCEL
+        self._input_type = Quadrotor.INPUT_TYPE.ACCELERATION
         self._force_type = Quadrotor.FORCE_TYPE.WRENCH
         self._n_action = 4
         self._step_freq = 500.0
@@ -114,17 +80,17 @@ class Quadrotor(BaseModel):
             self.sim_timestep = kwargs["sim_timestep"]
         if "input" in kwargs:
             if kwargs["input"] == "prop_forces":
-                self._input_type = Quadrotor.INPUT_TYPE.CMD_PROP_FORCES
+                self._input_type = Quadrotor.INPUT_TYPE.PROP_FORCES
                 self._n_action = 4
                 self._step_freq = 500.0
                 self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
             elif kwargs["input"] == "accel":
-                self._input_type = Quadrotor.INPUT_TYPE.CMD_ACCEL
+                self._input_type = Quadrotor.INPUT_TYPE.ACCELERATION
                 self._n_action = 3
                 self._step_freq = 100.0
                 self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
             else:
-                self._input_type = Quadrotor.INPUT_TYPE.CMD_WRENCH
+                self._input_type = Quadrotor.INPUT_TYPE.WRENCH
                 self._n_action = 4
                 self._step_freq = 500.0
                 self._step_iter = max(1, int(1.0 / self._step_freq / self.sim_timestep))
@@ -248,9 +214,9 @@ class Quadrotor(BaseModel):
 
     def _parse_input(self):
         """Parse input type. Default parse only to wrench type."""
-        if self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
+        if self._input_type == Quadrotor.INPUT_TYPE.ACCELERATION:
             self._repackage_input = lambda u: self._in_accel_out_wrench(u)
-        elif self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
+        elif self._input_type == Quadrotor.INPUT_TYPE.PROP_FORCES:
             self._repackage_input = lambda u: self._in_propforces_out_wrench(u)
         else:
             self._repackage_input = lambda u: self._in_wrench_out_wrench(u)
@@ -330,7 +296,7 @@ class Quadrotor(BaseModel):
 
         start_t = time.time_ns()
         while self.t < tf:
-            if self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
+            if self._input_type == Quadrotor.INPUT_TYPE.PROP_FORCES:
                 u = self._prop_controller.compute(
                     self.t,
                     (
@@ -340,7 +306,7 @@ class Quadrotor(BaseModel):
                         self.state.angular_velocity,
                     ),
                 )
-            elif self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
+            elif self._input_type == Quadrotor.INPUT_TYPE.ACCELERATION:
                 u = self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
 
             else:

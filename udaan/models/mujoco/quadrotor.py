@@ -63,21 +63,21 @@ class Quadrotor(base.Quadrotor):
 
     def _parse_input(self):
         """Parse input type based on input and force type"""
-        if self._input_type == Quadrotor.INPUT_TYPE.CMD_ACCEL:
+        if self._input_type == Quadrotor.INPUT_TYPE.ACCELERATION:
             if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
-                self._repack_input = lambda u: self._in_accel_out_propforces(u)
+                self._repackage_input = lambda u: self._in_accel_out_propforces(u)
             else:
-                self._repack_input = lambda u: self._in_accel_out_wrench(u)
-        elif self._input_type == Quadrotor.INPUT_TYPE.CMD_PROP_FORCES:
+                self._repackage_input = lambda u: self._in_accel_out_wrench(u)
+        elif self._input_type == Quadrotor.INPUT_TYPE.PROP_FORCES:
             if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
-                self._repack_input = lambda u: self._in_propforces_out_propforces(u)
+                self._repackage_input = lambda u: self._in_propforces_out_propforces(u)
             else:
-                self._repack_input = lambda u: self._in_propforces_out_wrench(u)
+                self._repackage_input = lambda u: self._in_propforces_out_wrench(u)
         else:
             if self._force_type == Quadrotor.FORCE_TYPE.PROP_FORCES:
-                self._repack_input = lambda u: self._in_wrench_out_propforces(u)
+                self._repackage_input = lambda u: self._in_wrench_out_propforces(u)
             else:
-                self._repack_input = lambda u: self._in_wrench_out_wrench(u)
+                self._repackage_input = lambda u: self._in_wrench_out_wrench(u)
         return
 
     def reset(self, **kwargs):
@@ -96,7 +96,7 @@ class Quadrotor(base.Quadrotor):
 
     def step(self, u):
         for _ in range(self._step_iter):
-            u_clamped = self._repack_input(u)
+            u_clamped = self._repackage_input(u)
             # set control
             self._mjMdl.data.ctrl[self._ctrl_index : self._ctrl_index + 4] = u_clamped
             # mujoco simulation
