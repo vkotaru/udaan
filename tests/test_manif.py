@@ -7,6 +7,7 @@ from udaan.core.exceptions import ManifoldTypeError
 from udaan.manif import (
     S2,
     SO3,
+    TS2,
     TSO3,
     Rot2Eul,
     expm_taylor_expansion,
@@ -218,6 +219,35 @@ class TestTSO3:
         assert "TSO3" in repr(w)
 
 
+class TestTS2:
+    def test_creation(self):
+        v = TS2(np.array([0.1, 0.2, 0.0]))
+        np.testing.assert_allclose(v.vector, [0.1, 0.2, 0.0])
+
+    def test_norm(self):
+        v = TS2(np.array([3.0, 4.0, 0.0]))
+        assert v.norm == pytest.approx(5.0)
+
+    def test_scalar_mul(self):
+        v = TS2(np.array([1.0, 2.0, 3.0]))
+        v2 = v * 3.0
+        np.testing.assert_allclose(v2.vector, [3.0, 6.0, 9.0])
+
+    def test_rmul(self):
+        v = TS2(np.array([1.0, 2.0, 3.0]))
+        v2 = 0.1 * v
+        np.testing.assert_allclose(v2.vector, [0.1, 0.2, 0.3])
+
+    def test_neg(self):
+        v = TS2(np.array([1.0, -2.0, 3.0]))
+        v2 = -v
+        np.testing.assert_allclose(v2.vector, [-1.0, 2.0, -3.0])
+
+    def test_repr(self):
+        v = TS2(np.array([0.1, 0.2, 0.3]))
+        assert "TS2" in repr(v)
+
+
 class TestSO3Inv:
     def test_inv_is_transpose(self):
         R = SO3(rodrigues_expm(np.array([0.3, -0.2, 0.5])))
@@ -302,8 +332,24 @@ class TestTSO3Transport:
         Omd = TSO3(np.array([0.05, 0.1, 0.15]))
         R = SO3(rodrigues_expm(np.array([0.1, 0.0, 0.0])))
         Rd = SO3(rodrigues_expm(np.array([0.1, 0.0, 0.0])))
+        # Same rotation -> transport is identity -> eOm = Om - Omd
         eOm = TSO3(Om.vector - Omd.transport(Rd, R).vector)
         np.testing.assert_allclose(eOm.vector, Om.vector - Omd.vector, atol=1e-10)
+
+
+class TestTS2AsNdarray:
+    def test_is_ndarray(self):
+        v = TS2(np.array([0.1, 0.2, 0.3]))
+        assert isinstance(v, np.ndarray)
+
+    def test_shape(self):
+        v = TS2(np.array([0.1, 0.2, 0.3]))
+        assert v.shape == (3,)
+
+    def test_numpy_ops_work(self):
+        """TS2 can be used in numpy operations like a regular array."""
+        v = TS2(np.array([3.0, 4.0, 0.0]))
+        assert np.linalg.norm(v) == pytest.approx(5.0)
 
 
 class TestSO3Operators:
@@ -326,6 +372,7 @@ class TestSO3Operators:
         Rd = SO3(rodrigues_expm(np.array([0.3, -0.2, 0.5])))
         R = SO3(rodrigues_expm(np.array([0.1, 0.1, 0.1])))
         eR = Rd - R
+        # Manual computation
         eR_manual = vee(np.array(R).T @ np.array(Rd) - np.array(Rd).T @ np.array(R)) / 2.0
         np.testing.assert_allclose(eR.vector, eR_manual, atol=1e-10)
 
@@ -385,3 +432,74 @@ class TestSO3Operators:
         R = SO3()
         with pytest.raises(ManifoldTypeError, match="SO3.__add__ expects a TSO3 tangent vector"):
             R + "invalid"
+
+
+class TestS2Operators:
+    def test_sub_self_is_zero(self):
+        """q - q should give zero error."""
+        q = S2(np.array([0.0, 0.0, 1.0]))
+        eq = q - q
+        assert isinstance(eq, TS2)
+        np.testing.assert_allclose(eq.vector, np.zeros(3), atol=1e-15)
+
+    def test_sub_returns_ts2(self):
+        q1 = S2(np.array([0.0, 0.0, 1.0]))
+        q2 = S2(np.array([1.0, 0.0, 0.0]))
+        eq = q1 - q2
+        assert isinstance(eq, TS2)
+        assert eq.vector.shape == (3,)
+
+    def test_sub_matches_error_vec(self):
+        """S2.__sub__ should match error_vec."""
+        q1 = S2(np.array([0.0, 0.0, 1.0]))
+        q2 = S2(np.array([1.0, 0.0, 0.0]))
+        eq = q1 - q2
+        eq_manual = q1.error_vec(q2)
+        np.testing.assert_allclose(eq.vector, eq_manual, atol=1e-15)
+
+    def test_add_returns_s2(self):
+        q = S2(np.array([0.0, 0.0, 1.0]))
+        w = TS2(np.array([0.1, 0.0, 0.0]))
+        q2 = q + w
+        assert isinstance(q2, S2)
+
+    def test_add_preserves_norm(self):
+        q = S2(np.array([1.0, 0.0, 0.0]))
+        w = TS2(np.array([0.0, 0.1, 0.2]))
+        q2 = q + w
+        np.testing.assert_allclose(np.linalg.norm(q2), 1.0, atol=1e-10)
+
+    def test_add_matches_step(self):
+        """q + TS2(omega) should match q.step(omega)."""
+        q = S2(np.array([0.0, 0.0, 1.0]))
+        omega = np.array([0.1, 0.2, 0.0])
+        q_step = q.step(omega)
+        q_add = q + TS2(omega)
+        np.testing.assert_allclose(np.array(q_add), np.array(q_step), atol=1e-10)
+
+    def test_add_zero_is_identity_op(self):
+        q = S2(np.array([0.0, 1.0, 0.0]))
+        q2 = q + TS2(np.zeros(3))
+        np.testing.assert_allclose(np.array(q2), np.array(q), atol=1e-10)
+
+    def test_sub_plain_ndarray_delegates_to_numpy(self):
+        """S2 - ndarray should fall through to numpy element-wise subtraction."""
+        q = S2(np.array([0.0, 0.0, 1.0]))
+        result = q - np.array([0.0, 0.0, 1.0])
+        np.testing.assert_allclose(result, np.zeros(3), atol=1e-15)
+
+    def test_sub_non_array_raises_manifold_error(self):
+        q = S2()
+        with pytest.raises(ManifoldTypeError, match="S2.__sub__ expects an S2 element"):
+            q - "invalid"
+
+    def test_add_plain_ndarray_delegates_to_numpy(self):
+        """S2 + ndarray should fall through to numpy element-wise addition."""
+        q = S2(np.array([0.0, 0.0, 1.0]))
+        result = q + np.array([1.0, 0.0, 0.0])
+        np.testing.assert_allclose(result, np.array([1.0, 0.0, 1.0]), atol=1e-15)
+
+    def test_add_non_array_raises_manifold_error(self):
+        q = S2()
+        with pytest.raises(ManifoldTypeError, match="S2.__add__ expects a TS2 tangent vector"):
+            q + "invalid"

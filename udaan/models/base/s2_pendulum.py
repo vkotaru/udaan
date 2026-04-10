@@ -64,7 +64,7 @@ class S2Pendulum(BaseModel):
             rng = np.random.default_rng()
             phi = -np.pi + 2 * np.pi * rng.standard_normal(1)
             th = np.pi * rng.random(1)
-            init_att = manif.S2.fromEuler(phi[0], th[0])
+            init_att = manif.S2.from_spherical(phi[0], th[0])
         else:
             init_att = manif.S2(np.array([1.0, 0.0, 0.0]))
         return {"attitude": init_att, "angular_velocity": np.zeros(3)}
