@@ -19,11 +19,23 @@ def record_quadrotor_state(mdl, tf, target):
     from ...manif import Rot2Eul
 
     h = {
-        "t": [], "x": [], "y": [], "z": [],
-        "vx": [], "vy": [], "vz": [],
-        "roll": [], "pitch": [], "yaw": [],
-        "wx": [], "wy": [], "wz": [],
-        "f": [], "Mx": [], "My": [], "Mz": [],
+        "t": [],
+        "x": [],
+        "y": [],
+        "z": [],
+        "vx": [],
+        "vy": [],
+        "vz": [],
+        "roll": [],
+        "pitch": [],
+        "yaw": [],
+        "wx": [],
+        "wy": [],
+        "wz": [],
+        "f": [],
+        "Mx": [],
+        "My": [],
+        "Mz": [],
         "pos_err": [],
     }
 
@@ -71,15 +83,17 @@ def plot_quadrotor_simulation(history, target=None):
 
     def _fig(title, ylabel):
         p = figure(
-            title=title, x_axis_label="time [s]", y_axis_label=ylabel,
-            width=500, height=250,
+            title=title,
+            x_axis_label="time [s]",
+            y_axis_label=ylabel,
+            width=500,
+            height=250,
             x_range=plots[0].x_range if plots else None,
         )
         return p
 
     # Position
-    p = figure(title="Position", x_axis_label="time [s]", y_axis_label="m",
-               width=500, height=250)
+    p = figure(title="Position", x_axis_label="time [s]", y_axis_label="m", width=500, height=250)
     p.line(t, history["x"], legend_label="x", color="red")
     p.line(t, history["y"], legend_label="y", color="green")
     p.line(t, history["z"], legend_label="z", color="blue")
@@ -132,8 +146,14 @@ def plot_quadrotor_simulation(history, target=None):
     plots.append(p)
 
     # XY trajectory
-    p = figure(title="XY Trajectory", x_axis_label="x [m]", y_axis_label="y [m]",
-               width=500, height=250, match_aspect=True)
+    p = figure(
+        title="XY Trajectory",
+        x_axis_label="x [m]",
+        y_axis_label="y [m]",
+        width=500,
+        height=250,
+        match_aspect=True,
+    )
     p.line(history["x"], history["y"], color="blue")
     p.circle([history["x"][0]], [history["y"][0]], color="green", size=8, legend_label="start")
     if target is not None:

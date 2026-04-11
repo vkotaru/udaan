@@ -61,9 +61,7 @@ def flat2state(acc, jerk, snap, mass, inertia):
 
     db3_b1d = np.cross(db3, b1d) + np.cross(b3, db1d)
     dnorm_b3_b1d = b3_b1d.dot(db3_b1d) / norm_b3_b1d
-    db1 = (
-        -np.cross(db3, b3_b1d) - np.cross(b3, db3_b1d) - b1 * dnorm_b3_b1d
-    ) / norm_b3_b1d
+    db1 = (-np.cross(db3, b3_b1d) - np.cross(b3, db3_b1d) - b1 * dnorm_b3_b1d) / norm_b3_b1d
     db2 = np.cross(db3, b1) + np.cross(b3, db1)
     dR = np.column_stack([db1, db2, db3])
 
@@ -79,9 +77,7 @@ def flat2state(acc, jerk, snap, mass, inertia):
 
     d2b1d = np.zeros(3)
     d2b3_b1d = np.cross(d2b3, b1d) + 2 * np.cross(db3, db1d) + np.cross(b3, d2b1d)
-    d2norm_b3_b1d = (
-        db3_b1d.dot(db3_b1d) + b3_b1d.dot(d2b3_b1d) - dnorm_b3_b1d**2
-    ) / norm_b3_b1d
+    d2norm_b3_b1d = (db3_b1d.dot(db3_b1d) + b3_b1d.dot(d2b3_b1d) - dnorm_b3_b1d**2) / norm_b3_b1d
 
     d2b1 = (
         -np.cross(d2b3, b3_b1d)

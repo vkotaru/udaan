@@ -34,7 +34,9 @@ def quadrotor(
         "mujoco", "--model", "-m", help="Quadrotor model: base, vfx, or mujoco."
     ),
     trajectory: str = typer.Option(
-        "hover", "--trajectory", "--traj",
+        "hover",
+        "--trajectory",
+        "--traj",
         help="Trajectory: hover, flip, spiral, circle, lissajous.",
     ),
     trail: bool = typer.Option(True, "--trail/--no-trail", help="Show trajectory trail."),

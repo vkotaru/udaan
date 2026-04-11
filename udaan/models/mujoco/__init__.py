@@ -170,9 +170,7 @@ class _GlfwViewer:
         if self.show_trails:
             trail_size = np.array([0.008, 0, 0], dtype=np.float64)
             for key, trail in self._trails.items():
-                rgba = self._trail_colors.get(
-                    key, np.array([0.2, 0.6, 1.0, 0.6], dtype=np.float32)
-                )
+                rgba = self._trail_colors.get(key, np.array([0.2, 0.6, 1.0, 0.6], dtype=np.float32))
                 for pt in trail[::2]:
                     self._add_geom(mujoco.mjtGeom.mjGEOM_SPHERE, trail_size, pt, rgba)
 
