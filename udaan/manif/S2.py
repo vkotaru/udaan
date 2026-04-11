@@ -70,8 +70,7 @@ class S2(np.ndarray):
     """
 
     def __new__(cls, q=np.array([0.0, 0.0, 1.0])):
-        obj = np.asarray(q).view(cls)
-        obj.q = np.array(q, dtype=float)
+        obj = np.asarray(q, dtype=float).view(cls)
         return obj
 
     @property

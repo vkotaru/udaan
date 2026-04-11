@@ -36,14 +36,11 @@ class GeometricAttitudeController(Controller):
 
         self._inertia = np.eye(3)
         self._inertia_inv = np.eye(3)
-        self.mass = 1.0
 
         if "inertia" in kwargs:
             self.inertia = kwargs["inertia"]
         else:
             _logger.error("Inertia not provided")
-        if "mass" in kwargs:
-            self.mass = kwargs["mass"]
 
     @property
     def inertia(self):

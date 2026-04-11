@@ -6,7 +6,6 @@ udaan/models/assets/mjcf/fleet_*.xml
 
 # Temporary files
 tmp/
-scripts/
 
 # Folders
 .vscode/
