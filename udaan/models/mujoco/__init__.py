@@ -236,7 +236,7 @@ class _GlfwViewer:
 
         glfw.swap_buffers(self._window)
 
-        # Capture frame for recording (every Nth frame to reduce overhead)
+        # Capture frame for recording (every Nth rendered frame)
         if self._frames is not None:
             self._render_count += 1
             if self._render_count % self._record_every == 0:
