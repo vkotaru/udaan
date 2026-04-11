@@ -9,8 +9,10 @@ import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
 from ... import _FOLDER_PATH
+from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
 from .. import base
+from ..quadrotor import QuadrotorBase
 from . import MujocoModel
 
 _logger = get_logger(__name__)
@@ -60,7 +62,7 @@ class QuadrotorFleet(base.BaseModel):
         self._disturbances = kwargs.get("disturbances", {})
 
         # Create N base quadrotor models (for state + controllers)
-        self.quadrotors = [base.Quadrotor(render=False) for _ in range(self.nQ)]
+        self.quadrotors = [QuadrotorBase() for _ in range(self.nQ)]
 
         # Generate and load MuJoCo model
         xml_path = self._generate_xml(self.nQ, self._disturbances)
@@ -171,7 +173,7 @@ class QuadrotorFleet(base.BaseModel):
             qi = 7 * i  # qpos offset
             vi = 6 * i  # qvel offset
             self._mjMdl.data.qpos[qi : qi + 3] = self.quadrotors[i].state.position
-            quat = sp_rot.from_matrix(self.quadrotors[i].state.orientation).as_quat()
+            quat = sp_rot.from_matrix(np.asarray(self.quadrotors[i].state.orientation)).as_quat()
             self._mjMdl.data.qpos[qi + 3 : qi + 7] = [quat[3], quat[0], quat[1], quat[2]]
             self._mjMdl.data.qvel[vi : vi + 3] = self.quadrotors[i].state.velocity
             self._mjMdl.data.qvel[vi + 3 : vi + 6] = self.quadrotors[i].state.angular_velocity
@@ -185,10 +187,10 @@ class QuadrotorFleet(base.BaseModel):
             vi = 6 * i
             self.quadrotors[i].state.position = copy.deepcopy(self._mjMdl.data.qpos[qi : qi + 3])
             q = copy.deepcopy(self._mjMdl.data.qpos[qi + 3 : qi + 7])
-            self.quadrotors[i].state.orientation = self._mjMdl._quat2rot(q)
+            self.quadrotors[i].state.orientation = SO3(self._mjMdl._quat2rot(q))
             self.quadrotors[i].state.velocity = copy.deepcopy(self._mjMdl.data.qvel[vi : vi + 3])
-            self.quadrotors[i].state.angular_velocity = copy.deepcopy(
-                self._mjMdl.data.qvel[vi + 3 : vi + 6]
+            self.quadrotors[i].state.angular_velocity = TSO3(
+                copy.deepcopy(self._mjMdl.data.qvel[vi + 3 : vi + 6])
             )
 
     def step(self, u):
