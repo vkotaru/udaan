@@ -18,7 +18,9 @@ class TSO3(np.ndarray):
         w.transport(R_from, R_to) -> TSO3  (frame transport)
     """
 
-    def __new__(cls, vector=np.zeros(3)):
+    def __new__(cls, vector=None):
+        if vector is None:
+            vector = np.zeros(3)
         obj = np.asarray(vector, dtype=float).view(cls)
         return obj
 
@@ -78,7 +80,9 @@ class SO3(np.ndarray):
         R.T      -> SO3    (transpose, preserves type)
     """
 
-    def __new__(cls, R=np.eye(3)):
+    def __new__(cls, R=None):
+        if R is None:
+            R = np.eye(3)
         obj = np.asarray(R, dtype=float).view(cls)
         return obj
 
@@ -130,7 +134,7 @@ class SO3(np.ndarray):
         norm_b3_b1 = np.linalg.norm(b3_b1)
         if norm_b3_b1 < 1e-10:
             # b3 parallel to b1, fall back to perpendicular axis
-            b1 = _e2 if abs(np.dot(b3, _e1)) > 0.9 else _e1
+            b1 = _e2
             b3_b1 = np.cross(b3, b1)
             norm_b3_b1 = np.linalg.norm(b3_b1)
         b1 = (-1 / norm_b3_b1) * np.cross(b3, b3_b1)
@@ -161,7 +165,7 @@ class SO3(np.ndarray):
         """
         return 0.5 * np.trace(np.eye(3) - np.asarray(other).T @ np.asarray(self))
 
-    def step(self, Omega_dt=np.zeros(3)):
+    def step(self, Omega_dt=None):
         """Integrate angular velocity via the exponential map.
 
         Args:
@@ -169,6 +173,8 @@ class SO3(np.ndarray):
 
         Returns a new SO3 element: R_next = R @ expm(hat(Omega_dt)).
         """
+        if Omega_dt is None:
+            Omega_dt = np.zeros(3)
         return SO3(self @ rodrigues_expm(Omega_dt))
 
     def __sub__(self, other) -> TSO3:

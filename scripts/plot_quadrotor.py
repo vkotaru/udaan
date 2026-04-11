@@ -6,13 +6,16 @@ Usage:
 """
 
 import argparse
+import os
 
 import numpy as np
-from bokeh.io import show
+from bokeh.io import output_file, show
 
 from udaan.models.quadrotor import QuadrotorBase
 from udaan.utils.plotting import plot_quadrotor_simulation
 from udaan.utils.plotting.quadrotor import record_quadrotor_state
+
+ARTIFACTS_DIR = os.path.join(os.path.dirname(__file__), "..", "artifacts")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Quadrotor debug plots")
@@ -35,4 +38,8 @@ if __name__ == "__main__":
     print(f"Final pos: {np.round(mdl.state.position, 4)}")
     print(f"Final err: {np.linalg.norm(mdl.state.position - target):.4f}m")
 
+    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+    out_path = os.path.join(ARTIFACTS_DIR, "quadrotor_debug.html")
+    output_file(out_path)
     show(plot_quadrotor_simulation(history, target))
+    print(f"Saved to {out_path}")

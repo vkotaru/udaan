@@ -24,9 +24,7 @@ class PositionPDController(PDController):
         sd, dsd, d2sd = self.setpoint(t)
         e = s - sd
         de = ds - dsd
-        u = -self._gains.kp * e - self._gains.kd * de + d2sd + self._ge3
-        # scale acceleration to force
-        u = self.mass * u
+        u = -self._gains.kp * e - self._gains.kd * de + self.mass * (d2sd + self._ge3)
 
         # store setpoint for visualization
         self.pos_setpoint = sd

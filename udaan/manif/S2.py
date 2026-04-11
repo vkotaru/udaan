@@ -17,7 +17,9 @@ class TS2(np.ndarray):
         v.transport(q) -> TS2  (project onto tangent space at q)
     """
 
-    def __new__(cls, vector=np.zeros(3)):
+    def __new__(cls, vector=None):
+        if vector is None:
+            vector = np.zeros(3)
         obj = np.asarray(vector, dtype=float).view(cls)
         return obj
 
@@ -69,7 +71,9 @@ class S2(np.ndarray):
         q + w    -> S2    (geodesic step via exponential map, w is a TS2)
     """
 
-    def __new__(cls, q=np.array([0.0, 0.0, 1.0])):
+    def __new__(cls, q=None):
+        if q is None:
+            q = np.array([0.0, 0.0, 1.0])
         obj = np.asarray(q, dtype=float).view(cls)
         return obj
 

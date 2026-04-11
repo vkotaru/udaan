@@ -57,6 +57,8 @@ class QuadrotorMujoco(QuadrotorBase):
         QuadrotorBase.mass.fset(self, m)
         if self._mjMdl is not None and self._mj_quad_index is not None:
             self._mjMdl.model.body_mass[self._mj_quad_index] = m
+        else:
+            _logger.warning("MuJoCo model not loaded, cannot set mass")
 
     @QuadrotorBase.inertia.setter
     def inertia(self, I):
