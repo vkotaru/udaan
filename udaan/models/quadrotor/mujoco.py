@@ -82,6 +82,12 @@ class QuadrotorMujoco(QuadrotorBase):
 
         self._query_latest_state()
 
+        # Set visual markers
+        if self.render and self._mjMdl._viewer is not None:
+            self._mjMdl._viewer.set_start(self.state.position.copy())
+            target = self._pos_controller.setpoint(0.0)[0]
+            self._mjMdl._viewer.set_target(target)
+
     def step(self, u):
         """Step MuJoCo simulation."""
         for _ in range(self._step_iter):
@@ -95,6 +101,10 @@ class QuadrotorMujoco(QuadrotorBase):
             self._mjMdl._step_mujoco_simulation(self._nFrames)
             self._query_latest_state()
             self.t = self._mjMdl.data.time
+
+        # Trail point every outer step
+        if self.render and self._mjMdl._viewer is not None:
+            self._mjMdl._viewer.add_trail_point(self.state.position)
 
     def _query_latest_state(self):
         """Sync state from MuJoCo data."""

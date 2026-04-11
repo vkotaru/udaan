@@ -19,6 +19,60 @@ _logger = get_logger(__name__)
 class _GlfwViewer:
     """Lightweight GLFW-based MuJoCo viewer with mouse interaction."""
 
+    def _mouse_button_callback(self, window, button, action, mods):
+        import glfw
+
+        pressed = action == glfw.PRESS
+        if button == glfw.MOUSE_BUTTON_LEFT:
+            self._button_left = pressed
+        elif button == glfw.MOUSE_BUTTON_RIGHT:
+            self._button_right = pressed
+        elif button == glfw.MOUSE_BUTTON_MIDDLE:
+            self._button_middle = pressed
+
+        x, y = self._glfw.get_cursor_pos(window)
+        self._last_mouse_x = x
+        self._last_mouse_y = y
+
+    def _mouse_move_callback(self, window, xpos, ypos):
+        dx = xpos - self._last_mouse_x
+        dy = ypos - self._last_mouse_y
+        self._last_mouse_x = xpos
+        self._last_mouse_y = ypos
+
+        if not (self._button_left or self._button_right or self._button_middle):
+            return
+
+        width, height = self._glfw.get_window_size(window)
+
+        if self._button_right:
+            action = mujoco.mjtMouse.mjMOUSE_MOVE_V
+        elif self._button_left:
+            action = mujoco.mjtMouse.mjMOUSE_ROTATE_V
+        elif self._button_middle:
+            action = mujoco.mjtMouse.mjMOUSE_ZOOM
+        else:
+            return
+
+        mujoco.mjv_moveCamera(
+            self._model, action, dx / width, dy / height, self._scene, self._camera
+        )
+
+    def _scroll_callback(self, window, xoffset, yoffset):
+        mujoco.mjv_moveCamera(
+            self._model, mujoco.mjtMouse.mjMOUSE_ZOOM, 0, -0.05 * yoffset, self._scene, self._camera
+        )
+
+    def _key_callback(self, window, key, scancode, action, mods):
+        import glfw
+
+        if action == glfw.PRESS and key in (glfw.KEY_ESCAPE, glfw.KEY_Q):
+            glfw.set_window_should_close(window, True)
+
+    @property
+    def cam(self):
+        return self._camera
+
     def __init__(self, model, data, width=1200, height=900, title="udaan", record=None):
         if record:
             width, height = 640, 480
@@ -75,59 +129,57 @@ class _GlfwViewer:
         self._last_render_time = 0.0
         self._overlay_text = ""
 
-    def _mouse_button_callback(self, window, button, action, mods):
-        import glfw
+        # Visual markers: trail, start, target
+        self._trail = []
+        self._trail_max = 500
+        self._start_pos = None
+        self._target_pos = None
 
-        pressed = action == glfw.PRESS
-        if button == glfw.MOUSE_BUTTON_LEFT:
-            self._button_left = pressed
-        elif button == glfw.MOUSE_BUTTON_RIGHT:
-            self._button_right = pressed
-        elif button == glfw.MOUSE_BUTTON_MIDDLE:
-            self._button_middle = pressed
-
-        x, y = self._glfw.get_cursor_pos(window)
-        self._last_mouse_x = x
-        self._last_mouse_y = y
-
-    def _mouse_move_callback(self, window, xpos, ypos):
-        dx = xpos - self._last_mouse_x
-        dy = ypos - self._last_mouse_y
-        self._last_mouse_x = xpos
-        self._last_mouse_y = ypos
-
-        if not (self._button_left or self._button_right or self._button_middle):
+    def _add_geom(self, type_, size, pos, rgba, mat=np.eye(3)):
+        """Add a custom geom to the scene for the current frame."""
+        if self._scene.ngeom >= self._scene.maxgeom:
             return
+        g = self._scene.geoms[self._scene.ngeom]
+        mujoco.mjv_initGeom(g, type_, size, pos, mat.flatten(), rgba)
+        self._scene.ngeom += 1
 
-        width, height = self._glfw.get_window_size(window)
+    def add_trail_point(self, pos):
+        """Append a position to the trailing trajectory."""
+        self._trail.append(np.array(pos, dtype=np.float64))
+        if len(self._trail) > self._trail_max:
+            self._trail = self._trail[-self._trail_max :]
 
-        if self._button_right:
-            action = mujoco.mjtMouse.mjMOUSE_MOVE_V
-        elif self._button_left:
-            action = mujoco.mjtMouse.mjMOUSE_ROTATE_V
-        elif self._button_middle:
-            action = mujoco.mjtMouse.mjMOUSE_ZOOM
-        else:
-            return
+    def set_start(self, pos):
+        self._start_pos = np.array(pos, dtype=np.float64)
 
-        mujoco.mjv_moveCamera(
-            self._model, action, dx / width, dy / height, self._scene, self._camera
-        )
+    def set_target(self, pos):
+        self._target_pos = np.array(pos, dtype=np.float64)
 
-    def _scroll_callback(self, window, xoffset, yoffset):
-        mujoco.mjv_moveCamera(
-            self._model, mujoco.mjtMouse.mjMOUSE_ZOOM, 0, -0.05 * yoffset, self._scene, self._camera
-        )
+    def _render_markers(self):
+        """Draw trail, start, and target markers into the scene."""
+        # Trail as small spheres
+        trail_rgba = np.array([0.2, 0.6, 1.0, 0.6], dtype=np.float32)
+        trail_size = np.array([0.008, 0, 0], dtype=np.float64)
+        for pt in self._trail[::2]:  # every other point to save geom budget
+            self._add_geom(mujoco.mjtGeom.mjGEOM_SPHERE, trail_size, pt, trail_rgba)
 
-    def _key_callback(self, window, key, scancode, action, mods):
-        import glfw
+        # Start marker (green sphere)
+        if self._start_pos is not None:
+            self._add_geom(
+                mujoco.mjtGeom.mjGEOM_SPHERE,
+                np.array([0.03, 0, 0], dtype=np.float64),
+                self._start_pos,
+                np.array([0.2, 0.9, 0.3, 0.8], dtype=np.float32),
+            )
 
-        if action == glfw.PRESS and key in (glfw.KEY_ESCAPE, glfw.KEY_Q):
-            glfw.set_window_should_close(window, True)
-
-    @property
-    def cam(self):
-        return self._camera
+        # Target marker (red sphere)
+        if self._target_pos is not None:
+            self._add_geom(
+                mujoco.mjtGeom.mjGEOM_SPHERE,
+                np.array([0.03, 0, 0], dtype=np.float64),
+                self._target_pos,
+                np.array([0.9, 0.2, 0.2, 0.8], dtype=np.float32),
+            )
 
     def render(self):
         import glfw
@@ -154,6 +206,7 @@ class _GlfwViewer:
             mujoco.mjtCatBit.mjCAT_ALL,
             self._scene,
         )
+        self._render_markers()
         mujoco.mjr_render(viewport, self._scene, self._context)
 
         # Overlay sim time top-right
