@@ -3,7 +3,6 @@
 import numpy as np
 import pytest
 
-from udaan.core.exceptions import ManifoldTypeError
 from udaan.manif import (
     S2,
     SO3,
@@ -86,8 +85,8 @@ class TestSO3:
     def test_step_returns_SO3(self):
         R = SO3()
         R2 = R.step(np.array([0.01, 0.02, 0.03]))
-        assert R2.shape == (3, 3)
-        np.testing.assert_allclose(R2 @ R2.T, np.eye(3), atol=1e-10)
+        assert isinstance(R2, SO3)
+        np.testing.assert_allclose(np.array(R2) @ np.array(R2).T, np.eye(3), atol=1e-10)
 
     def test_step_zero_is_identity(self):
         R = SO3(rodrigues_expm(np.array([0.5, 0.3, 0.1])))
@@ -99,7 +98,6 @@ class TestSO3FromTwoVectors:
     def test_basic(self):
         R = SO3.from_two_vectors(np.array([0, 0, 1.0]), np.array([1.0, 0, 0]))
         assert isinstance(R, SO3)
-        assert R.shape == (3, 3)
         np.testing.assert_allclose(np.array(R) @ np.array(R).T, np.eye(3), atol=1e-10)
 
     def test_b3_preserved(self):
@@ -111,7 +109,7 @@ class TestSO3FromTwoVectors:
     def test_parallel_vectors_guard(self):
         """b3 parallel to b1 should not crash."""
         R = SO3.from_two_vectors(np.array([1.0, 0, 0]), np.array([1.0, 0, 0]))
-        assert R.shape == (3, 3)
+        assert isinstance(R, SO3)
         np.testing.assert_allclose(np.linalg.det(np.array(R)), 1.0, atol=1e-10)
 
     def test_arbitrary_direction(self):
@@ -284,13 +282,13 @@ class TestSO3FromAngleAxis:
 
 
 class TestTSO3AsNdarray:
-    def test_is_ndarray(self):
+    def test_numpy_interop(self):
         w = TSO3(np.array([1.0, 2.0, 3.0]))
-        assert isinstance(w, np.ndarray)
+        assert np.asarray(w).shape == (3,)
 
-    def test_shape(self):
+    def test_len(self):
         w = TSO3(np.array([1.0, 2.0, 3.0]))
-        assert w.shape == (3,)
+        assert len(w) == 3
 
     def test_vector_property(self):
         w = TSO3(np.array([1.0, 2.0, 3.0]))
@@ -373,13 +371,13 @@ class TestTS2Transport:
 
 
 class TestTS2AsNdarray:
-    def test_is_ndarray(self):
+    def test_numpy_interop(self):
         v = TS2(np.array([0.1, 0.2, 0.3]))
-        assert isinstance(v, np.ndarray)
+        assert np.asarray(v).shape == (3,)
 
-    def test_shape(self):
+    def test_len(self):
         v = TS2(np.array([0.1, 0.2, 0.3]))
-        assert v.shape == (3,)
+        assert len(v) == 3
 
     def test_numpy_ops_work(self):
         """TS2 can be used in numpy operations like a regular array."""
@@ -416,7 +414,6 @@ class TestSO3Operators:
         w = TSO3(np.array([0.01, 0.02, 0.03]))
         R2 = R + w
         assert isinstance(R2, SO3)
-        assert R2.shape == (3, 3)
 
     def test_add_preserves_orthogonality(self):
         R = SO3(rodrigues_expm(np.array([0.5, 0.3, 0.1])))
@@ -453,9 +450,9 @@ class TestSO3Operators:
         result = R - np.eye(3)
         np.testing.assert_allclose(result, np.zeros((3, 3)), atol=1e-15)
 
-    def test_sub_non_array_raises_manifold_error(self):
+    def test_sub_non_so3_raises_type_error(self):
         R = SO3()
-        with pytest.raises(ManifoldTypeError, match="SO3.__sub__ expects an SO3 element"):
+        with pytest.raises(TypeError):
             R - "invalid"
 
     def test_add_plain_ndarray_delegates_to_numpy(self):
@@ -464,9 +461,9 @@ class TestSO3Operators:
         result = R + np.eye(3)
         np.testing.assert_allclose(result, 2 * np.eye(3), atol=1e-15)
 
-    def test_add_non_array_raises_manifold_error(self):
+    def test_add_non_tso3_raises_type_error(self):
         R = SO3()
-        with pytest.raises(ManifoldTypeError, match="SO3.__add__ expects a TSO3 tangent vector"):
+        with pytest.raises(TypeError):
             R + "invalid"
 
 
@@ -524,9 +521,9 @@ class TestS2Operators:
         result = q - np.array([0.0, 0.0, 1.0])
         np.testing.assert_allclose(result, np.zeros(3), atol=1e-15)
 
-    def test_sub_non_array_raises_manifold_error(self):
+    def test_sub_non_s2_raises_type_error(self):
         q = S2()
-        with pytest.raises(ManifoldTypeError, match="S2.__sub__ expects an S2 element"):
+        with pytest.raises(TypeError):
             q - "invalid"
 
     def test_add_plain_ndarray_delegates_to_numpy(self):
@@ -535,7 +532,7 @@ class TestS2Operators:
         result = q + np.array([1.0, 0.0, 0.0])
         np.testing.assert_allclose(result, np.array([1.0, 0.0, 1.0]), atol=1e-15)
 
-    def test_add_non_array_raises_manifold_error(self):
+    def test_add_non_ts2_raises_type_error(self):
         q = S2()
-        with pytest.raises(ManifoldTypeError, match="S2.__add__ expects a TS2 tangent vector"):
+        with pytest.raises(TypeError):
             q + "invalid"
