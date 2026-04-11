@@ -58,23 +58,47 @@ pip install -e ".[all]"
 ### CLI
 
 ```bash
-udaan run quadrotor -t 10                             # quadrotor with geometric control
-udaan run quad-payload -t 10 -m tendon                # quadrotor + cable-suspended payload
-udaan run multi-quad -n 3 -t 10                       # multi-quadrotor cooperative payload
-udaan run multi-quad-rigid -t 10                      # multi-quadrotor rigid-body payload
-udaan run fleet --demo l1-comparison -t 10            # L1 vs PD controller comparison
-udaan run fleet --demo gain-sweep -t 10               # PD gain tuning comparison
-udaan run quadrotor -t 5 -r out.gif                   # record to GIF
+# Quadrotor with geometric SE(3) control
+udaan run quadrotor                                    # MuJoCo (default)
+udaan run quadrotor -m base                            # pure dynamics (no viz)
+udaan run quadrotor -m vfx                             # VPython visualization
+
+# Trajectory tracking
+udaan run quadrotor --traj hover -p 1,1,0              # hover (default)
+udaan run quadrotor --traj spiral -p 0,0,2             # helical spiral
+udaan run quadrotor --traj lissajous -p 0,0,2          # 3D Lissajous
+udaan run quadrotor --traj circle -p 0,0,1             # circular
+
+# Cable-suspended payload
+udaan run quad-payload -t 10 -m tendon                 # tendon model
+udaan run quad-payload -t 10 -m links                  # rigid links
+
+# Multi-quadrotor cooperative transport
+udaan run multi-quad -n 3 -t 10                        # N-quad pointmass payload
+udaan run multi-quad-rigid -t 10                       # rigid-body payload
+
+# Fleet: compare controllers side-by-side
+udaan run fleet --demo l1-comparison                   # L1 adaptive vs PD
+udaan run fleet --demo gain-sweep                      # PD gain comparison
+udaan run fleet -n 4 --trail                           # 4 quads with trails
+
+# Recording
+udaan run quadrotor -t 5 -r out.gif                    # save to GIF
+udaan run quadrotor --traj spiral -r spiral.mp4        # save to MP4
 ```
 
 ### Python
 
 ```python
-import udaan as U
-import numpy as np
+from udaan.models.quadrotor import QuadrotorBase, QuadrotorMujoco
 
-mdl = U.models.mujoco.Quadrotor(render=True)
-mdl.simulate(tf=10, position=np.array([1., 1., 0.]))
+# Pure dynamics (no rendering)
+mdl = QuadrotorBase()
+mdl.simulate(tf=10, position=[1., 1., 0.])
+
+# MuJoCo with visualization
+mdl = QuadrotorMujoco(render=True)
+mdl.simulate(tf=10, position=[1., 1., 0.])
 ```
 
 ## Documentation
