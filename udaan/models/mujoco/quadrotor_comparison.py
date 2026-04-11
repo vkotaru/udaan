@@ -3,11 +3,13 @@ import copy
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
+from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
+from .. import base
+from ..quadrotor import QuadrotorBase
+from . import MujocoModel
 
 _logger = get_logger(__name__)
-from .. import base
-from . import MujocoModel
 
 
 class QuadrotorComparison(base.BaseModel):
@@ -15,9 +17,8 @@ class QuadrotorComparison(base.BaseModel):
         super().__init__(**kwargs)
 
         # Actual plant model.
-        self.plant = base.Quadrotor()
-        # Reference model for comparison, running either a different controller, or just the reference trajectory.
-        self.reference = base.Quadrotor()
+        self.plant = QuadrotorBase()
+        self.reference = QuadrotorBase()
 
         # mujoco model param handling
         self._mjMdl = None
@@ -92,16 +93,16 @@ class QuadrotorComparison(base.BaseModel):
         # Set plant position
         self._mjMdl.data.qpos[:3] = self.plant.state.position
         self._mjMdl.data.qvel[:3] = self.plant.state.velocity
-        qQ = sp_rot.from_matrix(self.plant.state.orientation).as_quat()
+        qQ = sp_rot.from_matrix(np.asarray(self.plant.state.orientation)).as_quat()
         self._mjMdl.data.qpos[3:7] = np.array([qQ[3], qQ[0], qQ[1], qQ[2]])
-        self._mjMdl.data.qvel[3:6] = self.plant.state.angular_velocity
+        self._mjMdl.data.qvel[3:6] = np.asarray(self.plant.state.angular_velocity)
 
         # Set reference position
         self._mjMdl.data.qpos[7:10] = self.reference.state.position
         self._mjMdl.data.qvel[6:9] = self.reference.state.velocity
-        qQ = sp_rot.from_matrix(self.reference.state.orientation).as_quat()
+        qQ = sp_rot.from_matrix(np.asarray(self.reference.state.orientation)).as_quat()
         self._mjMdl.data.qpos[10:14] = np.array([qQ[3], qQ[0], qQ[1], qQ[2]])
-        self._mjMdl.data.qvel[9:12] = self.reference.state.angular_velocity
+        self._mjMdl.data.qvel[9:12] = np.asarray(self.reference.state.angular_velocity)
 
         self._query_latest_state()
         return
@@ -115,8 +116,8 @@ class QuadrotorComparison(base.BaseModel):
 
         self.plant.state.position = np.array(pos)
         self.plant.state.velocity = np.array(vel)
-        self.plant.state.orientation = self._mjMdl._quat2rot(q)
-        self.plant.state.angular_velocity = np.array(ang_vel)
+        self.plant.state.orientation = SO3(self._mjMdl._quat2rot(q))
+        self.plant.state.angular_velocity = TSO3(ang_vel)
 
         pos2 = copy.deepcopy(self._mjMdl.data.qpos[7:10])
         q2 = copy.deepcopy(self._mjMdl.data.qpos[10:14])
@@ -125,8 +126,8 @@ class QuadrotorComparison(base.BaseModel):
 
         self.reference.state.position = np.array(pos2)
         self.reference.state.velocity = np.array(vel2)
-        self.reference.state.orientation = self._mjMdl._quat2rot(q2)
-        self.reference.state.angular_velocity = np.array(ang_vel2)
+        self.reference.state.orientation = SO3(self._mjMdl._quat2rot(q2))
+        self.reference.state.angular_velocity = TSO3(ang_vel2)
         return
 
     def step(self, u):

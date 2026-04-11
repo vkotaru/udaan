@@ -30,8 +30,8 @@ def _setup_recording(mdl, record_path):
 def quadrotor(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
-    backend: str = typer.Option(
-        "mujoco", "--backend", "-b", help="Physics backend: mujoco or base."
+    model: str = typer.Option(
+        "mujoco", "--model", "-m", help="Quadrotor model: base, vfx, or mujoco."
     ),
     verbose: int = typer.Option(0, "--verbose", "-v", help="Verbosity level (0-2)."),
     record: str | None = _record_option,
@@ -47,15 +47,25 @@ def quadrotor(
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-    import udaan as U
+    from udaan.models.quadrotor import QuadrotorBase
 
     from . import parse_vec
 
     x0 = parse_vec(position, default=np.array([1.0, 1.0, 0.0]))
-    mdl_module = getattr(U.models, backend)
-    mdl = mdl_module.Quadrotor(render=render, verbose=verbose)
+
+    if model == "mujoco":
+        from udaan.models.quadrotor import QuadrotorMujoco
+
+        mdl = QuadrotorMujoco(render=render, verbose=verbose)
+    elif model == "vfx":
+        from udaan.models.quadrotor import QuadrotorVfx
+
+        mdl = QuadrotorVfx(render=render, verbose=verbose)
+    else:
+        mdl = QuadrotorBase(verbose=verbose)
+
     _setup_recording(mdl, record)
-    typer.echo(f"Running quadrotor ({backend}) for {time}s ...")
+    typer.echo(f"Running quadrotor ({model}) for {time}s ...")
     mdl.simulate(tf=time, position=x0)
     _hold_viewer(mdl)
 
