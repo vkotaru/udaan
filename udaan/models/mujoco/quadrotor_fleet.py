@@ -184,9 +184,7 @@ class QuadrotorFleet(base.BaseModel):
         if self.render and self._mjMdl._viewer is not None:
             for i in range(self.nQ):
                 rgb, _ = _FLEET_COLORS[i % len(_FLEET_COLORS)]
-                self._mjMdl._viewer.set_start(
-                    self.quadrotors[i].state.position.copy(), key=i
-                )
+                self._mjMdl._viewer.set_start(self.quadrotors[i].state.position.copy(), key=i)
                 target = self.quadrotors[i].position_controller.setpoint(0.0)[0]
                 self._mjMdl._viewer.set_target(target, key=i)
 

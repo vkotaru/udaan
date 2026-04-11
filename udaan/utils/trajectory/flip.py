@@ -104,11 +104,13 @@ class FlipTrajectory(Trajectory):
         v0z = self._v_launch[2]
         sw, cw = np.sin(w * tp), np.cos(w * tp)
 
-        p = self._start + np.array([
-            T / w * tp - T / w**2 * sw,
-            0.0,
-            v0z * tp + T / w**2 * (1 - cw) - _g * tp**2 / 2,
-        ])
+        p = self._start + np.array(
+            [
+                T / w * tp - T / w**2 * sw,
+                0.0,
+                v0z * tp + T / w**2 * (1 - cw) - _g * tp**2 / 2,
+            ]
+        )
         v = np.array([T / w * (1 - cw), 0.0, v0z + T / w * sw - _g * tp])
         a = np.array([T * sw, 0.0, T * cw - _g])
         j = np.array([T * w * cw, 0.0, -T * w * sw])
@@ -205,11 +207,13 @@ class SpiralTrajectory(Trajectory):
 
         # Position: x advances linearly, yz traces a circle
         # Circle starts at (y=0, z=center) and goes through (y=+r, z=center)
-        p = self._start + np.array([
-            vx * tp,
-            r * sw,
-            r * (1 - cw),
-        ])
+        p = self._start + np.array(
+            [
+                vx * tp,
+                r * sw,
+                r * (1 - cw),
+            ]
+        )
 
         v = np.array([vx, r * w * cw, r * w * sw])
         a = np.array([0.0, -r * w**2 * sw, r * w**2 * cw])

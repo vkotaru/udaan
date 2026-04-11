@@ -27,7 +27,7 @@ def resize_gif(path, width=480, max_frames=50, fps=15, output=None):
     h, w = frames[0].shape[:2]
     height = int(width * h / w)
 
-    step = max(1, len(frames) // max_frames)
+    step = max(1, (len(frames) + max_frames - 1) // max_frames)
     resized = []
     for i in range(0, len(frames), step):
         img = Image.fromarray(frames[i]).resize((width, height), Image.LANCZOS)
@@ -36,7 +36,9 @@ def resize_gif(path, width=480, max_frames=50, fps=15, output=None):
     out_path = output or path
     iio.imwrite(out_path, resized, duration=1000 // fps, loop=0)
     size_mb = Path(out_path).stat().st_size / 1e6
-    print(f"{out_path}: {len(frames)} -> {len(resized)} frames, {w}x{h} -> {width}x{height}, {size_mb:.1f}MB")
+    print(
+        f"{out_path}: {len(frames)} -> {len(resized)} frames, {w}x{h} -> {width}x{height}, {size_mb:.1f}MB"
+    )
 
 
 if __name__ == "__main__":
