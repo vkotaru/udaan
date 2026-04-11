@@ -233,6 +233,7 @@ class CrazyTrajectory(Trajectory):
     def __init__(
         self,
         tf=10,
+        center=np.zeros(3),
         ax=2,
         ay=2.5,
         az=1.5,
@@ -245,6 +246,7 @@ class CrazyTrajectory(Trajectory):
     ):
         super().__init__()
         self._tf = tf
+        self._center = np.array(center, dtype=float)
         self.ax = ax
         self.ay = ay
         self.az = az
@@ -259,7 +261,7 @@ class CrazyTrajectory(Trajectory):
         w1 = 2 * np.pi * self.f1
         w2 = 2 * np.pi * self.f2
         w3 = 2 * np.pi * self.f3
-        x = np.array(
+        x = self._center + np.array(
             [
                 self.ax * (1 - np.cos(w1 * t + self.phix)),
                 self.ay * np.sin(w2 * t + self.phiy),
@@ -281,6 +283,20 @@ class CrazyTrajectory(Trajectory):
             ]
         )
         return x, dx, d2x
+
+    def get_full(self, t):
+        w1 = 2 * np.pi * self.f1
+        w2 = 2 * np.pi * self.f2
+        w3 = 2 * np.pi * self.f3
+        s1, c1 = np.sin(w1 * t + self.phix), np.cos(w1 * t + self.phix)
+        s2, c2 = np.sin(w2 * t + self.phiy), np.cos(w2 * t + self.phiy)
+        s3, c3 = np.sin(w3 * t + self.phiz), np.cos(w3 * t + self.phiz)
+        x = self._center + np.array([self.ax * (1 - c1), self.ay * s2, self.az * c3])
+        dx = np.array([self.ax * s1 * w1, self.ay * c2 * w2, -self.az * s3 * w3])
+        d2x = np.array([self.ax * c1 * w1**2, -self.ay * s2 * w2**2, -self.az * c3 * w3**2])
+        d3x = np.array([-self.ax * s1 * w1**3, -self.ay * c2 * w2**3, self.az * s3 * w3**3])
+        d4x = np.array([-self.ax * c1 * w1**4, self.ay * s2 * w2**4, self.az * c3 * w3**4])
+        return x, dx, d2x, d3x, d4x
 
 
 def setpoint(t, sp=np.array([0.0, 0.0, 1.0])):

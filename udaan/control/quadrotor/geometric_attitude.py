@@ -65,20 +65,32 @@ class GeometricAttitudeController(Controller):
         b1d = np.array([1.0, 0.0, 0.0])
         return SO3.from_two_vectors(b3, b1d)
 
-    def compute(self, t: float, state: tuple[SO3, TSO3], thrust_force: Vec3) -> tuple[float, Vec3]:
+    def compute(
+        self,
+        t: float,
+        state: tuple[SO3, TSO3],
+        thrust_force: Vec3,
+        desired_att: tuple[SO3, TSO3, Vec3] | None = None,
+    ) -> tuple[float, Vec3]:
         """Compute scalar thrust and torque vector.
 
         Args:
             state: (R, Omega) — rotation matrix and body angular velocity.
             thrust_force: desired thrust force vector in world frame.
+            desired_att: optional (Rd, Omegad, dOmegad) from differential
+                flatness. When provided, overrides the attitude derived
+                from thrust direction and adds feedforward terms.
 
         Returns:
             (f, M) — scalar thrust and 3D torque vector.
         """
         R, Omega = state
         Rd: SO3 = self._cmd_accel_to_cmd_att(thrust_force)
-        Omegad: TSO3 = TSO3()
-        dOmegad: Vec3 = np.zeros(3)
+        if desired_att is not None:
+            _, Omegad, dOmegad = desired_att
+        else:
+            Omegad: TSO3 = TSO3()
+            dOmegad: Vec3 = np.zeros(3)
 
         eR: TSO3 = R - Rd
         eOmega: TSO3 = Omega - Omegad.transport(Rd, R)

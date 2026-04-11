@@ -33,6 +33,10 @@ def quadrotor(
     model: str = typer.Option(
         "mujoco", "--model", "-m", help="Quadrotor model: base, vfx, or mujoco."
     ),
+    trajectory: str = typer.Option(
+        "hover", "--trajectory", "--traj",
+        help="Trajectory: hover, flip, spiral, circle, lissajous.",
+    ),
     verbose: int = typer.Option(0, "--verbose", "-v", help="Verbosity level (0-2)."),
     record: str | None = _record_option,
     position: str | None = typer.Option(
@@ -64,8 +68,36 @@ def quadrotor(
     else:
         mdl = QuadrotorBase(verbose=verbose)
 
+    # Set trajectory
+    if trajectory == "flip":
+        from udaan.utils.trajectory import FlipTrajectory
+
+        traj = FlipTrajectory(start=x0)
+        mdl._pos_controller.setpoint = traj.get
+        time = traj.duration
+    elif trajectory == "spiral":
+        from udaan.utils.trajectory import SpiralTrajectory
+
+        traj = SpiralTrajectory(start=x0)
+        mdl._pos_controller.setpoint = traj.get
+        time = traj.duration
+    elif trajectory == "circle":
+        from udaan.utils.trajectory import CircularTraj
+
+        traj = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time)
+        mdl._pos_controller.setpoint = traj.get
+    elif trajectory == "lissajous":
+        from udaan.utils.trajectory import CrazyTrajectory
+
+        traj = CrazyTrajectory(tf=time, center=x0)
+        mdl._pos_controller.setpoint = traj.get
+        x0 = traj.get(0.0)[0]
+    else:
+        # Hover: default setpoint is [0,0,1], start from x0
+        pass
+
     _setup_recording(mdl, record)
-    typer.echo(f"Running quadrotor ({model}) for {time}s ...")
+    typer.echo(f"Running quadrotor ({model}, {trajectory}) for {time:.1f}s ...")
     mdl.simulate(tf=time, position=x0)
     _hold_viewer(mdl)
 

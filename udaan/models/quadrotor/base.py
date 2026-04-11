@@ -182,12 +182,15 @@ class QuadrotorBase:
 
     # ─── Input repackaging ─────────────────────────────────────────
 
-    def _repackage_input(self, u):
+    def _repackage_input(self, u, desired_att=None):
         """Convert user input to wrench [thrust, Mx, My, Mz]."""
         if self._input_type == InputType.ACCELERATION:
             # u is desired thrust force vector (3D) → attitude ctrl → wrench
             f, M = self._att_controller.compute(
-                self.t, (self.state.orientation, self.state.angular_velocity), u
+                self.t,
+                (self.state.orientation, self.state.angular_velocity),
+                u,
+                desired_att=desired_att,
             )
             wrench = np.array([f, *M])
         elif self._input_type == InputType.PROP_FORCES:
@@ -209,9 +212,9 @@ class QuadrotorBase:
 
     # ─── Step / Reset / Simulate ───────────────────────────────────
 
-    def step(self, u):
+    def step(self, u, desired_att=None):
         """One outer step: repackage input, then run inner substeps."""
-        wrench = self._repackage_input(u)
+        wrench = self._repackage_input(u, desired_att=desired_att)
         thrust = wrench[0]
         torque = wrench[1:]
         for _ in range(self._inner_loop_steps):
@@ -229,8 +232,14 @@ class QuadrotorBase:
         """Run closed-loop simulation to time tf."""
         self.reset(**kwargs)
 
+        # Check if trajectory provides higher derivatives for feedforward
+        setpoint_fn = self._pos_controller.setpoint
+        has_flat = hasattr(setpoint_fn, "__self__") and hasattr(setpoint_fn.__self__, "get_full")
+        flat_fn = setpoint_fn.__self__.get_full if has_flat else None
+
         start_t = time.time_ns()
         while self.t < tf:
+            desired_att = None
             if self._input_type == InputType.PROP_FORCES:
                 u = self._prop_controller.compute(
                     self.t,
@@ -243,6 +252,13 @@ class QuadrotorBase:
                 )
             elif self._input_type == InputType.ACCELERATION:
                 u = self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
+                # Compute feedforward from flat output if available
+                if flat_fn is not None:
+                    from ...utils.flat2state_utils import flat2state
+
+                    _p, _v, acc, jerk, snap = flat_fn(self.t)
+                    Rd, Omd, dOmd, _f = flat2state(acc, jerk, snap, self._mass, self._inertia)
+                    desired_att = (Rd, Omd, dOmd)
             else:
                 thrust_force = self._pos_controller.compute(
                     self.t, (self.state.position, self.state.velocity)
@@ -252,12 +268,12 @@ class QuadrotorBase:
                     (self.state.orientation, self.state.angular_velocity),
                     thrust_force,
                 )
-                u = np.array([f, *M])  # clipping handled in step() → _repackage_input()
+                u = np.array([f, *M])
 
             if self.verbose >= 2:
                 self._log_state(u)
 
-            self.step(u)
+            self.step(u, desired_att=desired_att)
 
         elapsed = (time.time_ns() - start_t) * 1e-9
         _logger.debug("Simulated %.2fs in %.3fs wall time", self.t, elapsed)

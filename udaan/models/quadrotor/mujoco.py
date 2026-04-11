@@ -88,10 +88,10 @@ class QuadrotorMujoco(QuadrotorBase):
             target = self._pos_controller.setpoint(0.0)[0]
             self._mjMdl._viewer.set_target(target)
 
-    def step(self, u):
+    def step(self, u, desired_att=None):
         """Step MuJoCo simulation."""
         for _ in range(self._step_iter):
-            wrench = self._repackage_input(u)
+            wrench = self._repackage_input(u, desired_att=desired_att)
             # Convert to prop forces if MuJoCo expects individual motor commands
             if self._force_type == QuadrotorBase.FORCE_TYPE.PROP_FORCES:
                 ctrl = self._wrench_to_propforces(wrench)
@@ -102,9 +102,9 @@ class QuadrotorMujoco(QuadrotorBase):
             self._query_latest_state()
             self.t = self._mjMdl.data.time
 
-        # Trail point every outer step
         if self.render and self._mjMdl._viewer is not None:
             self._mjMdl._viewer.add_trail_point(self.state.position)
+            self._mjMdl._viewer.set_target(self._pos_controller.setpoint(self.t)[0])
 
     def _query_latest_state(self):
         """Sync state from MuJoCo data."""

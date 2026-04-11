@@ -1,3 +1,5 @@
+from .flip import FlipTrajectory as FlipTrajectory
+from .flip import SpiralTrajectory as SpiralTrajectory
 from .trajectory import (
     CircularTraj as CircularTraj,
 )
