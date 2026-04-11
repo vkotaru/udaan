@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..core.exceptions import ManifoldTypeError
 from .utils import hat, rodrigues_expm, vee
 
 
-class TSO3(np.ndarray):
+class TSO3:
     """Element of the Lie algebra so(3) — tangent vector to SO(3).
 
-    Subclasses np.ndarray (3-vector) representing angular velocity or
-    rotation error. Supports:
+    Wraps a 3-vector representing angular velocity or rotation error.
+    Supports:
         w1 - w2  -> TSO3   (tangent vector difference)
         w1 + w2  -> TSO3   (tangent vector sum)
         w * s    -> TSO3   (scalar multiplication)
@@ -18,40 +17,80 @@ class TSO3(np.ndarray):
         w.transport(R_from, R_to) -> TSO3  (frame transport)
     """
 
-    def __new__(cls, vector=None):
+    __slots__ = ("_data",)
+
+    def __init__(self, vector=None):
         if vector is None:
-            vector = np.zeros(3)
-        obj = np.asarray(vector, dtype=float).view(cls)
-        return obj
+            self._data = np.zeros(3)
+        else:
+            self._data = np.asarray(vector, dtype=float).copy()
+
+    # ─── numpy interop ─────────────────────────────────────────────
+
+    def __array__(self, dtype=None):
+        return self._data if dtype is None else self._data.astype(dtype)
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __len__(self):
+        return 3
+
+    # ─── properties ────────────────────────────────────────────────
 
     @property
     def arr(self) -> np.ndarray:
-        """Plain numpy array (strips type wrapper)."""
-        return np.asarray(self)
+        """Plain numpy array (copy)."""
+        return self._data.copy()
 
     @property
     def vector(self) -> np.ndarray:
         """Raw 3-vector as a plain np.ndarray."""
-        return np.asarray(self)
+        return self._data
 
     def hat(self) -> np.ndarray:
         """Return the 3x3 skew-symmetric matrix in so(3)."""
-        return hat(np.asarray(self))
+        return hat(self._data)
 
     @property
     def norm(self) -> float:
         """Magnitude of the tangent vector."""
-        return float(np.linalg.norm(self))
+        return float(np.linalg.norm(self._data))
+
+    # ─── arithmetic ────────────────────────────────────────────────
 
     def __sub__(self, other) -> TSO3:
         if not isinstance(other, TSO3):
             return NotImplemented
-        return TSO3(np.asarray(self) - np.asarray(other))
+        return TSO3(self._data - other._data)
 
     def __add__(self, other) -> TSO3:
         if not isinstance(other, TSO3):
             return NotImplemented
-        return TSO3(np.asarray(self) + np.asarray(other))
+        return TSO3(self._data + other._data)
+
+    def __iadd__(self, other) -> TSO3:
+        if not isinstance(other, TSO3):
+            return NotImplemented
+        self._data += other._data
+        return self
+
+    def __isub__(self, other) -> TSO3:
+        if not isinstance(other, TSO3):
+            return NotImplemented
+        self._data -= other._data
+        return self
+
+    def __mul__(self, scalar) -> TSO3:
+        return TSO3(self._data * scalar)
+
+    def __rmul__(self, scalar) -> TSO3:
+        return TSO3(scalar * self._data)
+
+    def __neg__(self) -> TSO3:
+        return TSO3(-self._data)
+
+    # ─── Lie algebra ───────────────────────────────────────────────
 
     def transport(self, R_from: SO3, R_to: SO3) -> TSO3:
         """Transport this tangent vector from R_from's body frame to R_to's.
@@ -62,17 +101,16 @@ class TSO3(np.ndarray):
         Example:
             eOm = Om - Omd.transport(Rd, R)  # angular velocity error
         """
-        return TSO3(np.asarray(R_to).T @ np.asarray(R_from) @ np.asarray(self))
+        return TSO3(np.asarray(R_to).T @ np.asarray(R_from) @ self._data)
 
     def __repr__(self) -> str:
-        return f"TSO3({np.array2string(np.asarray(self), precision=4, separator=', ')})"
+        return f"TSO3({np.array2string(self._data, precision=4, separator=', ')})"
 
 
-class SO3(np.ndarray):
+class SO3:
     """Rotation matrix on the Special Orthogonal group SO(3).
 
-    Subclasses np.ndarray so it can be used directly in matrix algebra.
-    Supports:
+    Wraps a 3x3 rotation matrix. Supports:
         R1 @ R2  -> SO3    (group composition, if both SO3)
         R @ v    -> ndarray (rotate a vector)
         R1 - R2  -> TSO3   (configuration error in the Lie algebra)
@@ -80,31 +118,72 @@ class SO3(np.ndarray):
         R.T      -> SO3    (transpose, preserves type)
     """
 
-    def __new__(cls, R=None):
+    __slots__ = ("_data",)
+
+    def __init__(self, R=None):
         if R is None:
-            R = np.eye(3)
-        obj = np.asarray(R, dtype=float).view(cls)
-        return obj
+            self._data = np.eye(3)
+        elif isinstance(R, SO3):
+            self._data = R._data.copy()
+        else:
+            self._data = np.asarray(R, dtype=float).copy()
+
+    # ─── numpy interop ─────────────────────────────────────────────
+
+    def __array__(self, dtype=None):
+        return self._data if dtype is None else self._data.astype(dtype)
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    # ─── properties ────────────────────────────────────────────────
 
     @property
     def T(self) -> SO3:
         """Transpose (same as inverse for SO3)."""
-        return SO3(np.asarray(self).T)
+        return SO3(self._data.T)
+
+    @property
+    def arr(self) -> np.ndarray:
+        """Plain numpy array (copy)."""
+        return self._data.copy()
+
+    # ─── group operations ──────────────────────────────────────────
 
     def __matmul__(self, other):
         """SO3 @ SO3 -> SO3, SO3 @ ndarray -> ndarray."""
         if isinstance(other, SO3):
-            return SO3(np.asarray(self) @ np.asarray(other))
-        return np.asarray(self) @ np.asarray(other)
+            return SO3(self._data @ other._data)
+        return self._data @ np.asarray(other)
 
     def __rmatmul__(self, other):
         """ndarray @ SO3 -> ndarray."""
-        return np.asarray(other) @ np.asarray(self)
+        return np.asarray(other) @ self._data
 
-    @property
-    def arr(self) -> np.ndarray:
-        """Plain numpy array (strips type wrapper)."""
-        return np.asarray(self)
+    def inv(self) -> SO3:
+        """Inverse rotation (transpose, since R^{-1} = R^T for SO(3))."""
+        return SO3(self._data.T)
+
+    def step(self, Omega_dt=None):
+        """Integrate angular velocity via the exponential map.
+
+        Args:
+            Omega_dt: angular velocity scaled by dt (3-vector or TSO3).
+
+        Returns a new SO3 element: R_next = R @ expm(hat(Omega_dt)).
+        """
+        if Omega_dt is None:
+            Omega_dt = np.zeros(3)
+        return SO3(self._data @ rodrigues_expm(np.asarray(Omega_dt)))
+
+    def config_error(self, other: SO3) -> float:
+        """Scalar configuration error: 0.5 * tr(I - other^T @ self).
+
+        Returns 0 when self == other, approaches 2 for 180-degree error.
+        """
+        return 0.5 * np.trace(np.eye(3) - np.asarray(other).T @ self._data)
+
+    # ─── constructors ──────────────────────────────────────────────
 
     @staticmethod
     def from_angle_axis(eta: np.ndarray) -> SO3:
@@ -127,13 +206,11 @@ class SO3(np.ndarray):
         This is the standard construction for desired attitude from thrust
         direction (b3) and heading direction (b1).
         """
-        _e1 = np.array([1.0, 0.0, 0.0])
         _e2 = np.array([0.0, 1.0, 0.0])
 
         b3_b1 = np.cross(b3, b1)
         norm_b3_b1 = np.linalg.norm(b3_b1)
         if norm_b3_b1 < 1e-10:
-            # b3 parallel to b1, fall back to perpendicular axis
             b1 = _e2
             b3_b1 = np.cross(b3, b1)
             norm_b3_b1 = np.linalg.norm(b3_b1)
@@ -154,44 +231,17 @@ class SO3(np.ndarray):
         b1 = np.array([np.cos(yaw), np.sin(yaw), 0.0])
         return SO3.from_two_vectors(b3, b1)
 
-    def inv(self) -> SO3:
-        """Inverse rotation (transpose, since R^{-1} = R^T for SO(3))."""
-        return SO3(np.asarray(self).T)
-
-    def config_error(self, other: SO3) -> float:
-        """Scalar configuration error: 0.5 * tr(I - other^T @ self).
-
-        Returns 0 when self == other, approaches 2 for 180-degree error.
-        """
-        return 0.5 * np.trace(np.eye(3) - np.asarray(other).T @ np.asarray(self))
-
-    def step(self, Omega_dt=None):
-        """Integrate angular velocity via the exponential map.
-
-        Args:
-            Omega_dt: angular velocity scaled by dt (3-vector).
-
-        Returns a new SO3 element: R_next = R @ expm(hat(Omega_dt)).
-        """
-        if Omega_dt is None:
-            Omega_dt = np.zeros(3)
-        return SO3(self @ rodrigues_expm(Omega_dt))
+    # ─── Lie group arithmetic ──────────────────────────────────────
 
     def __sub__(self, other) -> TSO3:
         """Configuration error: eR = 1/2 vee(Rd^T R - R^T Rd).
 
         Ref: Lee, Leok, McClamroch 2010, Eq. 9.
         """
-        if isinstance(other, np.ndarray) and not isinstance(other, SO3):
-            # Delegate to numpy for plain ndarray operands (e.g. R @ R.T - I)
-            return NotImplemented
         if not isinstance(other, SO3):
-            raise ManifoldTypeError(
-                f"SO3.__sub__ expects an SO3 element, got {type(other).__name__}. "
-                "Use SO3(R) to wrap a rotation matrix."
-            )
+            return NotImplemented
         # R - Rd: eR = 1/2 vee(Rd^T R - R^T Rd), where self=R, other=Rd
-        err_matrix = np.asarray(other).T @ np.asarray(self) - np.asarray(self).T @ np.asarray(other)
+        err_matrix = other._data.T @ self._data - self._data.T @ other._data
         return TSO3(vee(err_matrix) / 2.0)
 
     def __add__(self, tangent) -> SO3:
@@ -200,21 +250,17 @@ class SO3(np.ndarray):
         Args:
             tangent: TSO3 element (e.g., TSO3(Omega * dt)).
         """
-        if isinstance(tangent, np.ndarray) and not isinstance(tangent, TSO3):
-            return NotImplemented
         if not isinstance(tangent, TSO3):
-            raise ManifoldTypeError(
-                f"SO3.__add__ expects a TSO3 tangent vector, got {type(tangent).__name__}. "
-                "Use TSO3(omega * dt) to wrap an angular velocity vector."
-            )
-        return SO3(np.asarray(self) @ rodrigues_expm(np.asarray(tangent)))
+            return NotImplemented
+        return SO3(self._data @ rodrigues_expm(tangent._data))
 
     def __repr__(self) -> str:
-        rows = [np.array2string(row, precision=4, separator=", ") for row in np.asarray(self)]
+        rows = [np.array2string(row, precision=4, separator=", ") for row in self._data]
         return f"SO3([{rows[0]}, {rows[1]}, {rows[2]}])"
 
 
 def Rot2Eul(R):
+    R = np.asarray(R)
     phi_val = np.arctan2(R[2, 1], R[2, 2])
     theta_val = np.arcsin(-R[2, 0])
     psi_val = np.arctan2(R[1, 0], R[0, 0])

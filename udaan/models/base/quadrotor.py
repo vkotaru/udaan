@@ -163,12 +163,12 @@ class Quadrotor(BaseModel):
             self.state.velocity * self.sim_timestep + 0.5 * accel * self.sim_timestep**2
         )
         self.state.velocity += accel * self.sim_timestep
-        self.state.orientation.step(self.state.angular_velocity * self.sim_timestep)
+        self.state.orientation = self.state.orientation.step(self.state.angular_velocity * self.sim_timestep)
         ang_vel_dot = self._inertia_inv @ (
             torque
             - np.cross(self.state.angular_velocity, self._inertia @ self.state.angular_velocity)
         )
-        self.state.angular_velocity += ang_vel_dot * self.sim_timestep
+        self.state.angular_velocity += TSO3(ang_vel_dot * self.sim_timestep)
         return
 
     def _actuation_params(self):
