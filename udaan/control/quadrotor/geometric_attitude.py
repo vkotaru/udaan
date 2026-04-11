@@ -23,12 +23,12 @@ class GeometricAttitudeController(Controller):
     """Geometric tracking control of a quadrotor UAV on SE(3).
 
     Control law (Lee, Leok, McClamroch 2010, Eq. 18-19):
-        M = -kR * eR - kOm * eOm + Om x J @ Om
-            - J @ (hat(Om) @ R.T @ Rd @ Omd - R.T @ Rd @ dOmd)
+        M = -kR·eR - kΩ·eΩ + Ω × J·Ω
+            - J·(hat(Ω)·Rᵀ·Rd·Ωd - Rᵀ·Rd·dΩd)
     where:
-        eR   = 0.5 * vee(Rd.T @ R - R.T @ Rd)   (attitude error on so(3))
-        eOm  = Om - R.T @ Rd @ Omd               (angular velocity error)
-        f    = F . R @ e3                          (scalar thrust)
+        eR = 0.5·vee(Rdᵀ·R - Rᵀ·Rd)   (attitude error on so(3))
+        eΩ = Ω - Rᵀ·Rd·Ωd              (angular velocity error)
+        f  = F · R·e3                    (scalar thrust)
     """
 
     def __init__(self, **kwargs):
@@ -93,12 +93,12 @@ class GeometricAttitudeController(Controller):
             dOmegad: Vec3 = np.zeros(3)
 
         eR: TSO3 = R - Rd
-        eOmega: TSO3 = Omega - Omegad.transport(Rd, R)
+        eOm: TSO3 = Omega - Omegad.transport(Rd, R)
 
         RtRd = R.T @ Rd
         M = (
             -self._gains.kp * eR.vector
-            - self._gains.kd * eOmega.vector
+            - self._gains.kd * eOm.vector
             + np.cross(Omega, self.inertia @ Omega)
         )
         M += -self.inertia @ (hat(Omega) @ RtRd @ Omegad - RtRd @ dOmegad)

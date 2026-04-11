@@ -129,11 +129,13 @@ class _GlfwViewer:
         self._last_render_time = 0.0
         self._overlay_text = ""
 
-        # Visual markers: trail, start, target
-        self._trail = []
-        self._trail_max = 500
-        self._start_pos = None
-        self._target_pos = None
+        # Visual markers: per-entity trails, starts, targets
+        self.show_trails = True
+        self._trails = {}  # key -> list of positions
+        self._trail_colors = {}  # key -> rgba
+        self._trail_max = 200
+        self._starts = {}  # key -> position
+        self._targets = {}  # key -> position
 
     def _add_geom(self, type_, size, pos, rgba, mat=np.eye(3)):
         """Add a custom geom to the scene for the current frame."""
@@ -143,43 +145,44 @@ class _GlfwViewer:
         mujoco.mjv_initGeom(g, type_, size, pos, mat.flatten(), rgba)
         self._scene.ngeom += 1
 
-    def add_trail_point(self, pos):
-        """Append a position to the trailing trajectory."""
-        self._trail.append(np.array(pos, dtype=np.float64))
-        if len(self._trail) > self._trail_max:
-            self._trail = self._trail[-self._trail_max :]
+    def add_trail_point(self, pos, key=0, rgba=None):
+        """Append a position to a keyed trail."""
+        if key not in self._trails:
+            self._trails[key] = []
+            self._trail_colors[key] = (
+                np.array(rgba, dtype=np.float32)
+                if rgba is not None
+                else np.array([0.2, 0.6, 1.0, 0.6], dtype=np.float32)
+            )
+        trail = self._trails[key]
+        trail.append(np.array(pos, dtype=np.float64))
+        if len(trail) > self._trail_max:
+            self._trails[key] = trail[-self._trail_max :]
 
-    def set_start(self, pos):
-        self._start_pos = np.array(pos, dtype=np.float64)
+    def set_start(self, pos, key=0):
+        self._starts[key] = np.array(pos, dtype=np.float64)
 
-    def set_target(self, pos):
-        self._target_pos = np.array(pos, dtype=np.float64)
+    def set_target(self, pos, key=0):
+        self._targets[key] = np.array(pos, dtype=np.float64)
 
     def _render_markers(self):
-        """Draw trail, start, and target markers into the scene."""
-        # Trail as small spheres
-        trail_rgba = np.array([0.2, 0.6, 1.0, 0.6], dtype=np.float32)
-        trail_size = np.array([0.008, 0, 0], dtype=np.float64)
-        for pt in self._trail[::2]:  # every other point to save geom budget
-            self._add_geom(mujoco.mjtGeom.mjGEOM_SPHERE, trail_size, pt, trail_rgba)
+        """Draw trails, start markers, and target markers."""
+        if self.show_trails:
+            trail_size = np.array([0.008, 0, 0], dtype=np.float64)
+            for key, trail in self._trails.items():
+                rgba = self._trail_colors.get(
+                    key, np.array([0.2, 0.6, 1.0, 0.6], dtype=np.float32)
+                )
+                for pt in trail[::2]:
+                    self._add_geom(mujoco.mjtGeom.mjGEOM_SPHERE, trail_size, pt, rgba)
 
-        # Start marker (green sphere)
-        if self._start_pos is not None:
-            self._add_geom(
-                mujoco.mjtGeom.mjGEOM_SPHERE,
-                np.array([0.03, 0, 0], dtype=np.float64),
-                self._start_pos,
-                np.array([0.2, 0.9, 0.3, 0.8], dtype=np.float32),
-            )
-
-        # Target marker (red sphere)
-        if self._target_pos is not None:
-            self._add_geom(
-                mujoco.mjtGeom.mjGEOM_SPHERE,
-                np.array([0.03, 0, 0], dtype=np.float64),
-                self._target_pos,
-                np.array([0.9, 0.2, 0.2, 0.8], dtype=np.float32),
-            )
+        marker_size = np.array([0.03, 0, 0], dtype=np.float64)
+        green = np.array([0.2, 0.9, 0.3, 0.8], dtype=np.float32)
+        red = np.array([0.9, 0.2, 0.2, 0.8], dtype=np.float32)
+        for pos in self._starts.values():
+            self._add_geom(mujoco.mjtGeom.mjGEOM_SPHERE, marker_size, pos, green)
+        for pos in self._targets.values():
+            self._add_geom(mujoco.mjtGeom.mjGEOM_SPHERE, marker_size, pos, red)
 
     def render(self):
         import glfw

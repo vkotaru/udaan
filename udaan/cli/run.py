@@ -37,6 +37,7 @@ def quadrotor(
         "hover", "--trajectory", "--traj",
         help="Trajectory: hover, flip, spiral, circle, lissajous.",
     ),
+    trail: bool = typer.Option(True, "--trail/--no-trail", help="Show trajectory trail."),
     verbose: int = typer.Option(0, "--verbose", "-v", help="Verbosity level (0-2)."),
     record: str | None = _record_option,
     position: str | None = typer.Option(
@@ -96,6 +97,8 @@ def quadrotor(
         # Hover: default setpoint is [0,0,1], start from x0
         pass
 
+    if hasattr(mdl, "_mjMdl") and mdl._mjMdl._viewer is not None:
+        mdl._mjMdl._viewer.show_trails = trail
     _setup_recording(mdl, record)
     typer.echo(f"Running quadrotor ({model}, {trajectory}) for {time:.1f}s ...")
     mdl.simulate(tf=time, position=x0)
@@ -191,6 +194,7 @@ def fleet(
     render: bool = typer.Option(True, help="Enable visualization."),
     num_quads: int = typer.Option(3, "--num-quads", "-n", help="Number of quadrotors."),
     demo: str | None = typer.Option(None, "--demo", "-d", help="Run a preset demo."),
+    trail: bool = typer.Option(False, "--trail/--no-trail", help="Show trajectory trails."),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Log quad states during sim."),
     record: str | None = _record_option,
     position: str | None = typer.Option(
@@ -228,6 +232,8 @@ def fleet(
             num_quadrotors=nQ, render=render, disturbances=params["disturbances"]
         )
         entry["configure"](f)
+        if f._mjMdl._viewer is not None:
+            f._mjMdl._viewer.show_trails = trail
         if record and f._mjMdl._viewer:
             f._mjMdl._viewer._record_path = record
             f._mjMdl._viewer._frames = []
@@ -235,6 +241,8 @@ def fleet(
         f.simulate(tf=time, position=x0)
     else:
         f = U.models.mujoco.QuadrotorFleet(num_quadrotors=num_quads, render=render)
+        if f._mjMdl._viewer is not None:
+            f._mjMdl._viewer.show_trails = trail
 
         traj = lambda t: (np.array([0.0, 0.0, 2.0]), np.zeros(3), np.zeros(3))
         for q in f.quadrotors:
