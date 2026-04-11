@@ -21,14 +21,15 @@ def rodrigues_expm(vector):
     """Closed-form matrix exponential for so(3) via Rodrigues' formula.
 
     Exact for 3-vectors (skew-symmetric generators) and ~1.5x faster
-    than scipy.linalg.expm over the hat map.
+    than scipy.linalg.expm over the hat map. Uses Taylor expansion for
+    small angles to avoid division-by-zero and maintain accuracy.
     """
     K = hat(vector)
     th = np.linalg.norm(vector)
-    if abs(th) <= 1e-4:
-        return np.eye(3)
-    else:
-        return np.eye(3) + (np.sin(th) / th) * K + ((1 - np.cos(th)) / th**2) * (K @ K)
+    if th < 1e-10:
+        # Second-order Taylor: I + K + K²/2
+        return np.eye(3) + K + 0.5 * (K @ K)
+    return np.eye(3) + (np.sin(th) / th) * K + ((1 - np.cos(th)) / th**2) * (K @ K)
 
 
 def expm_taylor_expansion(M, order=2):
