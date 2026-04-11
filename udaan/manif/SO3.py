@@ -79,8 +79,7 @@ class SO3(np.ndarray):
     """
 
     def __new__(cls, R=np.eye(3)):
-        obj = np.asarray(R).view(cls)
-        obj.R = np.array(R, dtype=float)
+        obj = np.asarray(R, dtype=float).view(cls)
         return obj
 
     @property
@@ -185,7 +184,7 @@ class SO3(np.ndarray):
                 f"SO3.__sub__ expects an SO3 element, got {type(other).__name__}. "
                 "Use SO3(R) to wrap a rotation matrix."
             )
-        # eR = 1/2 vee(Rd^T R - R^T Rd), self=Rd, other=R
+        # R - Rd: eR = 1/2 vee(Rd^T R - R^T Rd), where self=R, other=Rd
         err_matrix = np.asarray(other).T @ np.asarray(self) - np.asarray(self).T @ np.asarray(other)
         return TSO3(vee(err_matrix) / 2.0)
 
