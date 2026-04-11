@@ -6,7 +6,7 @@ Usage:
 """
 
 import argparse
-import os
+from pathlib import Path
 
 import imageio.v3 as iio
 import numpy as np
@@ -35,7 +35,7 @@ def resize_gif(path, width=480, max_frames=50, fps=15, output=None):
 
     out_path = output or path
     iio.imwrite(out_path, resized, duration=1000 // fps, loop=0)
-    size_mb = os.path.getsize(out_path) / 1e6
+    size_mb = Path(out_path).stat().st_size / 1e6
     print(f"{out_path}: {len(frames)} -> {len(resized)} frames, {w}x{h} -> {width}x{height}, {size_mb:.1f}MB")
 
 
