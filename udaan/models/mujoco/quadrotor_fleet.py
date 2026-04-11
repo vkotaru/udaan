@@ -180,6 +180,16 @@ class QuadrotorFleet(base.BaseModel):
 
         self._query_latest_state()
 
+        # Set start markers
+        if self.render and self._mjMdl._viewer is not None:
+            for i in range(self.nQ):
+                rgb, _ = _FLEET_COLORS[i % len(_FLEET_COLORS)]
+                self._mjMdl._viewer.set_start(
+                    self.quadrotors[i].state.position.copy(), key=i
+                )
+                target = self.quadrotors[i].position_controller.setpoint(0.0)[0]
+                self._mjMdl._viewer.set_target(target, key=i)
+
     def _query_latest_state(self):
         self.t = self._mjMdl.data.time
         for i in range(self.nQ):
@@ -219,6 +229,16 @@ class QuadrotorFleet(base.BaseModel):
                 )
                 u[4 * i : 4 * i + 4] = [f, *M]
             self.step(u)
+
+            # Trail points and dynamic targets (every 10th step to avoid slowdown)
+            if self.render and self._mjMdl._viewer is not None and int(self.t * 200) % 10 == 0:
+                for i in range(self.nQ):
+                    rgb, _ = _FLEET_COLORS[i % len(_FLEET_COLORS)]
+                    self._mjMdl._viewer.add_trail_point(
+                        self.quadrotors[i].state.position, key=i, rgba=[*rgb, 0.6]
+                    )
+                    target = self.quadrotors[i].position_controller.setpoint(self.t)[0]
+                    self._mjMdl._viewer.set_target(target, key=i)
 
             if self.t >= next_log:
                 self._log_state()
