@@ -111,11 +111,11 @@ def quadrotor(
 def quad_payload(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
-    backend: str = typer.Option(
-        "mujoco", "--backend", "-b", help="Physics backend: mujoco or base."
+    model: str = typer.Option(
+        "mujoco", "--model", "-m", help="Quad-payload model: mujoco or base."
     ),
-    model_type: str = typer.Option(
-        "tendon", "--model-type", "-m", help="Cable model: tendon, links, or cable."
+    cable_model: str = typer.Option(
+        "tendon", "--cable-model", "-c", help="Cable model: tendon, links, or cable."
     ),
     record: str | None = _record_option,
     position: str | None = typer.Option(
@@ -125,18 +125,27 @@ def quad_payload(
     """Simulate a quadrotor with cable-suspended payload."""
     import numpy as np
 
-    import udaan as U
-
     from . import parse_vec
 
     x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
-    mdl_module = getattr(U.models, backend)
-    if backend == "mujoco":
-        mdl = mdl_module.QuadrotorCSPayload(render=render, model=model_type)
+    if cable_model == "cable":
+        typer.secho(
+            "WARNING: cable model 'cable' is not officially supported; "
+            "included for experimentation only.",
+            fg=typer.colors.YELLOW,
+            bold=True,
+            err=True,
+        )
+    if model == "mujoco":
+        from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadMujoco
+
+        mdl = QuadrotorCsPayloadMujoco(render=render, cable_model=cable_model)
     else:
-        mdl = mdl_module.QuadrotorCSPayload(render=render)
+        from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadVfx
+
+        mdl = QuadrotorCsPayloadVfx(render=render)
     _setup_recording(mdl, record)
-    typer.echo(f"Running quad-payload ({backend}, {model_type}) for {time}s ...")
+    typer.echo(f"Running quad-payload ({model}, {cable_model}) for {time}s ...")
     mdl.simulate(tf=time, payload_position=x0)
     _hold_viewer(mdl)
 

@@ -43,6 +43,7 @@ dependencies = [
     "matplotlib>=3.7",
     "mujoco>=3.0",
     "typer>=0.9",
+    "vpython>=7.6",
 ]
 
 [project.optional-dependencies]
@@ -71,7 +72,10 @@ rl = [
     "gymnasium>=0.29",
     "stable-baselines3>=2.0",
 ]
-all = ["udaan[mujoco,l1,dev,docs,rl]"]
+plot = [
+    "bokeh>=3.0",
+]
+all = ["udaan[mujoco,l1,dev,docs,rl,plot]"]
 
 [project.scripts]
 udaan = "udaan.cli:app"
