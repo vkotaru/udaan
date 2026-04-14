@@ -44,6 +44,8 @@ dependencies = [
     "mujoco>=3.0",
     "typer>=0.9",
     "vpython>=7.6",
+    "imageio>=2.30",
+    "imageio-ffmpeg>=0.4",
 ]
 
 [project.optional-dependencies]

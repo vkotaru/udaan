@@ -4,22 +4,22 @@
   <statistic meansize=".05"/>
 
   <visual>
-    <rgba haze="0.15 0.25 0.35 1"/>
+    <rgba haze="0.85 0.9 1.0 1"/>
     <quality shadowsize="4096"/>
-    <map stiffness="700" shadowscale="0.5" fogstart="3" fogend="20" zfar="40" haze="0.3"/>
+    <map stiffness="700" shadowscale="0.5" fogstart="10" fogend="50" zfar="60" haze="0.0"/>
     <global offwidth="1920" offheight="1080"/>
   </visual>
 
   <asset>
-    <texture type="skybox" builtin="gradient" rgb1="0.6 0.75 0.9" rgb2="0.15 0.2 0.3" width="512" height="512"/>
-    <texture name="texplane" type="2d" builtin="checker" rgb1=".25 .28 .3" rgb2=".18 .2 .22"
-      width="512" height="512" mark="cross" markrgb=".5 .5 .5"/>
-    <material name="matplane" reflectance="0.2" texture="texplane" texrepeat="10 10" texuniform="true"/>
+    <texture type="skybox" builtin="gradient" rgb1="0.7 0.82 0.95" rgb2="0.35 0.45 0.55" width="512" height="512"/>
+    <texture name="texplane" type="2d" builtin="checker" rgb1=".42 .45 .48" rgb2=".34 .37 .4"
+      width="512" height="512" mark="cross" markrgb=".65 .65 .65"/>
+    <material name="matplane" reflectance="0.15" texture="texplane" texrepeat="10 10" texuniform="true"/>
   </asset>
 
   <worldbody>
-    <light diffuse=".5 .5 .5" specular="0.15 0.15 0.15" pos="0 0 3.0" dir="0 0 -1" castshadow="false"/>
-    <light directional="true" diffuse=".8 .8 .8" specular="0.25 0.25 0.25" pos="2 2 5" dir="-0.2 -0.2 -1"/>
+    <light diffuse=".65 .65 .65" specular="0.18 0.18 0.18" pos="0 0 3.0" dir="0 0 -1" castshadow="false"/>
+    <light directional="true" diffuse=".9 .9 .9" specular="0.28 0.28 0.28" pos="2 2 5" dir="-0.2 -0.2 -1"/>
     <geom name="ground" type="plane" size="0 0 1" pos="0 0 0" material="matplane" condim="1"/>
   </worldbody>
 </mujoco>

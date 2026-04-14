@@ -92,7 +92,9 @@ def quadrotor(
     elif trajectory == "lissajous":
         from udaan.utils.trajectory import CrazyTrajectory
 
-        traj = CrazyTrajectory(tf=time, center=x0)
+        # Lift the trajectory center so the z-oscillation (±1.5 m) stays above ground.
+        center = x0 + np.array([0.0, 0.0, 2.0])
+        traj = CrazyTrajectory(tf=time, center=center)
         mdl._pos_controller.setpoint = traj.get
         x0 = traj.get(0.0)[0]
     else:

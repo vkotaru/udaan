@@ -70,8 +70,10 @@ udaan run quadrotor --traj lissajous -p 0,0,2          # 3D Lissajous
 udaan run quadrotor --traj circle -p 0,0,1             # circular
 
 # Cable-suspended payload
-udaan run quad-payload -t 10 -m tendon                 # tendon model
-udaan run quad-payload -t 10 -m links                  # rigid links
+udaan run quad-payload -t 10 -c tendon                 # spatial tendon cable
+udaan run quad-payload -t 10 -c links                  # rigid link chain
+udaan run quad-payload -t 10 -c cable                  # composite cable (experimental)
+udaan run quad-payload -t 10 -m vfx                   # vpython backend
 
 # Multi-quadrotor cooperative transport
 udaan run multi-quad -n 3 -t 10                        # N-quad pointmass payload
