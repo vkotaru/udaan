@@ -201,6 +201,68 @@ def multi_quad_rigid(
     _hold_viewer(mdl)
 
 
+@run_app.command("cspayload-fleet")
+def cspayload_fleet(
+    time: float = typer.Option(8.0, "--time", "-t", help="Simulation duration in seconds."),
+    render: bool = typer.Option(True, help="Enable visualization."),
+    num_agents: int = typer.Option(2, "--num-agents", "-n", help="Number of quad-payload agents."),
+    demo: str | None = typer.Option(None, "--demo", "-d", help="Run a preset demo."),
+    cable_links: int = typer.Option(10, "--cable-links", help="Cable discretization (links)."),
+    trail: bool = typer.Option(True, "--trail/--no-trail", help="Show payload trails."),
+    same_start: bool = typer.Option(
+        False,
+        "--same-start",
+        help="All agents start at the same absolute position (demo only; overlaps visually).",
+    ),
+    record: str | None = _record_option,
+):
+    """Compare N quadrotor-cable-payload agents side-by-side.
+
+    Available demos: same-gains, gain-sweep
+    """
+    import udaan as U
+
+    from .demos import CSPAYLOAD_DEMOS
+
+    if demo is not None:
+        if demo not in CSPAYLOAD_DEMOS:
+            typer.echo(
+                f"Unknown demo: '{demo}'. Available: {', '.join(CSPAYLOAD_DEMOS.keys())}",
+                err=True,
+            )
+            raise typer.Exit(1)
+        entry = CSPAYLOAD_DEMOS[demo]
+        params = entry["config"]()
+        nQ = params["num_agents"]
+
+        f = U.models.mujoco.QuadrotorCsPayloadFleet(
+            num_agents=nQ, render=render, cable_links=cable_links
+        )
+        starts = entry["configure"](f, same_start=same_start)
+    else:
+        nQ = num_agents
+        import numpy as np
+
+        target = np.array([0.0, 0.0, 1.5])
+        starts = [np.array([(-1.0) ** i * 1.0, (-1.0) ** i * 1.0, 0.5]) for i in range(nQ)]
+        f = U.models.mujoco.QuadrotorCsPayloadFleet(
+            num_agents=nQ, render=render, cable_links=cable_links
+        )
+        traj = lambda t: (target, np.zeros(3), np.zeros(3))
+        for i in range(nQ):
+            f[i]._payload_controller.setpoint = traj
+
+    if f._mjMdl._viewer is not None:
+        f._mjMdl._viewer.show_trails = trail
+    if record and f._mjMdl._viewer:
+        f._mjMdl._viewer._record_path = record
+        f._mjMdl._viewer._frames = []
+
+    label = demo or f"{nQ} agents"
+    typer.echo(f"Running cspayload-fleet ({label}) for {time}s ...")
+    f.simulate(tf=time, payload_positions=starts)
+
+
 @run_app.command("fleet")
 def fleet(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),

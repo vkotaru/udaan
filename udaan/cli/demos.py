@@ -77,3 +77,95 @@ DEMOS = {
         "description": "PD with increasing gains (soft -> aggressive)",
     },
 }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Quad-cable-payload fleet demos
+# ══════════════════════════════════════════════════════════════════════
+#
+# Schema:
+#   config():                         returns {"num_agents": N}
+#   configure(fleet, same_start):     sets per-agent setpoint/gains/label,
+#                                     returns list of absolute per-agent
+#                                     payload start positions.
+#
+# Default: per-agent start and target are translated by `fleet._offsets[i]`
+# so every agent runs the same maneuver in its own X-lane. With
+# same_start=True, all agents share one absolute start/target (they overlap
+# visually but inter-agent contacts are disabled in the fleet MJCF).
+
+
+def _cspayload_same_gains_config():
+    return {"num_agents": 2}
+
+
+def _cspayload_same_gains_configure(fleet, same_start=False):
+    """All agents share the default gains; identical maneuver per lane.
+
+    If same_start=True, all agents start at the same absolute position
+    (visually overlap; diverge only as dynamics differ).
+    """
+    start_delta = np.array([1.0, 1.0, 0.5])
+    target_delta = np.array([0.0, 0.0, 1.5])
+    starts = []
+    for i in range(fleet.nQ):
+        offset = (
+            np.array([0.0, 0.0, 0.0]) if same_start else np.array([fleet._offsets[i], 0.0, 0.0])
+        )
+        target = target_delta + offset
+        fleet[i]._payload_controller.setpoint = lambda t, tgt=target: (
+            tgt,
+            np.zeros(3),
+            np.zeros(3),
+        )
+        fleet._labels[i] = "default gains"
+        starts.append(start_delta + offset)
+    return starts
+
+
+def _cspayload_gain_sweep_config():
+    return {"num_agents": 4}
+
+
+def _cspayload_gain_sweep_configure(fleet, same_start=False):
+    """Cable kp/kd scale sweep.
+
+    By default each agent runs in its own X-lane with identical maneuver.
+    If same_start=True, all agents start at the same absolute position and
+    fly to the same target — divergence is due to gain differences alone.
+    """
+    start_delta = np.array([1.0, 0.0, 0.5])
+    target_delta = np.array([0.0, 0.0, 1.5])
+    cable_kp_default = np.array([24.0, 24.0, 24.0])
+    cable_kd_default = np.array([8.0, 8.0, 8.0])
+    scales = [0.5, 1.0, 1.5, 2.0][: fleet.nQ]
+    starts = []
+    for i in range(fleet.nQ):
+        offset = (
+            np.array([0.0, 0.0, 0.0]) if same_start else np.array([fleet._offsets[i], 0.0, 0.0])
+        )
+        target = target_delta + offset
+        fleet[i]._payload_controller.setpoint = lambda t, tgt=target: (
+            tgt,
+            np.zeros(3),
+            np.zeros(3),
+        )
+        fleet[i]._payload_controller._gain_cable.kp = cable_kp_default * scales[i]
+        fleet[i]._payload_controller._gain_cable.kd = cable_kd_default * scales[i]
+        fleet._labels[i] = f"cable × {scales[i]:.1f}"
+        starts.append(start_delta + offset)
+    return starts
+
+
+CSPAYLOAD_DEMOS = {
+    "same-gains": {
+        "config": _cspayload_same_gains_config,
+        "configure": _cspayload_same_gains_configure,
+        "description": "Two agents, identical default gains, identical per-lane maneuver",
+    },
+    "gain-sweep": {
+        "config": _cspayload_gain_sweep_config,
+        "configure": _cspayload_gain_sweep_configure,
+        "description": "Four agents, cable kp/kd × [0.5, 1.0, 1.5, 2.0], identical per-lane maneuver",
+    },
+}
