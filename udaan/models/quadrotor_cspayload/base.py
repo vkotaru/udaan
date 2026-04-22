@@ -315,7 +315,13 @@ class QuadrotorCsPayloadBase:
             "cable_angular_velocity",
         ]:
             if key in kwargs:
-                setattr(self.state, key, kwargs[key])
+                v = kwargs[key]
+                # Copy ndarray inputs: _zoh() does in-place += on payload_position
+                # and payload_velocity, which would otherwise silently mutate
+                # caller arrays across repeated sims (e.g. shared EVAL_STARTS).
+                if isinstance(v, np.ndarray):
+                    v = v.copy()
+                setattr(self.state, key, v)
 
         # Keep quadrotor and payload positions consistent via cable geometry.
         # If only one is given, derive the other.
