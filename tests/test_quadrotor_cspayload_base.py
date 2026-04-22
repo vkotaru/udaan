@@ -33,6 +33,22 @@ class TestQuadrotorCsPayloadUnit:
         # Quadrotor should sit one cable length above the payload (q = -e3).
         np.testing.assert_allclose(mdl.state.position, np.array([0.0, 0.0, 1.0 + mdl.cable_length]))
 
+    def test_reset_does_not_mutate_caller_array(self):
+        # Regression: the integrator does in-place += on payload_position, so
+        # reset() must copy ndarray kwargs; otherwise a shared start array
+        # drifts across repeated sims (e.g. EVAL_STARTS in CMA-ES tuning).
+        start = np.array([1.0, 1.0, 0.5])
+        snapshot = start.copy()
+        mdl = QuadrotorCsPayloadBase()
+        mdl.reset(payload_position=start)
+        mdl._payload_controller.setpoint = lambda t: (np.zeros(3), np.zeros(3), np.zeros(3))
+        for _ in range(50):
+            u = mdl._payload_controller.compute(mdl.t, mdl.state)
+            mdl.step(u)
+        # Internal state must have advanced; caller's array must not have.
+        assert not np.allclose(mdl.state.payload_position, snapshot)
+        np.testing.assert_array_equal(start, snapshot)
+
     def test_reset_quad_position(self):
         mdl = QuadrotorCsPayloadBase()
         mdl.reset(position=np.array([0.0, 0.0, 2.0]))
