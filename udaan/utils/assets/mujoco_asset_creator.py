@@ -443,7 +443,7 @@ class MujocoAssetCreator:
             length=length,
             mass=0.1,
             density=50,
-            rgba=[0.2, 0.2, 0.2, 1.0],
+            rgb=[0.2, 0.2, 0.2],
         )
         pyld = self.body(cable, "pyld", pos=np.array([0.0, 0.0, -0.5 * length]))
         pyld_geom = self.sphere(
@@ -461,54 +461,62 @@ class MujocoAssetCreator:
         )
         return cable
 
-    def create_flexible_cable_payload(self, parent, name, pos, N=5, length=1, mass=0.15):
+    def create_flexible_cable_payload(
+        self, parent, name, pos, N=5, length=1, mass=0.15, payload_rgb=(0.0, 0.8, 0.2)
+    ):
+        """N-link cable + payload subtree. All child names are prefixed with `name`."""
         dl = length / N
         cable_mass = 0.01
         dm = cable_mass / N
-        cable = self.body(parent, name + "_0", np.array([0.0, 0.0, -0.5 * dl]))
-        cable_joint = self.joint(
+        cable = self.body(parent, f"{name}_link0", np.array([0.0, 0.0, -0.5 * dl]))
+        self.joint(
             cable,
-            "cable_quad_joint_0",
+            f"{name}_joint0",
             "ball",
             pos=np.array([0.0, 0.0, 0.5 * dl]),
             damping=1e-3,
             stiffness=0,
         )
-        cable_geom = self.cylinder(
+        self.cylinder(
             cable,
-            "cable_cylinder_0",
+            f"{name}_geom0",
             radius=0.005,
             length=dl,
             mass=dm,
             density=50,
-            rgba=[0.2, 0.2, 0.2, 1.0],
+            rgb=[0.2, 0.2, 0.2],
         )
         for i in range(1, N):
-            cable = self.body(cable, name + "_" + str(i), np.array([0.0, 0.0, -dl]))
-            cable_joint = self.joint(
+            cable = self.body(cable, f"{name}_link{i}", np.array([0.0, 0.0, -dl]))
+            self.joint(
                 cable,
-                "cable_quad_joint_" + str(i),
+                f"{name}_joint{i}",
                 "ball",
                 pos=np.array([0.0, 0.0, 0.5 * dl]),
                 damping=1e-3,
                 stiffness=0.0,
             )
-            cable_geom = self.cylinder(
+            self.cylinder(
                 cable,
-                "cable_cylinder_" + str(i),
+                f"{name}_geom{i}",
                 radius=0.005,
                 length=dl,
                 mass=dm,
                 density=50,
-                rgba=[0.2, 0.2, 0.2, 1.0],
+                rgb=[0.2, 0.2, 0.2],
             )
-        pyld = self.body(cable, "pyld", pos=np.array([0.0, 0.0, -0.5 * dl]))
-        pyld_geom = self.sphere(
-            pyld, "pyld", radius=0.05, mass=mass, density=50, rgba=[0.0, 0.8, 0.2, 1.0]
-        )
-        pyld_joint = self.joint(
+        pyld = self.body(cable, f"{name}_payload", pos=np.array([0.0, 0.0, -0.5 * dl]))
+        self.sphere(
             pyld,
-            "pyld_joint",
+            f"{name}_payload_geom",
+            radius=0.05,
+            mass=mass,
+            density=50,
+            rgb=list(payload_rgb),
+        )
+        self.joint(
+            pyld,
+            f"{name}_payload_joint",
             "ball",
             pos=np.array([0.0, 0.0, 0]),
             range=np.array([-0.001, 0.001]),
