@@ -92,7 +92,9 @@ def quadrotor(
     elif trajectory == "lissajous":
         from udaan.utils.trajectory import CrazyTrajectory
 
-        traj = CrazyTrajectory(tf=time, center=x0)
+        # Lift the trajectory center so the z-oscillation (±1.5 m) stays above ground.
+        center = x0 + np.array([0.0, 0.0, 2.0])
+        traj = CrazyTrajectory(tf=time, center=center)
         mdl._pos_controller.setpoint = traj.get
         x0 = traj.get(0.0)[0]
     else:
@@ -111,11 +113,11 @@ def quadrotor(
 def quad_payload(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
-    backend: str = typer.Option(
-        "mujoco", "--backend", "-b", help="Physics backend: mujoco or base."
+    model: str = typer.Option(
+        "mujoco", "--model", "-m", help="Quad-payload model: mujoco or base."
     ),
-    model_type: str = typer.Option(
-        "tendon", "--model-type", "-m", help="Cable model: tendon, links, or cable."
+    cable_model: str = typer.Option(
+        "tendon", "--cable-model", "-c", help="Cable model: tendon, links, or cable."
     ),
     record: str | None = _record_option,
     position: str | None = typer.Option(
@@ -125,18 +127,27 @@ def quad_payload(
     """Simulate a quadrotor with cable-suspended payload."""
     import numpy as np
 
-    import udaan as U
-
     from . import parse_vec
 
     x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
-    mdl_module = getattr(U.models, backend)
-    if backend == "mujoco":
-        mdl = mdl_module.QuadrotorCSPayload(render=render, model=model_type)
+    if cable_model == "cable":
+        typer.secho(
+            "WARNING: cable model 'cable' is not officially supported; "
+            "included for experimentation only.",
+            fg=typer.colors.YELLOW,
+            bold=True,
+            err=True,
+        )
+    if model == "mujoco":
+        from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadMujoco
+
+        mdl = QuadrotorCsPayloadMujoco(render=render, cable_model=cable_model)
     else:
-        mdl = mdl_module.QuadrotorCSPayload(render=render)
+        from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadVfx
+
+        mdl = QuadrotorCsPayloadVfx(render=render)
     _setup_recording(mdl, record)
-    typer.echo(f"Running quad-payload ({backend}, {model_type}) for {time}s ...")
+    typer.echo(f"Running quad-payload ({model}, {cable_model}) for {time}s ...")
     mdl.simulate(tf=time, payload_position=x0)
     _hold_viewer(mdl)
 
@@ -188,6 +199,68 @@ def multi_quad_rigid(
     typer.echo(f"Running multi-quad rigid ({mdl.nQ} quads) for {time}s ...")
     mdl.simulate(tf=time, xL=x0)
     _hold_viewer(mdl)
+
+
+@run_app.command("cspayload-fleet")
+def cspayload_fleet(
+    time: float = typer.Option(8.0, "--time", "-t", help="Simulation duration in seconds."),
+    render: bool = typer.Option(True, help="Enable visualization."),
+    num_agents: int = typer.Option(2, "--num-agents", "-n", help="Number of quad-payload agents."),
+    demo: str | None = typer.Option(None, "--demo", "-d", help="Run a preset demo."),
+    cable_links: int = typer.Option(10, "--cable-links", help="Cable discretization (links)."),
+    trail: bool = typer.Option(True, "--trail/--no-trail", help="Show payload trails."),
+    same_start: bool = typer.Option(
+        False,
+        "--same-start",
+        help="All agents start at the same absolute position (demo only; overlaps visually).",
+    ),
+    record: str | None = _record_option,
+):
+    """Compare N quadrotor-cable-payload agents side-by-side.
+
+    Available demos: same-gains, gain-sweep
+    """
+    import udaan as U
+
+    from .demos import CSPAYLOAD_DEMOS
+
+    if demo is not None:
+        if demo not in CSPAYLOAD_DEMOS:
+            typer.echo(
+                f"Unknown demo: '{demo}'. Available: {', '.join(CSPAYLOAD_DEMOS.keys())}",
+                err=True,
+            )
+            raise typer.Exit(1)
+        entry = CSPAYLOAD_DEMOS[demo]
+        params = entry["config"]()
+        nQ = params["num_agents"]
+
+        f = U.models.mujoco.QuadrotorCsPayloadFleet(
+            num_agents=nQ, render=render, cable_links=cable_links
+        )
+        starts = entry["configure"](f, same_start=same_start)
+    else:
+        nQ = num_agents
+        import numpy as np
+
+        target = np.array([0.0, 0.0, 1.5])
+        starts = [np.array([(-1.0) ** i * 1.0, (-1.0) ** i * 1.0, 0.5]) for i in range(nQ)]
+        f = U.models.mujoco.QuadrotorCsPayloadFleet(
+            num_agents=nQ, render=render, cable_links=cable_links
+        )
+        traj = lambda t: (target, np.zeros(3), np.zeros(3))
+        for i in range(nQ):
+            f[i]._payload_controller.setpoint = traj
+
+    if f._mjMdl._viewer is not None:
+        f._mjMdl._viewer.show_trails = trail
+    if record and f._mjMdl._viewer:
+        f._mjMdl._viewer._record_path = record
+        f._mjMdl._viewer._frames = []
+
+    label = demo or f"{nQ} agents"
+    typer.echo(f"Running cspayload-fleet ({label}) for {time}s ...")
+    f.simulate(tf=time, payload_positions=starts)
 
 
 @run_app.command("fleet")

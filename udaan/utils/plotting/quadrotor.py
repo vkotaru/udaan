@@ -155,9 +155,9 @@ def plot_quadrotor_simulation(history, target=None):
         match_aspect=True,
     )
     p.line(history["x"], history["y"], color="blue")
-    p.circle([history["x"][0]], [history["y"][0]], color="green", size=8, legend_label="start")
+    p.scatter([history["x"][0]], [history["y"][0]], color="green", size=8, legend_label="start")
     if target is not None:
-        p.circle([target[0]], [target[1]], color="red", size=8, legend_label="target")
+        p.scatter([target[0]], [target[1]], color="red", size=8, legend_label="target")
     p.legend.click_policy = "hide"
     plots.append(p)
 

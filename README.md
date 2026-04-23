@@ -70,8 +70,10 @@ udaan run quadrotor --traj lissajous -p 0,0,2          # 3D Lissajous
 udaan run quadrotor --traj circle -p 0,0,1             # circular
 
 # Cable-suspended payload
-udaan run quad-payload -t 10 -m tendon                 # tendon model
-udaan run quad-payload -t 10 -m links                  # rigid links
+udaan run quad-payload -t 10 -c tendon                 # spatial tendon cable
+udaan run quad-payload -t 10 -c links                  # rigid link chain
+udaan run quad-payload -t 10 -c cable                  # composite cable (experimental)
+udaan run quad-payload -t 10 -m vfx                   # vpython backend
 
 # Multi-quadrotor cooperative transport
 udaan run multi-quad -n 3 -t 10                        # N-quad pointmass payload
@@ -81,6 +83,12 @@ udaan run multi-quad-rigid -t 10                       # rigid-body payload
 udaan run fleet --demo l1-comparison                   # L1 adaptive vs PD
 udaan run fleet --demo gain-sweep                      # PD gain comparison
 udaan run fleet -n 4 --trail                           # 4 quads with trails
+
+# Cable-payload fleet: compare payload controllers / gains side-by-side
+udaan run cspayload-fleet --demo same-gains            # 2 agents, default gains
+udaan run cspayload-fleet --demo gain-sweep            # cable kp/kd × [0.5, 1, 1.5, 2]
+udaan run cspayload-fleet --demo gain-sweep --same-start  # overlap start, gain-driven divergence
+udaan run cspayload-fleet -n 4                         # 4 agents, default gains
 
 # Recording
 udaan run quadrotor -t 5 -r out.gif                    # save to GIF

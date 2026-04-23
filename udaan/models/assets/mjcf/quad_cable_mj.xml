@@ -3,7 +3,7 @@
   <include file="scene.xml" />
 
   <extension>
-    <required plugin="mujoco.elasticity.cable" />
+    <plugin plugin="mujoco.elasticity.cable" />
   </extension>
 
   <statistic center="0 0 .3" extent="1" />
@@ -70,13 +70,13 @@
           <config key="twist" value="0" />
           <config key="bend" value="0" />
         </plugin>
-        <joint kind="main" damping=".001" stiffness="0." />
+        <joint kind="main" damping="0.001" stiffness="0." />
         <geom type="capsule" size=".0015" mass="0.00024" rgba=".8 .2 .1 1" />
       </composite>
     </body>
     <body name="pyld" pos="1.0 0.0 0.075" quat="1 0 0 0">
       <!-- <inertial mass="0.15" pos="0. 0. 0." diaginertia="0.0005078125 0.0005078125 0.001" /> -->
-      <geom name="pyld" type="box" mass="0.15" density="50" size="0.05 0.05 0.025"
+      <geom name="pyld" type="sphere" mass="0.15" density="50" size="0.04"
         rgba="0.0 1 1 1.0" />
       <site name="pyld_cntr" type="sphere" pos="0. 0. 0.025" quat="1 0 0 0" size="0.005"
         rgba="0.1 0.1 0.5 1.0" />
