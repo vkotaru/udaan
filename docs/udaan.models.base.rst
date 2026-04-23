@@ -4,18 +4,18 @@ udaan.models.base package
 Submodules
 ----------
 
-udaan.models.base.quadrotor module
-----------------------------------
+.. toctree::
+   :maxdepth: 4
 
-.. automodule:: udaan.models.base.quadrotor
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   udaan.models.base.floating_pointmass
+   udaan.models.base.multi_pointmass_suspended_payload
+   udaan.models.base.pointmass_suspended_payload
+   udaan.models.base.s2_pendulum
 
 Module contents
 ---------------
 
 .. automodule:: udaan.models.base
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:

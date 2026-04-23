@@ -1,21 +1,23 @@
-.. Udaan documentation master file, created by
-   sphinx-quickstart on Fri Jan 27 07:44:36 2023.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+Udaan — Aerial robotics framework
+==================================
 
-Welcome to Udaan's documentation!
-=================================
+A Python MuJoCo-based simulation and control framework for quadrotors,
+cable-suspended payload systems, and multi-quad cooperative transport.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Getting started
 
-   modules
+   README
 
+.. toctree::
+   :maxdepth: 2
+   :caption: API reference
 
+   udaan
 
 Indices and tables
-==================
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`
