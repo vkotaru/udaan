@@ -4,18 +4,13 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.12"
-
-python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - docs
-
-sphinx:
-  configuration: docs/conf.py
-  fail_on_warning: false
-
-formats:
-  - pdf
-  - htmlzip
+  # RTD's default sphinx invocation uses `-j auto` and passes the repo
+  # root as the source directory. The parallel autodoc workers deadlock
+  # while introspecting udaan's module tree on the headless builder, and
+  # the implicit source dir makes debugging harder. Override with an
+  # explicit serial invocation, a hard timeout, and docs/ as source.
+  commands:
+    - python -m pip install --upgrade pip
+    - python -m pip install .[docs]
+    - mkdir -p $READTHEDOCS_OUTPUT/html
+    - timeout 600 python -m sphinx -T -j 1 -b html docs $READTHEDOCS_OUTPUT/html
