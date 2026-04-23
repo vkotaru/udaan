@@ -5,7 +5,7 @@ Subpackages
 -----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.cli
    udaan.control
@@ -21,3 +21,4 @@ Module contents
    :members:
    :show-inheritance:
    :undoc-members:
+   :no-index:

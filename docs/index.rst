@@ -11,10 +11,30 @@ cable-suspended payload systems, and multi-quad cooperative transport.
    README
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
+   :caption: Guides
+
+   guides/getting-started
+   guides/running-simulations
+   guides/controllers
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Theory
+
+   theory/index
+
+.. toctree::
+   :maxdepth: 3
    :caption: API reference
 
    udaan
+
+.. toctree::
+   :maxdepth: 3
+   :caption: References
+
+   references
 
 Indices and tables
 ------------------

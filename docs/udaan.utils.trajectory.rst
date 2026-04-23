@@ -5,7 +5,7 @@ Submodules
 ----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.utils.trajectory.flip
    udaan.utils.trajectory.trajectory
