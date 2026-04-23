@@ -5,7 +5,7 @@ Subpackages
 -----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.utils.assets
    udaan.utils.plotting
@@ -16,7 +16,7 @@ Submodules
 ----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.utils.flat2state
    udaan.utils.flat2state_utils

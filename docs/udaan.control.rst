@@ -5,7 +5,7 @@ Subpackages
 -----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.control.quadrotor
    udaan.control.quadrotor_cspayload

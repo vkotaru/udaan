@@ -5,7 +5,7 @@ Submodules
 ----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.manif.S2
    udaan.manif.SO3
@@ -18,3 +18,4 @@ Module contents
    :members:
    :show-inheritance:
    :undoc-members:
+   :no-index:
