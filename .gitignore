@@ -3,6 +3,7 @@ MUJOCO_LOG.TXT
 # Runtime-generated MJCF files
 udaan/models/assets/mjcf/multi_quad_pointmass_*q.xml
 udaan/models/assets/mjcf/fleet_*.xml
+udaan/models/assets/mjcf/cspayload_fleet_*.xml
 
 # Temporary files
 tmp/
@@ -12,6 +13,7 @@ debug/
 # Folders
 .vscode/
 .idea/
+.claude/
 
 .DS_Store
 

@@ -20,7 +20,7 @@ class QuadrotorVFX(VFXHandler):
 
         self._init_quadrotor_geometry()
         self._traj = vp.curve(color=vp.color.black, radius=0.025)
-        self.update()
+        QuadrotorVFX.update(self)
 
     def _init_quadrotor_geometry(self):
         """Create arms, propellers, and curves shared by all quadrotor visualizers."""
