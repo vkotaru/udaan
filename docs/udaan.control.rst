@@ -1,21 +1,19 @@
 udaan.control package
 =====================
 
-Submodules
-----------
+Subpackages
+-----------
 
-udaan.control.quadrotor module
-------------------------------
+.. toctree::
+   :maxdepth: 4
 
-.. automodule:: udaan.control.quadrotor
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   udaan.control.quadrotor
+   udaan.control.quadrotor_cspayload
 
 Module contents
 ---------------
 
 .. automodule:: udaan.control
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
