@@ -1,29 +1,33 @@
 udaan.utils package
 ===================
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   udaan.utils.assets
+   udaan.utils.plotting
+   udaan.utils.trajectory
+   udaan.utils.vfx
+
 Submodules
 ----------
 
-udaan.utils.geometry module
----------------------------
+.. toctree::
+   :maxdepth: 4
 
-.. automodule:: udaan.utils.geometry
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-udaan.utils.printout module
----------------------------
-
-.. automodule:: udaan.utils.printout
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   udaan.utils.flat2state
+   udaan.utils.flat2state_utils
+   udaan.utils.geometry
+   udaan.utils.logging
+   udaan.utils.resize_gif
 
 Module contents
 ---------------
 
 .. automodule:: udaan.utils
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
