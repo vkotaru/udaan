@@ -84,6 +84,12 @@ udaan run fleet --demo l1-comparison                   # L1 adaptive vs PD
 udaan run fleet --demo gain-sweep                      # PD gain comparison
 udaan run fleet -n 4 --trail                           # 4 quads with trails
 
+# Cable-payload fleet: compare payload controllers / gains side-by-side
+udaan run cspayload-fleet --demo same-gains            # 2 agents, default gains
+udaan run cspayload-fleet --demo gain-sweep            # cable kp/kd × [0.5, 1, 1.5, 2]
+udaan run cspayload-fleet --demo gain-sweep --same-start  # overlap start, gain-driven divergence
+udaan run cspayload-fleet -n 4                         # 4 agents, default gains
+
 # Recording
 udaan run quadrotor -t 5 -r out.gif                    # save to GIF
 udaan run quadrotor --traj spiral -r spiral.mp4        # save to MP4
