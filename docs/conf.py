@@ -64,12 +64,21 @@ autodoc_default_options = {
 }
 autodoc_typehints = "signature"
 autodoc_class_signature = "separated"
-autosummary_generate = True
-# Optional runtime deps that may be missing on the RTD builder.
+
+# Mock heavy / GUI / optional runtime deps during autodoc's introspection.
+# These can deadlock on headless CI (vpython spawns a browser/WebGL context,
+# mujoco + glfw open an OpenGL context at import, etc.) — mocking replaces
+# them with stub modules so autodoc can walk udaan without real imports.
 autodoc_mock_imports = [
     "bokeh",
     "vpython",
     "mujoco",
+    "glfw",
+    "pyopengl",
+    "OpenGL",
+    "imageio",
+    "imageio_ffmpeg",
+    "autobahn",
     "scipy",
     "matplotlib",
     "optuna",
