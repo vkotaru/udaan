@@ -5,7 +5,7 @@ Submodules
 ----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.control.quadrotor.geometric_attitude
    udaan.control.quadrotor.geometric_l1_attitude

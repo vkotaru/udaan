@@ -5,7 +5,7 @@ Submodules
 ----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.models.base.floating_pointmass
    udaan.models.base.multi_pointmass_suspended_payload

@@ -5,7 +5,7 @@ Submodules
 ----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.utils.vfx.quadrotor_cspayload_vfx
    udaan.utils.vfx.quadrotor_vfx

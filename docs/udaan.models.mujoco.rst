@@ -5,7 +5,7 @@ Submodules
 ----------
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    udaan.models.mujoco.multi_quad_cs_pointmass
    udaan.models.mujoco.multi_quad_rigidbody
