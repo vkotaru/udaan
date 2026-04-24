@@ -105,6 +105,8 @@ html_static_path = ["_static"]
 html_css_files = ["fonts.css", "sidebar-rtd.css"]
 html_js_files = ["expand-sidebar.js"]
 html_title = f"Udaan {release}"
+html_logo = "_static/logo.png"
+html_favicon = "_static/icon.png"
 
 _font_stack = (
     '"Fustat", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, '
