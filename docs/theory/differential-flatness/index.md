@@ -89,6 +89,7 @@ abstraction makes available.
 :hidden:
 
 jet
+quadrotor
 ```
 
 ## References
