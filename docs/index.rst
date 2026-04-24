@@ -1,8 +1,19 @@
+:hide-toc:
+
+.. image:: _static/logo.png
+   :alt: Udaan
+   :align: center
+   :class: landing-logo
+   :width: 360
+
 Udaan — Aerial robotics framework
 ==================================
 
-A Python MuJoCo-based simulation and control framework for quadrotors,
-cable-suspended payload systems, and multi-quad cooperative transport.
+.. rst-class:: landing-tagline
+
+   **A Python MuJoCo-based simulation and control framework for
+   quadrotors, cable-suspended payload systems, and multi-quad
+   cooperative transport.**
 
 .. toctree::
    :maxdepth: 2
