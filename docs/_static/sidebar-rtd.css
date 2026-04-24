@@ -1,0 +1,74 @@
+/* RTD-style dropdown look on top of Furo's default colour scheme.
+ *
+ * Furo's light/dark theme switching is preserved untouched; only the
+ * sidebar tree's *visual treatment* of expanded branches is restyled
+ * to match the classic ReadTheDocs / stable-baselines3 look:
+ *
+ *   - No more chevron arrow icons.
+ *   - When a branch is expanded, its children get a subtle highlight
+ *     background that "scopes" the section, making the active page's
+ *     context visible at a glance.
+ *   - Toggle indicator (when present) becomes a `+` / `−` glyph rather
+ *     than Furo's rotating arrow.
+ *   - Captions stay in Furo's brand colour but tighten up the
+ *     uppercase / letter-spacing for the RTD feel.
+ *
+ * Pairs with `expand-sidebar.js`, which forces every toctree-checkbox
+ * outside the API-reference subtree open on load.
+ */
+
+/* ── Captions: tighter, uppercase, brand colour (no colour override) ── */
+.sidebar-tree p.caption {
+  margin-top: 1.25rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+/* ── Compact line-height in the tree ─────────────────────────────── */
+.sidebar-tree li > a {
+  line-height: 1.45;
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+}
+
+/* ── Replace Furo's chevron toggle with a +/− glyph ──────────────── */
+.sidebar-tree .toctree-checkbox + label .icon svg {
+  display: none;
+}
+.sidebar-tree .toctree-checkbox + label::after {
+  content: "+";
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.sidebar-tree .toctree-checkbox:checked + label::after {
+  content: "−";
+}
+
+/* ── Expanded-branch highlight: the RTD "scoped" background bar ──── */
+.sidebar-tree li.has-children > .toctree-checkbox:checked ~ ul {
+  background: var(--color-background-secondary);
+  margin-left: 0;
+  padding-left: 1rem;
+  border-left: 2px solid var(--color-background-border);
+}
+
+/* ── Active page: bold + same secondary background bleed ─────────── */
+.sidebar-tree .current-page > a,
+.sidebar-tree .reference.internal.current {
+  background: var(--color-background-hover);
+  font-weight: 600;
+}
+
+/* ── Drop the old guide-line indentation we used in the dark CSS ─── */
+.sidebar-tree ul {
+  border-left: none;
+  margin-left: 0;
+}

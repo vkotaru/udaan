@@ -102,7 +102,8 @@ source_suffix = {
 # ── HTML (furo) ───────────────────────────────────────────────────────
 html_theme = "furo"
 html_static_path = ["_static"]
-html_css_files = ["fonts.css"]
+html_css_files = ["fonts.css", "sidebar-rtd.css"]
+html_js_files = ["expand-sidebar.js"]
 html_title = f"Udaan {release}"
 
 _font_stack = (
