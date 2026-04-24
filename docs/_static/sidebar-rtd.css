@@ -72,3 +72,26 @@
   border-left: none;
   margin-left: 0;
 }
+
+/* ── Landing page: logo replaces the H1 ──────────────────────────── */
+.landing-logo {
+  display: block;
+  margin: 1.25rem auto 0.5rem !important;
+}
+
+/* Hide the H1 on the landing page only — Sphinx still uses it for the
+ * document title, breadcrumbs, and TOC, but it doesn't render. */
+article:has(.landing-logo) > section > h1:first-of-type {
+  display: none;
+}
+
+/* Tagline directly under the logo: larger, bolder, lighter weight than
+ * a heading — sets the project's pitch above the navigation grid. */
+.landing-tagline {
+  font-size: 1.15rem;
+  font-weight: 600;
+  text-align: center;
+  margin: 0.5rem auto 2rem;
+  max-width: 42rem;
+  color: var(--color-foreground-secondary);
+}
