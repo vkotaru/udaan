@@ -42,6 +42,102 @@ def _skew(m: np.ndarray) -> np.ndarray:
     return 0.5 * (m - m.T)
 
 
+def _attitude_from_thrust_vector(
+    B: np.ndarray,
+    dB: np.ndarray,
+    d2B: np.ndarray,
+    psi: float,
+    dpsi: float,
+    d2psi: float,
+    J: np.ndarray,
+) -> tuple[float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Recover ``(f, R, Ω, dΩ, M)`` from the thrust-vector chain ``(B, dB, d2B)``
+    and yaw chain ``(ψ, ψ̇, ψ̈)``.
+
+    Used by every flat-to-state map whose thrust acts along the body z-axis:
+    once the caller has assembled ``B = f R e_3`` (in the form
+    ``m(ẍ + g e_3)`` for the standalone quadrotor, or
+    ``m_Q(ẍ_Q + g e_3) - 𝐓`` for the cspayload), the b_3-projector chain,
+    yaw-hint frame construction, skew-projector body rates, and Newton–Euler
+    moment are all the same.
+
+    Args:
+        B:     thrust vector ``f R e_3`` (R^3); must be non-vanishing.
+        dB:    first time derivative of B (R^3).
+        d2B:   second time derivative of B (R^3).
+        psi:   yaw angle.
+        dpsi:  yaw rate.
+        d2psi: yaw acceleration.
+        J:     quadrotor inertia matrix (3×3).
+
+    Returns:
+        ``(f, R, Ω, dΩ, M)`` where ``f = ‖B‖``, ``R ∈ SO(3)`` (3×3 ndarray),
+        ``Ω, dΩ ∈ R^3`` are body-frame rate / angular acceleration, and
+        ``M = J dΩ + Ω × J Ω`` is the body-frame moment.
+
+    Raises:
+        ValueError: if ``b_3 := B/‖B‖`` is parallel to the yaw-hint
+            ``[cos ψ, sin ψ, 0]ᵀ`` (yaw-aligned singularity). The caller
+            is responsible for the ``‖B‖ ≈ 0`` (free-fall) check.
+    """
+    norm_B = float(np.linalg.norm(B))
+    f = norm_B
+    b3 = B / norm_B
+
+    # Yaw-frame heading vector and its first two derivatives
+    cpsi, spsi = np.cos(psi), np.sin(psi)
+    b1d = np.array([cpsi, spsi, 0.0])
+    db1d = np.array([-spsi, cpsi, 0.0]) * dpsi
+    d2b1d = np.array([-cpsi, -spsi, 0.0]) * dpsi**2 + np.array([-spsi, cpsi, 0.0]) * d2psi
+
+    # Derivatives of ‖B‖ via d/dt(‖v‖) = v·v̇/‖v‖
+    dnorm_B = B.dot(dB) / norm_B
+    d2norm_B = (dB.dot(dB) + B.dot(d2B) - dnorm_B**2) / norm_B
+
+    # Derivatives of b_3 = B/‖B‖ (projector form, automatically perpendicular)
+    db3 = (dB - b3 * dnorm_B) / norm_B
+    d2b3 = (d2B - 2.0 * db3 * dnorm_B - b3 * d2norm_B) / norm_B
+
+    # Build R = [b1 b2 b3] with yaw-hint b1d
+    b3_x_b1d = np.cross(b3, b1d)
+    norm_b3_x_b1d = float(np.linalg.norm(b3_x_b1d))
+    if norm_b3_x_b1d < 1e-6:
+        raise ValueError(
+            "Thrust direction aligned with yaw hint — cannot construct a "
+            "unique desired attitude. Offset the yaw."
+        )
+    b2 = b3_x_b1d / norm_b3_x_b1d
+    b1 = np.cross(b2, b3)
+    R = np.column_stack([b1, b2, b3])
+
+    # First derivatives of {b1, b2} for Ω
+    db3_x_b1d = np.cross(db3, b1d) + np.cross(b3, db1d)
+    dnorm_b3_x_b1d = b3_x_b1d.dot(db3_x_b1d) / norm_b3_x_b1d
+    db2 = (db3_x_b1d - b2 * dnorm_b3_x_b1d) / norm_b3_x_b1d
+    db1 = np.cross(db2, b3) + np.cross(b2, db3)
+    dR = np.column_stack([db1, db2, db3])
+
+    # Body-frame angular velocity: Ω̂ = Rᵀ Ṙ
+    Omega = vee(_skew(R.T @ dR))
+
+    # Second derivatives of {b1, b2} for dΩ
+    d2b3_x_b1d = np.cross(d2b3, b1d) + 2.0 * np.cross(db3, db1d) + np.cross(b3, d2b1d)
+    d2norm_b3_x_b1d = (
+        db3_x_b1d.dot(db3_x_b1d) + b3_x_b1d.dot(d2b3_x_b1d) - dnorm_b3_x_b1d**2
+    ) / norm_b3_x_b1d
+    d2b2 = (d2b3_x_b1d - 2.0 * db2 * dnorm_b3_x_b1d - b2 * d2norm_b3_x_b1d) / norm_b3_x_b1d
+    d2b1 = np.cross(d2b2, b3) + 2.0 * np.cross(db2, db3) + np.cross(b2, d2b3)
+    d2R = np.column_stack([d2b1, d2b2, d2b3])
+
+    # dΩ̂ = skew(Rᵀ R̈) — symmetric Ω̂² piece cancels under the projector
+    dOmega = vee(_skew(R.T @ d2R))
+
+    # Feedforward moment: M = J dΩ + Ω × J Ω
+    M = J @ dOmega + np.cross(Omega, J @ Omega)
+
+    return f, R, Omega, dOmega, M
+
+
 @dataclass
 class QuadrotorFlats:
     """Flat output of a rigid-body quadrotor: position jet (order ≥ 4)
@@ -139,70 +235,18 @@ class Quadrotor(Flat2State):
         dpsi = flats.psi.velocity
         d2psi = flats.psi.acceleration
 
-        # ── Yaw-frame heading vector and its first two derivatives ────
-        cpsi, spsi = np.cos(psi), np.sin(psi)
-        b1d = np.array([cpsi, spsi, 0.0])
-        db1d = np.array([-spsi, cpsi, 0.0]) * dpsi
-        d2b1d = np.array([-cpsi, -spsi, 0.0]) * dpsi**2 + np.array([-spsi, cpsi, 0.0]) * d2psi
+        # Thrust vector  B = f R e_3 = m (ẍ + g e_3)  and its time derivatives.
+        B = m * (acc + g * _E3)
+        dB = m * jerk
+        d2B = m * snap
 
-        # ── Thrust vector: m (ẍ + g e3) and its time derivatives ──────
-        fb3 = m * (acc + g * _E3)
-        dfb3 = m * jerk
-        d2fb3 = m * snap
-
-        norm_fb3 = float(np.linalg.norm(fb3))
-        if norm_fb3 < 1e-6:
-            # Free-fall singularity — no unique thrust direction.
+        if float(np.linalg.norm(B)) < 1e-6:
+            # Free-fall singularity — no unique thrust direction. Return a
+            # degraded reference (kinematics only, zero feedforward).
             ref = QuadrotorRefState(position=pos, velocity=vel, acceleration=acc)
             return ref, QuadrotorInputs()
 
-        f = norm_fb3
-        b3 = fb3 / norm_fb3
-
-        # Derivatives of the norm — via d/dt(‖v‖) = v·v̇/‖v‖
-        dnorm_fb3 = fb3.dot(dfb3) / norm_fb3
-        d2norm_fb3 = (dfb3.dot(dfb3) + fb3.dot(d2fb3) - dnorm_fb3**2) / norm_fb3
-
-        # Derivatives of b3 = fb3 / ‖fb3‖
-        db3 = (dfb3 - b3 * dnorm_fb3) / norm_fb3
-        d2b3 = (d2fb3 - 2.0 * db3 * dnorm_fb3 - b3 * d2norm_fb3) / norm_fb3
-
-        # ── Build Rd = [b1 b2 b3] with yaw-hint b1d ────────────────────
-        b3_x_b1d = np.cross(b3, b1d)
-        norm_b3_x_b1d = float(np.linalg.norm(b3_x_b1d))
-        if norm_b3_x_b1d < 1e-6:
-            raise ValueError(
-                "Quadrotor.recover: thrust direction aligned with yaw hint "
-                "— cannot construct a unique desired attitude. Offset the yaw."
-            )
-        b2 = b3_x_b1d / norm_b3_x_b1d
-        b1 = np.cross(b2, b3)
-        R = np.column_stack([b1, b2, b3])
-
-        # ── First derivatives of {b1, b2} for Ω ────────────────────────
-        db3_x_b1d = np.cross(db3, b1d) + np.cross(b3, db1d)
-        dnorm_b3_x_b1d = b3_x_b1d.dot(db3_x_b1d) / norm_b3_x_b1d
-        db2 = (db3_x_b1d - b2 * dnorm_b3_x_b1d) / norm_b3_x_b1d
-        db1 = np.cross(db2, b3) + np.cross(b2, db3)
-        dR = np.column_stack([db1, db2, db3])
-
-        # Body-frame angular velocity: Ω̂ = Rᵀ Ṙ
-        Omega = vee(_skew(R.T @ dR))
-
-        # ── Second derivatives of {b1, b2} for dΩ ──────────────────────
-        d2b3_x_b1d = np.cross(d2b3, b1d) + 2.0 * np.cross(db3, db1d) + np.cross(b3, d2b1d)
-        d2norm_b3_x_b1d = (
-            db3_x_b1d.dot(db3_x_b1d) + b3_x_b1d.dot(d2b3_x_b1d) - dnorm_b3_x_b1d**2
-        ) / norm_b3_x_b1d
-        d2b2 = (d2b3_x_b1d - 2.0 * db2 * dnorm_b3_x_b1d - b2 * d2norm_b3_x_b1d) / norm_b3_x_b1d
-        d2b1 = np.cross(d2b2, b3) + 2.0 * np.cross(db2, db3) + np.cross(b2, d2b3)
-        d2R = np.column_stack([d2b1, d2b2, d2b3])
-
-        # dΩ̂ = skew(Rᵀ R̈); the symmetric Ω̂² piece cancels.
-        dOmega = vee(_skew(R.T @ d2R))
-
-        # ── Feedforward moment: M = J dΩ + Ω × J Ω ─────────────────────
-        moment = J @ dOmega + np.cross(Omega, J @ Omega)
+        f, R, Omega, dOmega, moment = _attitude_from_thrust_vector(B, dB, d2B, psi, dpsi, d2psi, J)
 
         ref = QuadrotorRefState(
             position=pos,
