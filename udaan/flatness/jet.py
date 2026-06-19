@@ -8,7 +8,7 @@ tuple
 In differential-flatness theory (Fliess, Lévine, et al.) the state and input
 of a flat system are algebraic functions of such a jet of the flat output.
 This module provides a lightweight container for these tuples, used
-throughout ``udaan.utils.flatness`` as the atomic data type for flat-output
+throughout ``udaan.flatness`` as the atomic data type for flat-output
 derivative bundles.
 
 Convention

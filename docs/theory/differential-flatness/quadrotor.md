@@ -147,7 +147,7 @@ R \;=\; [\, b_1 \;\; b_2 \;\; b_3 \,] \;\in\; SO(3).
 
 This is the same construction performed by
 `SO3.from_two_vectors(b3, b1d)` in {doc}`../preliminaries` — but the
-implementation in {py:class}`udaan.utils.flatness.Quadrotor` builds
+implementation in {py:class}`udaan.flatness.Quadrotor` builds
 $R$ inline as ``np.column_stack([b1, b2, b3])`` rather than calling
 the constructor, because the intermediate columns $b_1$ and $b_2$ are
 also needed downstream (their derivatives feed Step 3 / Step 4 via
@@ -162,7 +162,7 @@ When $b_3$ is parallel to $b_{1,d}$ — i.e. the quadrotor is pointed
 straight up/down while the yaw hint would lie along the body axis —
 the cross product in {math:numref}`eq-quad-b2-b1` vanishes and $R$ is
 not uniquely defined. The implementation in
-{py:class}`udaan.utils.flatness.Quadrotor` raises an error at this
+{py:class}`udaan.flatness.Quadrotor` raises an error at this
 configuration; the regular region for the flatness map is the open
 subset of jet space on which $b_3 \times b_{1,d} \neq 0$.
 :::
@@ -214,7 +214,7 @@ jerk and $\dot\psi$.
 
 Recovering the moment through {math:numref}`eq-quad-eom` requires
 $\dot\Omega$. The implementation in
-{py:class}`udaan.utils.flatness.Quadrotor` computes it through a
+{py:class}`udaan.flatness.Quadrotor` computes it through a
 skew-projector on $\ddot R$:
 
 ```{math}
@@ -374,13 +374,13 @@ $J^4 \times J^2$ type.
 ## Jet input
 
 The map $\Phi$ of {prf:ref}`thm-quad-flat` takes a pair of
-{py:class}`udaan.utils.flatness.Jet` objects — one of order 4 for the
+{py:class}`udaan.flatness.Jet` objects — one of order 4 for the
 position, one of order 2 for the yaw — packaged into a
-{py:class}`udaan.utils.flatness.QuadrotorFlats` struct:
+{py:class}`udaan.flatness.QuadrotorFlats` struct:
 
 ```python
 import numpy as np
-from udaan.utils.flatness import Jet, Quadrotor, QuadrotorFlats
+from udaan.flatness import Jet, Quadrotor, QuadrotorFlats
 
 # Centre-of-mass position and its first four time derivatives at t
 x_jet = Jet(np.stack([

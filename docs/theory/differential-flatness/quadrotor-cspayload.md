@@ -537,13 +537,13 @@ constraint $x_Q = x_L - \ell\, q$.
 ## Jet input
 
 The map $\Phi$ of {prf:ref}`thm-payload-flat` takes a pair of
-{py:class}`udaan.utils.flatness.Jet` objects — one of order 6 for the
+{py:class}`udaan.flatness.Jet` objects — one of order 6 for the
 payload position, one of order 2 for the yaw — packaged into a
-{py:class}`udaan.utils.flatness.QuadrotorCsPayloadFlats` struct:
+{py:class}`udaan.flatness.QuadrotorCsPayloadFlats` struct:
 
 ```python
 import numpy as np
-from udaan.utils.flatness import (
+from udaan.flatness import (
     Jet,
     QuadrotorCsPayload,
     QuadrotorCsPayloadFlats,
@@ -582,8 +582,8 @@ ref, inputs = QuadrotorCsPayload(
 ```
 
 The returned `ref` is a
-{py:class}`udaan.utils.flatness.QuadrotorCsPayloadRefState` and
-`inputs` is a {py:class}`udaan.utils.flatness.QuadrotorCsPayloadInputs`.
+{py:class}`udaan.flatness.QuadrotorCsPayloadRefState` and
+`inputs` is a {py:class}`udaan.flatness.QuadrotorCsPayloadInputs`.
 Truncation ({prf:ref}`def-jet-trunc`) extracts the lower-order jets
 needed by intermediate stages of the recovery (for example,
 `x_L_jet.truncate(4)` is enough to produce $(q,\, \dot q,\, \ddot q,\,

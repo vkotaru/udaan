@@ -1,4 +1,4 @@
-"""Unit tests for :class:`udaan.utils.flatness.QuadrotorCsPayload` — the
+"""Unit tests for :class:`udaan.flatness.QuadrotorCsPayload` — the
 quadrotor + cable-suspended-point-mass-payload differential-flatness map."""
 
 from __future__ import annotations
@@ -13,12 +13,12 @@ from udaan.core.defaults import (
     DEFAULT_QUAD_MASS,
     GRAVITY,
 )
-from udaan.models.quadrotor_cspayload.base import QuadrotorCsPayloadBase
-from udaan.utils.flatness import (
+from udaan.flatness import (
     Jet,
     QuadrotorCsPayload,
     QuadrotorCsPayloadFlats,
 )
+from udaan.models.quadrotor_cspayload.base import QuadrotorCsPayloadBase
 
 # ─── Helpers ──────────────────────────────────────────────────────────
 

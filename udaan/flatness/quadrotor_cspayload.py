@@ -30,15 +30,15 @@ from math import comb
 
 import numpy as np
 
-from ...core.defaults import (
+from ..core.defaults import (
     DEFAULT_CABLE_LENGTH,
     DEFAULT_PAYLOAD_MASS,
     DEFAULT_QUAD_INERTIA,
     DEFAULT_QUAD_MASS,
     GRAVITY,
 )
-from ...core.types import Mat3, Vec3
-from ...manif import S2, SO3, TS2, TSO3
+from ..core.types import Mat3, Vec3
+from ..manif import S2, SO3, TS2, TSO3
 from .base import Flat2State
 from .jet import Jet
 from .quadrotor import _attitude_from_thrust_vector
@@ -162,7 +162,7 @@ class QuadrotorCsPayloadRefState:
     def as_state(self):
         """Project onto the model's ``QuadrotorCsPayloadState`` shape (drops
         all *_acceleration extras; wraps cable fields as :class:`S2`/:class:`TS2`)."""
-        from ...models.quadrotor_cspayload.base import QuadrotorCsPayloadState
+        from ..models.quadrotor_cspayload.base import QuadrotorCsPayloadState
 
         return QuadrotorCsPayloadState(
             position=self.position,

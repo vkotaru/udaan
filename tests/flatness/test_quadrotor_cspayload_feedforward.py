@@ -33,13 +33,13 @@ from udaan.core.defaults import (
     DEFAULT_QUAD_MASS,
     GRAVITY,
 )
-from udaan.manif import SO3
-from udaan.models.quadrotor_cspayload.base import QuadrotorCsPayloadBase
-from udaan.utils.flatness import (
+from udaan.flatness import (
     Jet,
     QuadrotorCsPayload,
     QuadrotorCsPayloadFlats,
 )
+from udaan.manif import SO3
+from udaan.models.quadrotor_cspayload.base import QuadrotorCsPayloadBase
 
 TF = 5.0
 

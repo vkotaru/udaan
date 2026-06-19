@@ -2,7 +2,7 @@
 # Jets of flat outputs
 
 This page defines the jet, states its basic operations, and documents
-{py:class}`udaan.utils.flatness.Jet` — the Python container that every
+{py:class}`udaan.flatness.Jet` — the Python container that every
 flat-to-state map in `udaan` takes as input.
 
 ## Formal definition
@@ -116,7 +116,7 @@ feedforward input.
 
 ## The `Jet` class
 
-`udaan` exposes jets as the {py:class}`udaan.utils.flatness.Jet`
+`udaan` exposes jets as the {py:class}`udaan.flatness.Jet`
 dataclass. Storage is a 2-D numpy array of shape
 $(\text{order} + 1,\; \text{dim})$; row $k$ is the $k$-th time
 derivative of the signal.
@@ -126,7 +126,7 @@ derivative of the signal.
 **Vector signals** (e.g. a 3-D position trajectory, up to snap):
 
 ```python
-from udaan.utils.flatness import Jet
+from udaan.flatness import Jet
 import numpy as np
 
 x = Jet(np.stack([

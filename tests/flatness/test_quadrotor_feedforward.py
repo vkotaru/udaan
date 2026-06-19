@@ -23,9 +23,9 @@ from scipy.integrate import solve_ivp
 from scipy.spatial.transform import Rotation as _ScipyRot
 
 from udaan.core.defaults import DEFAULT_QUAD_INERTIA, DEFAULT_QUAD_MASS, GRAVITY
+from udaan.flatness import Jet, Quadrotor, QuadrotorFlats
 from udaan.manif import SO3
 from udaan.models.quadrotor import QuadrotorBase
-from udaan.utils.flatness import Jet, Quadrotor, QuadrotorFlats
 
 TF = 10.0
 

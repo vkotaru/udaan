@@ -80,7 +80,7 @@ flat-to-state map {math:numref}`eq-df-recovery` reads compactly as
 
 a single map from the jet space $J^q \mathbb{R}^m$ to the state-input
 space $\mathbb{R}^n \times \mathbb{R}^m$. See {doc}`jet` for the formal
-definition, the {py:class}`udaan.utils.flatness.Jet` implementation,
+definition, the {py:class}`udaan.flatness.Jet` implementation,
 and the operations (differentiation, truncation, prolongation) the
 abstraction makes available.
 

@@ -1,4 +1,4 @@
-"""Unit tests for :class:`udaan.utils.flatness.Quadrotor` — the rigid-body
+"""Unit tests for :class:`udaan.flatness.Quadrotor` — the rigid-body
 quadrotor differential-flatness map."""
 
 from __future__ import annotations
@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 from udaan.core.defaults import DEFAULT_QUAD_INERTIA, DEFAULT_QUAD_MASS, GRAVITY
+from udaan.flatness import Jet, Quadrotor, QuadrotorFlats
 from udaan.models.quadrotor.base import QuadrotorBase
-from udaan.utils.flatness import Jet, Quadrotor, QuadrotorFlats
 
 # ─── Helpers ──────────────────────────────────────────────────────────
 

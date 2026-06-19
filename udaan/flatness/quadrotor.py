@@ -23,9 +23,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ...core.defaults import GRAVITY
-from ...core.types import Mat3, Vec3
-from ...manif import SO3, TSO3, vee
+from ..core.defaults import GRAVITY
+from ..core.types import Mat3, Vec3
+from ..manif import SO3, TSO3, vee
 from .base import Flat2State
 from .jet import Jet
 
@@ -183,7 +183,7 @@ class QuadrotorRefState:
     def as_state(self):
         """Project onto the model's ``QuadrotorState`` shape (drops
         acceleration + angular_acceleration)."""
-        from ...models.quadrotor.base import QuadrotorState
+        from ..models.quadrotor.base import QuadrotorState
 
         return QuadrotorState(
             position=self.position,
