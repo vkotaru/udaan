@@ -102,6 +102,27 @@ def _normalize_derivatives(v: list[np.ndarray]) -> tuple[list[float], list[np.nd
     return n, u
 
 
+def cable_direction_jet(
+    payload_accel: list[np.ndarray], mass_l: float, gravity: float = GRAVITY
+) -> tuple[list[float], list[np.ndarray]]:
+    """Cable tension and unit-direction jets from the payload-acceleration jet.
+
+    Newton's law on the point-mass payload gives the cable force
+    ``T q = -m_L (a_L + g e3)``, where ``q`` is the unit cable direction
+    (quadrotor → payload).  Given ``payload_accel = [a_L, ȧ_L, …, a_L^(K)]``,
+    return ``(T, q)`` where ``T[k] = (d/dt)^k T`` is the k-th derivative of the
+    scalar cable tension and ``q[k] = (d/dt)^k q`` for k = 0…K, via the Leibniz
+    :func:`_normalize_derivatives` chain.
+
+    Raises ``ValueError`` if the payload is in free fall (``a_L + g e3 ≈ 0``):
+    the cable goes slack and ``q`` is undefined.
+    """
+    tvec = [-mass_l * (payload_accel[0] + gravity * _E3)]
+    for k in range(1, len(payload_accel)):
+        tvec.append(-mass_l * payload_accel[k])
+    return _normalize_derivatives(tvec)
+
+
 @dataclass
 class QuadrotorCsPayloadFlats:
     """Flat output of a quadrotor with cable-suspended payload: payload-position
@@ -244,16 +265,12 @@ class QuadrotorCsPayload(Flat2State):
         x_L = [flats.x_L[k] for k in range(7)]  # rows 0..6
 
         # ── Newton–Euler on the payload alone: m_L ẍ_L = -T q - m_L g e_3.
-        # Build the tension vector  T_vec := T q = -m_L (ẍ_L + g e_3)
-        # (doc symbol: bold T; see eq-payload-Tvec). Then
+        # The cable force is  T_vec := T q = -m_L (ẍ_L + g e_3); from it
         #   T = ‖T_vec‖   (scalar cable tension; slack-cable diagnostic),
-        #   q = T_vec / T (unit cable direction, quadrotor → payload).
-        # Derivative chain: T_vec^(k) = -m_L x_L^(k+2) for k >= 1.
-        Tvec = [-mL * (x_L[2] + g * _E3)]
-        for k in range(1, 5):  # k = 1..4 → uses x_L^(3..6)
-            Tvec.append(-mL * x_L[k + 2])
-
-        if float(np.linalg.norm(Tvec[0])) < 1e-6:
+        #   q = T_vec / T (unit cable direction, quadrotor → payload),
+        # both with derivatives through order 4 (q^(4) feeds the moment).
+        # The payload acceleration jet is a_L^(k) = x_L^(k+2), i.e. x_L[2:7].
+        if float(np.linalg.norm(mL * (x_L[2] + g * _E3))) < 1e-6:
             # Payload free-fall: cable goes slack, q is undefined.
             raise ValueError(
                 "QuadrotorCsPayload.recover: payload is in free fall "
@@ -261,7 +278,7 @@ class QuadrotorCsPayload(Flat2State):
             )
 
         # ── q = T_vec / T and its derivatives through q^(4) ────────────
-        T_derivs, q_d = _normalize_derivatives(Tvec)
+        T_derivs, q_d = cable_direction_jet(x_L[2:7], mL, g)
         tension = T_derivs[0]
         # q_d[k] is the k-th time derivative of q.
         q = q_d[0]
