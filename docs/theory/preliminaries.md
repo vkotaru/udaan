@@ -196,7 +196,7 @@ e_\Omega = \Omega - \Omega_d^{(R)} = \Omega - R^\top R_d\, \Omega_d.
 ```
 
 This is the construction used in the geometric SE(3) controller
-{footcite}`lee2010geometric`; see {doc}`controllers/quadrotor-se3`.
+{footcite}`lee2010geometric`.
 
 ```python
 e_Omega = Omega - Omega_d.transport(R_from=R_d, R_to=R)
@@ -440,7 +440,7 @@ e_om = dq - np.cross(np.cross(q_d, dqd), q)   # matches eq. (eq-eomega-s2)
 ```
 
 Both $e_q$ and $e_\omega$ appear in the payload cable-attitude PD law
-derived in {doc}`controllers/quadrotor-payload`.
+used by {py:class}`udaan.control.quadrotor_cspayload.QuadCSPayloadController`.
 
 ## References
 
