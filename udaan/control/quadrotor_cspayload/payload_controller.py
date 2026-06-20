@@ -16,6 +16,7 @@ from ...core.defaults import (
     DEFAULT_QUAD_INERTIA,
     DEFAULT_QUAD_MASS,
 )
+from ...flatness.quadrotor_cspayload import cable_direction_jet
 from ...utils import hat
 
 
@@ -37,7 +38,13 @@ class QuadCSPayloadController(PDController):
         """payload position control"""
         t = args[0]
         s = args[1]  # quadrotor payload state
-        sd, dsd, d2sd = self.setpoint(t)
+        sp = self.setpoint(t)
+        sd, dsd, d2sd = sp[0], sp[1], sp[2]
+        # Higher payload derivatives (jerk, snap) feed the cable-attitude
+        # feedforward below; default to zero when the setpoint omits them
+        # (e.g. a stationary set-point), which recovers the prior behaviour.
+        d3sd = sp[3] if len(sp) > 3 else np.zeros(3)
+        d4sd = sp[4] if len(sp) > 4 else np.zeros(3)
 
         ex = s.payload_position - sd
         ev = s.payload_velocity - dsd
@@ -57,8 +64,21 @@ class QuadCSPayloadController(PDController):
         qc = -A / np.linalg.norm(A)
         # load-attitude ctrl
         qd = qc
-        dqd = np.zeros(3)  # TODO update from differential flatness
-        d2qd = np.zeros(3)  # TODO update from differential flatness
+        # Desired cable-attitude rates from differential flatness of the
+        # payload trajectory: the flat cable direction is
+        # q_des = -(a_L + g e3)/‖·‖ with payload-acceleration jet
+        # [a_L, ȧ_L, ä_L] = [d2sd, d3sd, d4sd]; dqd, d2qd are its 1st/2nd time
+        # derivatives, from the same flat-to-state map as
+        # udaan.flatness.quadrotor_cspayload. These supply the cable
+        # feedforward that was previously stubbed to zero; q_des coincides with
+        # qc in the nominal (feedback-free) case, so qd is left as qc.
+        try:
+            _, q_flat = cable_direction_jet([d2sd, d3sd, d4sd], mL)
+            dqd, d2qd = q_flat[1], q_flat[2]
+        except ValueError:
+            # Payload near free-fall: cable direction undefined, drop feedforward.
+            dqd = np.zeros(3)
+            d2qd = np.zeros(3)
         # calculating errors
         err_q = hat(q) @ hat(q) @ qd
         err_dq = dq - np.cross(np.cross(qd, dqd), q)
