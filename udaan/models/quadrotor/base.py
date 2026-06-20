@@ -20,6 +20,7 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
+from ...flatness import Jet, Quadrotor, QuadrotorFlats
 from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
 
@@ -236,6 +237,7 @@ class QuadrotorBase:
         setpoint_fn = self._pos_controller.setpoint
         has_flat = hasattr(setpoint_fn, "__self__") and hasattr(setpoint_fn.__self__, "get_full")
         flat_fn = setpoint_fn.__self__.get_full if has_flat else None
+        flat_map = Quadrotor.from_model(self) if flat_fn is not None else None
 
         start_t = time.time_ns()
         while self.t < tf:
@@ -252,13 +254,15 @@ class QuadrotorBase:
                 )
             elif self._input_type == InputType.ACCELERATION:
                 u = self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
-                # Compute feedforward from flat output if available
-                if flat_fn is not None:
-                    from ...utils.flat2state_utils import flat2state
-
-                    _p, _v, acc, jerk, snap = flat_fn(self.t)
-                    Rd, Omd, dOmd, _f = flat2state(acc, jerk, snap, self._mass, self._inertia)
-                    desired_att = (Rd, Omd, dOmd)
+                # Differential-flatness attitude feedforward from the flat output.
+                if flat_map is not None:
+                    pos, vel, acc, jerk, snap = flat_fn(self.t)
+                    flats = QuadrotorFlats(
+                        x=Jet(np.array([pos, vel, acc, jerk, snap])),  # order-4, dim-3
+                        psi=Jet(np.zeros(3)),  # ψ ≡ 0 (order-2 scalar jet)
+                    )
+                    ref, _ = flat_map.recover(flats)
+                    desired_att = (ref.orientation, ref.angular_velocity, ref.angular_acceleration)
             else:
                 thrust_force = self._pos_controller.compute(
                     self.t, (self.state.position, self.state.velocity)
