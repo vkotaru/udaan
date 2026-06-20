@@ -10,6 +10,7 @@ Subpackages
    udaan.cli
    udaan.control
    udaan.core
+   udaan.flatness
    udaan.manif
    udaan.models
    udaan.utils
