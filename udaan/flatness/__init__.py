@@ -9,6 +9,10 @@ Per-system maps
 ---------------
 :class:`Quadrotor` — flat-to-state recovery for a rigid-body quadrotor
 with flat output ``(x_Q, ψ)``.
+
+:class:`QuadrotorCsPayload` — flat-to-state recovery for a quadrotor
+with a cable-suspended point-mass payload, with flat output
+``(x_L, ψ)``.
 """
 
 from .base import Flat2State as Flat2State
@@ -25,11 +29,27 @@ from .quadrotor import (
 from .quadrotor import (
     QuadrotorRefState as QuadrotorRefState,
 )
+from .quadrotor_cspayload import (
+    QuadrotorCsPayload as QuadrotorCsPayload,
+)
+from .quadrotor_cspayload import (
+    QuadrotorCsPayloadFlats as QuadrotorCsPayloadFlats,
+)
+from .quadrotor_cspayload import (
+    QuadrotorCsPayloadInputs as QuadrotorCsPayloadInputs,
+)
+from .quadrotor_cspayload import (
+    QuadrotorCsPayloadRefState as QuadrotorCsPayloadRefState,
+)
 
 __all__ = [
     "Flat2State",
     "Jet",
     "Quadrotor",
+    "QuadrotorCsPayload",
+    "QuadrotorCsPayloadFlats",
+    "QuadrotorCsPayloadInputs",
+    "QuadrotorCsPayloadRefState",
     "QuadrotorFlats",
     "QuadrotorInputs",
     "QuadrotorRefState",
