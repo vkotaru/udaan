@@ -1,11 +1,16 @@
 """Differential flatness for a quadrotor with a cable-suspended point-mass payload.
 
-Flat output:
+Flat output::
+
     y = (x_L, ψ)
+
 where x_L ∈ R^3 is the payload position and ψ ∈ R is the quadrotor yaw.
-Derivative orders required:
-    x_L through pop          (x_L, ẋ_L, ẍ_L, x_L^(3), x_L^(4), x_L^(5), x_L^(6))
-    ψ   through ψ̈           (ψ, ψ̇, ψ̈)
+
+Derivative orders required::
+
+    x_L through pop  (x_L, ẋ_L, ẍ_L, x_L^(3), x_L^(4), x_L^(5), x_L^(6))
+    ψ   through ψ̈    (ψ, ψ̇, ψ̈)
+
 The map recovers the full state (x_L, ẋ_L, q, ω, x_Q, ẋ_Q, R, Ω) plus the
 feedforward thrust and moment (f, M).
 
@@ -182,7 +187,7 @@ class QuadrotorCsPayloadRefState:
 
     def as_state(self):
         """Project onto the model's ``QuadrotorCsPayloadState`` shape (drops
-        all *_acceleration extras; wraps cable fields as :class:`S2`/:class:`TS2`)."""
+        all ``*_acceleration`` extras; wraps cable fields as :class:`S2`/:class:`TS2`)."""
         from ..models.quadrotor_cspayload.base import QuadrotorCsPayloadState
 
         return QuadrotorCsPayloadState(

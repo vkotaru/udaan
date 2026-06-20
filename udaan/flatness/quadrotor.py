@@ -1,11 +1,16 @@
 """Differential flatness for the single rigid-body quadrotor.
 
-Flat output:
+Flat output::
+
     y = (x_Q, ψ)
+
 where x_Q ∈ R^3 is the centre-of-mass position and ψ ∈ R is the yaw angle.
-Derivative orders required:
+
+Derivative orders required::
+
     x_Q through snap (x, ẋ, ẍ, x⃛, x⁽⁴⁾)
-    ψ through ψ̈
+    ψ   through ψ̈
+
 The map recovers the full state (x_Q, v_Q, R, Ω) plus the feedforward
 thrust and moment (f, M).
 
