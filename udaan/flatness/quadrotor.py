@@ -8,7 +8,7 @@ where x_Q ∈ R^3 is the centre-of-mass position and ψ ∈ R is the yaw angle.
 
 Derivative orders required::
 
-    x_Q through snap (x, ẋ, ẍ, x⃛, x⁽⁴⁾)
+    x_Q through snap (x, ẋ, ẍ, x⁽³⁾, x⁽⁴⁾)
     ψ   through ψ̈
 
 The map recovers the full state (x_Q, v_Q, R, Ω) plus the feedforward
