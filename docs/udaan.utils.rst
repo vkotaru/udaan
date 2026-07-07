@@ -18,8 +18,6 @@ Submodules
 .. toctree::
    :maxdepth: 2
 
-   udaan.utils.flat2state
-   udaan.utils.flat2state_utils
    udaan.utils.geometry
    udaan.utils.logging
    udaan.utils.resize_gif

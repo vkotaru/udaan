@@ -2,7 +2,6 @@
 
 from . import assets, trajectory
 from .assets import xml_model_generator
-from .flat2state import Flat2State
 from .geometry import *
 from .logging import LoggerMixin, get_logger, setup_logging
 
@@ -16,6 +15,4 @@ __all__ = [
     "xml_model_generator",
     # Trajectory
     "trajectory",
-    # Flat2State
-    "Flat2State",
 ]
