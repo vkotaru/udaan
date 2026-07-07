@@ -25,7 +25,7 @@ class FlipTrajectory(Trajectory):
     The thrust vector rotates 360° in the xz-plane. During the inverted
     phase (90°-270°), thrust projection is negative — the quadrotor is
     in free-fall. This is physically correct; the attitude controller
-    maintains rotation via torque feedforward from flat2state.
+    maintains rotation via torque feedforward from differential flatness.
 
     Args:
         start: starting hover position [x, y, z].
