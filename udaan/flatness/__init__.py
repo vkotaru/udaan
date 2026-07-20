@@ -16,6 +16,9 @@ with a cable-suspended point-mass payload, with flat output
 """
 
 from .base import Flat2State as Flat2State
+from .derivatives import leibniz_dot as leibniz_dot
+from .derivatives import leibniz_product as leibniz_product
+from .derivatives import normalize_derivatives as normalize_derivatives
 from .jet import Jet as Jet
 from .quadrotor import (
     Quadrotor as Quadrotor,
@@ -46,6 +49,9 @@ __all__ = [
     "Flat2State",
     "Jet",
     "Quadrotor",
+    "leibniz_dot",
+    "leibniz_product",
+    "normalize_derivatives",
     "QuadrotorCsPayload",
     "QuadrotorCsPayloadFlats",
     "QuadrotorCsPayloadInputs",
