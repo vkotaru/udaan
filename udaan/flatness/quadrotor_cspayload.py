@@ -31,7 +31,6 @@ Reference:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import comb
 
 import numpy as np
 
@@ -45,6 +44,9 @@ from ..core.defaults import (
 from ..core.types import Mat3, Vec3
 from ..manif import S2, SO3, TS2, TSO3
 from .base import Flat2State
+from .cable import (
+    cable_direction_jet as cable_direction_jet,  # re-export (used by controller + recover)
+)
 from .jet import Jet
 from .quadrotor import _attitude_from_thrust_vector
 
@@ -53,79 +55,6 @@ _E3 = np.array([0.0, 0.0, 1.0])
 
 def _zeros3() -> Vec3:
     return np.zeros(3)
-
-
-def _normalize_derivatives(v: list[np.ndarray]) -> tuple[list[float], list[np.ndarray]]:
-    """Given the time-derivative tuple ``v = [v, v̇, v̈, …, v^(K)]`` of a
-    non-vanishing vector signal, return ``(n, u)`` where ``n[k] = (d/dt)^k ‖v‖``
-    and ``u[k] = (d/dt)^k (v / ‖v‖)`` for k = 0, 1, …, K.
-
-    Uses the Leibniz expansions
-        (n²)^(k) = sum_{j=0}^{k} C(k,j) v^(j) · v^(k-j),
-        u^(k)   = (v^(k) - sum_{j=1}^{k} C(k,j) n^(j) u^(k-j)) / n,
-    and the closed-form recursion for n^(k) by differentiating ``n² = n·n``.
-
-    Raises ``ValueError`` on a vanishing v (free-fall singularity in the
-    flatness map).
-    """
-    K = len(v) - 1
-    n_val = float(np.linalg.norm(v[0]))
-    if n_val < 1e-9:
-        raise ValueError(
-            "_normalize_derivatives: input vector has zero norm — singularity in the flatness map."
-        )
-
-    # n²[k] := (d/dt)^k (‖v‖²)
-    n_sq = []
-    for k in range(K + 1):
-        s = np.zeros_like(v[0], dtype=float)[..., 0] if False else 0.0
-        s = 0.0
-        for j in range(k + 1):
-            s += comb(k, j) * float(v[j].dot(v[k - j]))
-        n_sq.append(s)
-
-    # n[k] from the Leibniz expansion of (n·n) = n²:
-    #   (n²)^(k) = sum_{j=0}^{k} C(k,j) n^(j) n^(k-j)
-    #   2 n n^(k) = (n²)^(k) - sum_{j=1}^{k-1} C(k,j) n^(j) n^(k-j)
-    n = [n_val]
-    for k in range(1, K + 1):
-        s = n_sq[k]
-        for j in range(1, k):
-            s -= comb(k, j) * n[j] * n[k - j]
-        n.append(s / (2.0 * n_val))
-
-    # u[k] from u·n = v:
-    #   v^(k) = sum_{j=0}^{k} C(k,j) u^(j) n^(k-j)
-    #   u^(k) = (v^(k) - sum_{j=1}^{k} C(k,j) n^(j) u^(k-j)) / n
-    u = [v[0] / n_val]
-    for k in range(1, K + 1):
-        s = v[k].copy()
-        for j in range(1, k + 1):
-            s -= comb(k, j) * n[j] * u[k - j]
-        u.append(s / n_val)
-
-    return n, u
-
-
-def cable_direction_jet(
-    payload_accel: list[np.ndarray], mass_l: float, gravity: float = GRAVITY
-) -> tuple[list[float], list[np.ndarray]]:
-    """Cable tension and unit-direction jets from the payload-acceleration jet.
-
-    Newton's law on the point-mass payload gives the cable force
-    ``T q = -m_L (a_L + g e3)``, where ``q`` is the unit cable direction
-    (quadrotor → payload).  Given ``payload_accel = [a_L, ȧ_L, …, a_L^(K)]``,
-    return ``(T, q)`` where ``T[k] = (d/dt)^k T`` is the k-th derivative of the
-    scalar cable tension and ``q[k] = (d/dt)^k q`` for k = 0…K, via the Leibniz
-    :func:`_normalize_derivatives` chain.
-
-    Raises ``ValueError`` if the payload is in free fall (``a_L + g e3 ≈ 0``):
-    the cable goes slack and ``q`` is undefined.
-    """
-    tvec = [-mass_l * (payload_accel[0] + gravity * _E3)]
-    for k in range(1, len(payload_accel)):
-        tvec.append(-mass_l * payload_accel[k])
-    return _normalize_derivatives(tvec)
 
 
 @dataclass

@@ -154,3 +154,6 @@ dmypy.json
 GYMNASIUM_PLAN.md
 LANDSCAPE.md
 refactor.md
+
+# uv lockfile (kept locally, resolved per-environment)
+uv.lock
