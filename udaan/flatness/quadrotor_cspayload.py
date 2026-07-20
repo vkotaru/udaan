@@ -44,7 +44,9 @@ from ..core.defaults import (
 from ..core.types import Mat3, Vec3
 from ..manif import S2, SO3, TS2, TSO3
 from .base import Flat2State
-from .derivatives import normalize_derivatives
+from .cable import (
+    cable_direction_jet as cable_direction_jet,  # re-export (used by controller + recover)
+)
 from .jet import Jet
 from .quadrotor import _attitude_from_thrust_vector
 
@@ -53,27 +55,6 @@ _E3 = np.array([0.0, 0.0, 1.0])
 
 def _zeros3() -> Vec3:
     return np.zeros(3)
-
-
-def cable_direction_jet(
-    payload_accel: list[np.ndarray], mass_l: float, gravity: float = GRAVITY
-) -> tuple[list[float], list[np.ndarray]]:
-    """Cable tension and unit-direction jets from the payload-acceleration jet.
-
-    Newton's law on the point-mass payload gives the cable force
-    ``T q = -m_L (a_L + g e3)``, where ``q`` is the unit cable direction
-    (quadrotor → payload).  Given ``payload_accel = [a_L, ȧ_L, …, a_L^(K)]``,
-    return ``(T, q)`` where ``T[k] = (d/dt)^k T`` is the k-th derivative of the
-    scalar cable tension and ``q[k] = (d/dt)^k q`` for k = 0…K, via the shared
-    Leibniz :func:`~udaan.flatness.derivatives.normalize_derivatives` chain.
-
-    Raises ``ValueError`` if the payload is in free fall (``a_L + g e3 ≈ 0``):
-    the cable goes slack and ``q`` is undefined.
-    """
-    tvec = [-mass_l * (payload_accel[0] + gravity * _E3)]
-    for k in range(1, len(payload_accel)):
-        tvec.append(-mass_l * payload_accel[k])
-    return normalize_derivatives(tvec)
 
 
 @dataclass
