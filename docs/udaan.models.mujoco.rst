@@ -7,7 +7,6 @@ Submodules
 .. toctree::
    :maxdepth: 2
 
-   udaan.models.mujoco.multi_quad_cs_pointmass
    udaan.models.mujoco.multi_quad_rigidbody
    udaan.models.mujoco.quadrotor_comparison
    udaan.models.mujoco.quadrotor_cspayload_fleet

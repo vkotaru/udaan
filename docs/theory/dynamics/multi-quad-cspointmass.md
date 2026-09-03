@@ -7,7 +7,7 @@ may change and cross-references may be incomplete.
 
 :::{note}
 This page is a stub. Content pending — see
-{py:class}`~udaan.models.mujoco.MultiQuadrotorCSPointmass` for the
+{py:class}`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase` for the
 corresponding simulation model.
 :::
 

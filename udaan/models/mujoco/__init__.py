@@ -368,7 +368,6 @@ class MujocoModel:
 
 
 from ..quadrotor.mujoco import QuadrotorMujoco as Quadrotor
-from .multi_quad_cs_pointmass import MultiQuadrotorCSPointmass as MultiQuadrotorCSPointmass
 from .multi_quad_rigidbody import MultiQuadRigidbody as MultiQuadRigidbody
 from .quadrotor_comparison import QuadrotorComparison as QuadrotorComparison
 from .quadrotor_cspayload_fleet import QuadrotorCsPayloadFleet as QuadrotorCsPayloadFleet
@@ -376,7 +375,6 @@ from .quadrotor_fleet import QuadrotorFleet as QuadrotorFleet
 
 __all__ = [
     "MujocoModel",
-    "MultiQuadrotorCSPointmass",
     "MultiQuadRigidbody",
     "Quadrotor",
     "QuadrotorComparison",

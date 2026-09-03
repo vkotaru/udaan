@@ -165,15 +165,15 @@ def multi_quad(
     """Simulate multiple quadrotors with cable-suspended pointmass payload."""
     import numpy as np
 
-    import udaan as U
+    from udaan.models.multi_quad_cspayload import MultiQuadCsPayloadMujoco
 
     from . import parse_vec
 
     x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
-    mdl = U.models.mujoco.MultiQuadrotorCSPointmass(render=render, num_quadrotors=num_quads)
+    mdl = MultiQuadCsPayloadMujoco(render=render, num_quadrotors=num_quads)
     _setup_recording(mdl, record)
     typer.echo(f"Running multi-quad ({num_quads} quads) for {time}s ...")
-    mdl.simulate(tf=time, xL=x0)
+    mdl.simulate(tf=time, payload_position=x0)
     _hold_viewer(mdl)
 
 

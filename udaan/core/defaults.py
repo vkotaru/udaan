@@ -34,6 +34,17 @@ DEFAULT_PAYLOAD_MASS = 0.2  # kg
 DEFAULT_CABLE_LENGTH = 1.0  # m
 
 # =============================================================================
+# Default multi-quadrotor (cooperative transport) parameters
+# =============================================================================
+
+#: Number of quadrotors in a cooperative-transport team.
+DEFAULT_NUM_QUADROTORS = 3
+
+#: Horizontal radius of the quadrotor ring around the payload, in metres.
+#: Must stay strictly below the cable length so the cables can be taut.
+DEFAULT_FORMATION_RADIUS = 0.5  # m
+
+# =============================================================================
 # Default control gains
 # =============================================================================
 

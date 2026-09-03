@@ -75,7 +75,9 @@ class MultiQuadRigidbody(BaseModel):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.nQ = kwargs.get("nQ", 4)
+        # ``num_quadrotors`` is the project-wide spelling (matches the CLI's
+        # --num-quads and MultiQuadCsPayload*); the M4 MJCF is fixed at 4.
+        self.nQ = kwargs.get("num_quadrotors", 4)
         self._n_action = 3 * self.nQ
         self.render = kwargs.get("render", False)
 
