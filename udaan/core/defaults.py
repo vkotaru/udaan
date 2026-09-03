@@ -33,6 +33,9 @@ DEFAULT_TORQUE_CONSTANT = 1.026e-07  # Nm/(rad/s)^2
 DEFAULT_PAYLOAD_MASS = 0.2  # kg
 DEFAULT_CABLE_LENGTH = 1.0  # m
 
+#: Radius of the point-mass payload sphere, in metres (geometry only).
+DEFAULT_PAYLOAD_RADIUS = 0.05  # m
+
 # =============================================================================
 # Default multi-quadrotor (cooperative transport) parameters
 # =============================================================================
@@ -43,6 +46,11 @@ DEFAULT_NUM_QUADROTORS = 3
 #: Horizontal radius of the quadrotor ring around the payload, in metres.
 #: Must stay strictly below the cable length so the cables can be taut.
 DEFAULT_FORMATION_RADIUS = 0.5  # m
+
+#: Height of the quadrotor ring above the ground at spawn, in metres. The
+#: payload height is *derived* from this, the cable length and the formation
+#: radius so that the cables start taut — never chosen independently.
+DEFAULT_SPAWN_HEIGHT = 2.0  # m
 
 # =============================================================================
 # Default control gains

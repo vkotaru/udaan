@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import os
 
 import mujoco
 import numpy as np
 
 from ... import _FOLDER_PATH
+from ...core.defaults import DEFAULT_SPAWN_HEIGHT
 from ...manif import SO3, TSO3
+from ...utils.assets.mujoco_asset_creator import MJCF_GENERATOR_VERSION
 from ...utils.logging import get_logger
 from ..mujoco import MujocoModel
 from .base import MultiQuadCsPayloadBase, cable_state_from_geometry
@@ -17,9 +21,6 @@ from .base import MultiQuadCsPayloadBase, cable_state_from_geometry
 _logger = get_logger(__name__)
 
 _MJCF_DIR = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf")
-
-#: MJCF shipped with the package; regenerated per-nQ when it does not match.
-_DEFAULT_XML = "multi_quad_pointmass.xml"
 
 #: Body-name templates used by the MJCF generator.
 _QUAD_BODY = "quad{}"
@@ -41,13 +42,44 @@ class MultiQuadCsPayloadMujoco(MultiQuadCsPayloadBase):
     the input pipeline, controllers and parameter bookkeeping are inherited.
     The cables are MuJoCo spatial tendons with an upper length limit, so they
     pull but never push.
+
+    The MJCF is generated on demand from the construction parameters
+    (``num_quadrotors``, ``cable_lengths``, ``payload_mass``, ``masses``,
+    ``formation_radius`` and ``spawn_height``) and cached under a filename
+    carrying a hash of them, so a changed parameter never reuses a stale asset.
+    The generated formation starts **taut**: the payload height is derived from
+    the cable length and the ring radius, not chosen independently.
+
+    Because one MJCF encodes one ring and one tendon length, ``masses`` and
+    ``cable_lengths`` must be uniform at construction time; assign per-index
+    values afterwards (the setters write straight into MuJoCo).
+
+    ``inertias`` cannot be passed at construction at all. MuJoCo derives the
+    body inertia from the generated geometry (``inertiafromgeom``) and
+    :meth:`_read_params_from_mjcf` adopts it, so a constructor argument would
+    be silently overwritten; it is rejected instead. Assign ``mdl.inertias``
+    after construction — that setter *does* write into MuJoCo.
     """
 
     def __init__(self, **kwargs):
         self.render = kwargs.get("render", False)
+        if "inertias" in kwargs:
+            raise ValueError(
+                "the MuJoCo backend derives inertias from the generated MJCF geometry, "
+                "so an `inertias` constructor argument would be silently overwritten; "
+                "construct the model and then assign `mdl.inertias`"
+            )
         super().__init__(**kwargs)
 
-        xml_path = self._ensure_xml(self._num_quadrotors)
+        self._spawn_height = float(kwargs.get("spawn_height", DEFAULT_SPAWN_HEIGHT))
+        xml_path = self._ensure_xml(
+            self._num_quadrotors,
+            self._uniform(self._cable_lengths, "cable_lengths"),
+            self._payload_mass,
+            self._uniform(self._masses, "masses"),
+            self._formation_radius,
+            self._spawn_height,
+        )
         self._mjMdl = MujocoModel(model_path=xml_path, render=self.render)
 
         self._resolve_mj_indices()
@@ -65,27 +97,72 @@ class MultiQuadCsPayloadMujoco(MultiQuadCsPayloadBase):
     # ─── Model initialization ──────────────────────────────────────
 
     @staticmethod
-    def _ensure_xml(num_quadrotors: int) -> str:
-        """Return the MJCF filename for ``num_quadrotors``, generating it if needed.
+    def _uniform(values: np.ndarray, name: str) -> float:
+        """Collapse a per-quadrotor array to the single value the MJCF encodes.
 
-        The packaged :data:`_DEFAULT_XML` is reused when its quadrotor count
-        already matches; otherwise a per-``nQ`` file is generated once and
-        cached alongside it.
+        The generator lays every quadrotor out on one ring with one tendon
+        length, so a per-index array it cannot express is an error rather than
+        a value to be silently averaged away.
+
+        The comparison is **exact**: under ``np.allclose`` a near-uniform array
+        like ``[1.0, 1.0000001]`` was accepted and quietly flattened to its
+        first entry, while ``[1.0, 1.00002]`` raised. There is no tolerance
+        this backend could honour — either the MJCF encodes the value or it
+        does not — so any difference at all is reported.
         """
-        default_path = os.path.join(_MJCF_DIR, _DEFAULT_XML)
-        if os.path.exists(default_path):
-            model = mujoco.MjModel.from_xml_path(default_path)
-            if _count_quad_bodies(model) == num_quadrotors:
-                return _DEFAULT_XML
+        arr = np.asarray(values, dtype=float)
+        if not np.all(arr == arr.flat[0]):
+            raise ValueError(
+                f"the MuJoCo backend needs a uniform {name} at construction time, got {arr}; "
+                f"build the model uniformly and assign per-index {name} afterwards"
+            )
+        return float(arr.flat[0])
 
-        generated_name = f"multi_quad_pointmass_{num_quadrotors}q.xml"
+    @staticmethod
+    def _ensure_xml(
+        num_quadrotors: int,
+        cable_length: float,
+        payload_mass: float,
+        quad_mass: float,
+        formation_radius: float,
+        spawn_height: float,
+    ) -> str:
+        """Return the MJCF filename for this configuration, generating it if needed.
+
+        The filename carries a hash of every parameter that shapes the XML —
+        *and* of :data:`MJCF_GENERATOR_VERSION`, so a release that changes the
+        emitted structure cannot reuse a file an earlier one left in a warm
+        asset directory.
+        """
+        # A lone quadrotor hovers on the axis; the ring radius is unused, so it
+        # must not enter the hash either.
+        if num_quadrotors == 1:
+            formation_radius = 0.0
+        config = {
+            "v": MJCF_GENERATOR_VERSION,
+            "nQ": int(num_quadrotors),
+            "L": float(cable_length),
+            "mL": float(payload_mass),
+            "mQ": float(quad_mass),
+            "r": float(formation_radius),
+            "z": float(spawn_height),
+        }
+        config_hash = hashlib.md5(json.dumps(config, sort_keys=True).encode()).hexdigest()[:8]
+        generated_name = f"multi_quad_pointmass_{num_quadrotors}q_{config_hash}.xml"
         generated_path = os.path.join(_MJCF_DIR, generated_name)
         if not os.path.exists(generated_path):
             from ...utils.assets import xml_model_generator
 
             _logger.info("Generating MJCF for %d quadrotors: %s", num_quadrotors, generated_name)
             xml_model_generator.multi_quad_pointmass(
-                nQ=num_quadrotors, filename=generated_path, verbose=False
+                num_quadrotors=num_quadrotors,
+                filename=generated_path,
+                cable_length=cable_length,
+                payload_mass=payload_mass,
+                quad_mass=quad_mass,
+                formation_radius=formation_radius,
+                spawn_height=spawn_height,
+                verbose=False,
             )
         return generated_name
 

@@ -113,10 +113,17 @@ class QuadrotorFleet(base.BaseModel):
     @staticmethod
     def _generate_xml(nQ, disturbances):
         """Generate MJCF with N independent quadrotors, no contact between them."""
-        from ...utils.assets.mujoco_asset_creator import MujocoAssetCreator
+        from ...utils.assets.mujoco_asset_creator import (
+            MJCF_GENERATOR_VERSION,
+            MujocoAssetCreator,
+        )
 
-        # Deterministic filename based on config
-        config_key = json.dumps({"nQ": nQ, "d": disturbances}, sort_keys=True)
+        # Deterministic filename based on config. MJCF_GENERATOR_VERSION is
+        # part of it so an upgraded udaan with a warm asset directory cannot
+        # keep loading XML emitted by an older generator.
+        config_key = json.dumps(
+            {"v": MJCF_GENERATOR_VERSION, "nQ": nQ, "d": disturbances}, sort_keys=True
+        )
         config_hash = hashlib.md5(config_key.encode()).hexdigest()[:8]
         filename = f"fleet_{nQ}q_{config_hash}.xml"
         filepath = os.path.join(_MJCF_DIR, filename)

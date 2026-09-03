@@ -157,6 +157,13 @@ def multi_quad(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
     num_quads: int = typer.Option(3, "--num-quads", "-n", help="Number of quadrotors."),
+    cable_length: float | None = typer.Option(
+        None, "--cable-length", "-l", help="Taut cable length in metres."
+    ),
+    payload_mass: float | None = typer.Option(None, "--payload-mass", help="Payload mass in kg."),
+    formation_radius: float | None = typer.Option(
+        None, "--radius", help="Radius of the quadrotor ring in metres."
+    ),
     record: str | None = _record_option,
     position: str | None = typer.Option(
         None, "--position", "-p", help="Initial payload position as 'x,y,z'."
@@ -170,7 +177,17 @@ def multi_quad(
     from . import parse_vec
 
     x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
-    mdl = MultiQuadCsPayloadMujoco(render=render, num_quadrotors=num_quads)
+    opts = {
+        "cable_lengths": cable_length,
+        "payload_mass": payload_mass,
+        "formation_radius": formation_radius,
+    }
+    opts = {k: v for k, v in opts.items() if v is not None}
+    try:
+        mdl = MultiQuadCsPayloadMujoco(render=render, num_quadrotors=num_quads, **opts)
+    except ValueError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
     _setup_recording(mdl, record)
     typer.echo(f"Running multi-quad ({num_quads} quads) for {time}s ...")
     mdl.simulate(tf=time, payload_position=x0)

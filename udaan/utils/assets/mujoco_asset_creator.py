@@ -10,6 +10,36 @@ from ..logging import get_logger
 
 _logger = get_logger(__name__)
 
+#: Version of the MJCF *structure* emitted by this module and the generators
+#: built on it (:mod:`udaan.utils.assets.xml_model_generator`,
+#: :class:`~udaan.models.mujoco.QuadrotorFleet`,
+#: :class:`~udaan.models.mujoco.QuadrotorCsPayloadFleet`).
+#:
+#: **Bump this whenever the emitted XML changes shape** — geom masses, actuator
+#: names or order, body/site layout, tendon wiring, anything a file on disk
+#: would freeze. Every runtime asset cache hashes it into the generated
+#: filename, so a bump makes stale cached XML unreachable instead of silently
+#: reused by an upgraded ``udaan`` with a warm asset directory.
+MJCF_GENERATOR_VERSION = 1
+
+# Per-geom masses of the rotor assembly emitted by ``create_quadrotor0`` at the
+# default total mass. A requested total scales all four geoms uniformly (see
+# `create_quadrotor0`), so these are reference values, not fixed ones.
+_ARM_MASS = 0.01  # kg, one rotor arm
+_PROP_MASS = 0.05  # kg, one propeller disc
+_N_ROTORS = 4
+#: Mass of the four arm + propeller pairs at the default total mass.
+_ROTOR_ASSEMBLY_MASS = _N_ROTORS * (_ARM_MASS + _PROP_MASS)
+#: Chassis geom mass used when no total quadrotor mass is requested.
+_DEFAULT_CHASSIS_MASS = 0.75  # kg
+#: Total quadrotor mass the geom masses above were tuned for.
+_DEFAULT_QUAD_TOTAL_MASS = _DEFAULT_CHASSIS_MASS + _ROTOR_ASSEMBLY_MASS  # 0.99 kg
+#: Smallest total quadrotor mass accepted by ``create_quadrotor0``. Well below
+#: any real airframe, but a strictly positive floor: without it a total just
+#: above the rotor assembly used to leave a ~1e-7 kg chassis geom, and MuJoCo
+#: would happily build a body whose inertia is pure rounding noise.
+_MIN_QUAD_MASS = 0.05  # kg
+
 
 class MujocoAssetCreator:
     """Adapted from IsaacGymEnvs
@@ -29,6 +59,8 @@ class MujocoAssetCreator:
         compiler.attrib["coordinate"] = "local"
         compiler.attrib["inertiafromgeom"] = "true"
         self.worldbody = ET.SubElement(self.root, "worldbody")
+        # One shared <actuator> block, created lazily by `actuator()`.
+        self._actuator = None
 
     def save_to(self, filename="mujoco_asset.xml", verbose=False):
         """Save the asset to a file
@@ -288,12 +320,36 @@ class MujocoAssetCreator:
         site.attrib["rgba"] = " ".join([str(x) for x in rgba])
         return site
 
-    def actuator(self, parent):
-        actuator = ET.SubElement(parent, "actuator")
-        return actuator
+    def actuator(self, parent=None):
+        """Return the model's single ``<actuator>`` block, creating it on demand.
 
-    def motor(self, parent, site, range=[], gear=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])):
+        MJCF allows sibling ``<actuator>`` sections, but one merged block is
+        idiomatic: every caller (notably :meth:`create_quadrotor0`, once per
+        quadrotor) appends into the same element. Actuator order — and hence
+        the layout of ``data.ctrl`` — is unchanged, since sibling blocks were
+        concatenated in document order anyway.
+        """
+        if self._actuator is None:
+            self._actuator = ET.SubElement(self.root if parent is None else parent, "actuator")
+        return self._actuator
+
+    def motor(
+        self,
+        parent,
+        site,
+        range=[],
+        gear=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        name=None,
+    ):
+        """Append a ``<motor>``; ``name`` defaults to the site it acts on.
+
+        Naming every actuator is what makes the ``data.ctrl`` layout
+        *assertable*: models write ``data.ctrl`` positionally while resolving
+        bodies by name, so without names nothing pins the two orders together
+        (see ``tests/test_actuator_order.py``).
+        """
         motor = ET.SubElement(parent, "motor")
+        motor.attrib["name"] = site if name is None else name
         motor.attrib["ctrllimited"] = "true"
         motor.attrib["site"] = site
         motor.attrib["ctrlrange"] = " ".join([str(x) for x in range])
@@ -317,9 +373,51 @@ class MujocoAssetCreator:
         return velocity
 
     def create_quadrotor0(self, parent, name, pos, **kwargs):
+        """Emit a quadrotor body (chassis + 4 arm/prop pairs) and its actuators.
+
+        Mass and inertia
+        ----------------
+        The geometry is fixed (0.2 m arms, 0.1 m propeller discs, a
+        0.16 × 0.08 × 0.05 m chassis box), and ``inertiafromgeom`` means MuJoCo
+        derives the body inertia from the geom masses. A requested ``mass``
+        therefore scales **every** geom by the same factor rather than dumping
+        the difference into the chassis box: at fixed geometry that is a uniform
+        density change, so the body inertia scales *linearly* with the total
+        mass. The alternative — a fixed rotor assembly plus a variable chassis
+        — is what made ``mass=3.0`` (3.3× the default) yield only a 1.3–1.8×
+        inertia, because the propeller discs at the arm tips dominate the
+        tensor and they never grew.
+
+        Two consequences worth stating out loud:
+
+        * The emitted inertia is a property of *this geometry*, and it is
+          several times :data:`udaan.core.defaults.DEFAULT_QUAD_INERTIA` (a
+          smaller airframe). Backends that call ``_read_params_from_mjcf``
+          adopt it, so changing ``mass`` retunes their attitude loop — by
+          design, and now proportionally.
+        * ``unmodeled_mass`` is *added on top* of ``mass``: it models an
+          unmodelled payload, so it is deliberately not part of the scaling.
+
+        Keyword Args:
+            mass: total quadrotor mass in kg, at least :data:`_MIN_QUAD_MASS`.
+                Omitted -> :data:`_DEFAULT_QUAD_TOTAL_MASS`.
+        """
         xtype = kwargs["xtype"] if "xtype" in kwargs else True
         alpha = kwargs["alpha"] if "alpha" in kwargs else 1.0
         rgb = kwargs["rgb"] if "rgb" in kwargs else [0.95, 0.45, 0.1]
+        mass = kwargs.get("mass")
+        if mass is None:
+            mass_scale = 1.0
+        else:
+            if float(mass) < _MIN_QUAD_MASS:
+                raise ValueError(
+                    f"quadrotor mass {mass} must be at least {_MIN_QUAD_MASS} kg; "
+                    "lighter airframes make the derived inertia rounding noise"
+                )
+            mass_scale = float(mass) / _DEFAULT_QUAD_TOTAL_MASS
+        chassis_mass = _DEFAULT_CHASSIS_MASS * mass_scale
+        arm_mass = _ARM_MASS * mass_scale
+        prop_mass = _PROP_MASS * mass_scale
         unmodeled_dynamics = False
         if "unmodeled_mass" in kwargs:
             unmodeled_dynamics = True
@@ -334,7 +432,7 @@ class MujocoAssetCreator:
             chassis,
             name + "_geom",
             size=np.array([0.08, 0.04, 0.025]),
-            mass=0.75,
+            mass=chassis_mass,
             density=1000,
             alpha=alpha,
             rgb=[0.15, 0.15, 0.15],
@@ -359,7 +457,7 @@ class MujocoAssetCreator:
                 name + "_rotor_arm_geom_%d" % i,
                 quat=rotor_arm_quat,
                 size=np.array([l, 0.01, 0.01]),
-                mass=0.01,
+                mass=arm_mass,
                 alpha=alpha,
                 rgb=[0.4, 0.4, 0.45],
             )
@@ -369,7 +467,7 @@ class MujocoAssetCreator:
                 pos=rotor_prop_pos,
                 radius=0.1,
                 length=0.01,
-                mass=0.05,
+                mass=prop_mass,
                 rgb=rgb,
                 alpha=alpha,
             )
@@ -447,7 +545,7 @@ class MujocoAssetCreator:
         )
         pyld = self.body(cable, "pyld", pos=np.array([0.0, 0.0, -0.5 * length]))
         pyld_geom = self.sphere(
-            pyld, "pyld", radius=0.05, mass=mass, density=50, rgba=[0.0, 0.8, 0.2, 1.0]
+            pyld, "pyld", radius=0.05, mass=mass, density=50, rgb=[0.0, 0.8, 0.2]
         )
         pyld_joint = self.joint(
             pyld,

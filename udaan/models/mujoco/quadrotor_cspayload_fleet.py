@@ -95,10 +95,22 @@ class QuadrotorCsPayloadFleet(base.BaseModel):
 
     @staticmethod
     def _generate_xml(nQ, cable_links, cable_length, payload_mass):
-        from ...utils.assets.mujoco_asset_creator import MujocoAssetCreator
+        from ...utils.assets.mujoco_asset_creator import (
+            MJCF_GENERATOR_VERSION,
+            MujocoAssetCreator,
+        )
 
+        # MJCF_GENERATOR_VERSION is part of the key so an upgraded udaan with a
+        # warm asset directory cannot keep loading XML emitted by an older
+        # generator.
         config_key = json.dumps(
-            {"nQ": nQ, "N": cable_links, "L": cable_length, "m": payload_mass},
+            {
+                "v": MJCF_GENERATOR_VERSION,
+                "nQ": nQ,
+                "N": cable_links,
+                "L": cable_length,
+                "m": payload_mass,
+            },
             sort_keys=True,
         )
         config_hash = hashlib.md5(config_key.encode()).hexdigest()[:8]
