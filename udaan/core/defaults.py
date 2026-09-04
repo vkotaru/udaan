@@ -199,3 +199,68 @@ DEFAULT_MULTI_PAYLOAD_CABLE_KD = np.array([10.0, 10.0, 10.0])
 # (``J_L ≈ diag(0.084, 0.084, 0.167)``) for ω_n ≈ 3 rad/s, ζ ≈ 0.9.
 DEFAULT_RIGID_PAYLOAD_ATT_KP = np.array([0.8, 0.8, 1.5])
 DEFAULT_RIGID_PAYLOAD_ATT_KD = np.array([0.45, 0.45, 0.9])
+
+# Flexible-cable payload LQR (M5).
+#
+# M5 is the first system here whose published law is a linear-quadratic
+# regulator rather than a geometric cascade, so its "gains" are the weights of
+# the cost
+#
+#     J = ∫ sᵀ Q s + duᵀ R du dt,
+#
+# not a PD pair: the gain matrix ``K = -R⁻¹ BᵀP`` is solved from these once, at
+# construction, by :class:`~udaan.control.quadrotor_flexcable.QuadrotorFlexCableController`.
+# The six ``Q`` entries weight the six blocks of the variational error state
+# ``s = [e_x, e_v, η, δΩ, ξ_i, δω_i]``; the two ``R`` entries weight the thrust
+# and the three body moments.
+#
+# The ``Q`` block values are the legacy MATLAB reference's
+# (``phd_research/quadrotor-flexible-cables-payload/Control/sQnlink/
+# sQ_nlink_control.m::odefun_riccati``, line 512,
+# ``Q1 = blkdiag(0.5 I6, 0.75 I6, I_3n, 0.75 I_3n)``) carried over unchanged.
+#
+# ``R`` is **not**.  The reference weights all four inputs equally at
+# ``0.2 I4`` (line 514), which ignores that the moment channel's input matrix
+# is ``J⁻¹`` — spectral norm 435 for the default airframe — while the thrust
+# channel's is ``1/M₀₀``, order 1.  Equal weights therefore buy an attitude
+# loop roughly 500 times faster than the thrust loop: the fastest closed-loop
+# pole lands at −842 rad/s, against a 200 Hz outer loop.
+#
+# What that costs, measured.  A 0.62 m payload step, tail RMS error over the
+# second half of a 20 s run on the analytical model:
+#
+#     n           1         2         3
+#     r = 0.2     4.96 m    0.37 m    1.46 m
+#     r = 20      1e-5 m    1e-5 m    1.6e-5 m
+#
+# — i.e. at ``0.2`` the loop never settles at any link count tested.  That is
+# the justification for the deviation, and it is empirical.
+#
+# The mechanism is **sampled-data phase loss**, not discrete-time divergence:
+# neither integrator actually amplifies that pole.  Exactly held at the 5 ms
+# outer step it maps to ``e^{-842·0.005} = 0.015``, and the model integrates
+# with forward Euler at ``h = dt/4 = 1.25 ms``, where ``|1 − 842 h| = 0.053``.
+# Both are well inside the unit circle.  What breaks the loop is that the
+# *command* is frozen across the whole 5 ms hold while the closed loop wants
+# to act at 842 rad/s: the hold's half-sample delay is ``ω Δt / 2 = 2.1``
+# rad ≈ 121° of phase lag at the crossover the design put there, which is more
+# phase margin than any of it has.  The reference's adaptive ``ode15s`` never
+# meets this because it re-evaluates the control continuously.
+#
+# Weighting the moments at 20 moves the fastest pole to −84 rad/s (12° of hold
+# lag).  Being an *input* weight it leaves the chain modes nearly alone, but
+# "nearly" is n-dependent, and from n = 2 up it is always in the *worse*
+# direction: the slowest closed-loop real part moves 0.02 % at n = 1
+# (marginally the other way), then 1.54 % at n = 2, 4.61 % at n = 3 and
+# 13.10 % at n = 5.  At n = 5 that costs more chain damping than the 60x Q
+# scaling elsewhere in this system's docs buys.  It is a real price, paid
+# deliberately for a loop that settles at all; see the damping-versus-tracking
+# trade-off in :mod:`udaan.control.quadrotor_flexcable.payload_controller`.
+DEFAULT_FLEXCABLE_LQR_Q_POSITION = 0.5
+DEFAULT_FLEXCABLE_LQR_Q_VELOCITY = 0.5
+DEFAULT_FLEXCABLE_LQR_Q_ATTITUDE = 0.75
+DEFAULT_FLEXCABLE_LQR_Q_ANGULAR_RATE = 0.75
+DEFAULT_FLEXCABLE_LQR_Q_LINK = 1.0
+DEFAULT_FLEXCABLE_LQR_Q_LINK_RATE = 0.75
+DEFAULT_FLEXCABLE_LQR_R_THRUST = 0.2
+DEFAULT_FLEXCABLE_LQR_R_MOMENT = 20.0

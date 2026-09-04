@@ -75,6 +75,11 @@ udaan run quad-payload -t 10 -c links                  # rigid link chain
 udaan run quad-payload -t 10 -c cable                  # composite cable (experimental)
 udaan run quad-payload -t 10 -m vfx                   # vpython backend
 
+# Flexible (n-link) cable-suspended payload
+udaan run quad-flexcable -n 3 -t 10                    # payload LQR, hover setpoint
+udaan run quad-flexcable -n 3 -t 20 --traj lissajous   # + differential-flatness feedforward
+udaan run quad-flexcable -n 2 -t 10 -m base            # pure dynamics (no viz)
+
 # Multi-quadrotor cooperative transport
 udaan run multi-quad -n 3 -t 10                        # N-quad pointmass payload
 udaan run multi-quad-rigid -n 4 -t 10                  # N-quad rigid-body payload

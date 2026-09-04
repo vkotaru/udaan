@@ -298,6 +298,49 @@ class CrazyTrajectory(Trajectory):
         d4x = np.array([-self.ax * c1 * w1**4, self.ay * s2 * w2**4, self.az * c3 * w3**4])
         return x, dx, d2x, d3x, d4x
 
+    def get_jet(self, t, order):
+        """Return the position jet ``(order + 1, 3)``, every row in closed form.
+
+        The deeper protocol ``get_full`` cannot serve. A flatness map whose jet
+        depth is fixed — M1's snap, M3's and M4's order 6 — can be fed from
+        ``get_full`` with a couple of zero rows and lose only the tail of the
+        moment feedforward. M5's is not fixed: an ``n``-link chain needs the
+        payload position through its ``2n + 4``-th derivative
+        (:func:`udaan.flatness.chain.chain_jet_order`), which is 10 at the
+        default three links and 14 at five, so *most* of the jet would be
+        fabricated. This trajectory is a sum of sinusoids, so every derivative
+        is a phase shift and there is nothing to fabricate:
+
+        .. math::
+
+            \\frac{d^k}{dt^k}\\cos(\\omega t + \\varphi)
+                = \\omega^k \\cos(\\omega t + \\varphi + k\\pi/2).
+
+        Args:
+            t: time.
+            order: highest derivative required; row ``k`` is the ``k``-th.
+
+        Returns:
+            ``(order + 1, 3)`` array, unscaled by factorials — the
+            :class:`~udaan.flatness.Jet` convention.
+        """
+        if order < 0:
+            raise ValueError(f"order must be >= 0, got {order}")
+        omega = 2 * np.pi * np.array([self.f1, self.f2, self.f3])
+        phase = np.array([self.phix, self.phiy, self.phiz])
+        amplitude = np.array([self.ax, self.ay, self.az])
+        # x = c + [a1 (1 - cos θ1), a2 sin θ2, a3 cos θ3]; the constant part of
+        # the first component belongs to row 0 only.
+        theta = omega * t + phase
+        jet = np.zeros((order + 1, 3))
+        for k in range(order + 1):
+            shifted = theta + 0.5 * np.pi * k
+            jet[k, 0] = -amplitude[0] * omega[0] ** k * np.cos(shifted[0])
+            jet[k, 1] = amplitude[1] * omega[1] ** k * np.sin(shifted[1])
+            jet[k, 2] = amplitude[2] * omega[2] ** k * np.cos(shifted[2])
+        jet[0] += self._center + np.array([self.ax, 0.0, 0.0])
+        return jet
+
 
 def setpoint(t, sp=np.array([0.0, 0.0, 1.0])):
     traj = {}

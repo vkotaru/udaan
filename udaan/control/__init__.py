@@ -60,6 +60,7 @@ from . import multi_quad_cspayload as multi_quad_cspayload  # noqa: E402
 from . import multi_quad_rigidbody as multi_quad_rigidbody  # noqa: E402
 from . import quadrotor as quadrotor  # noqa: E402
 from . import quadrotor_cspayload as quadrotor_cspayload  # noqa: E402
+from . import quadrotor_flexcable as quadrotor_flexcable  # noqa: E402
 
 __all__ = [
     "Gains",
@@ -69,4 +70,5 @@ __all__ = [
     "multi_quad_rigidbody",
     "quadrotor",
     "quadrotor_cspayload",
+    "quadrotor_flexcable",
 ]

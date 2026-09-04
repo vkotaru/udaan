@@ -11,6 +11,7 @@ Subpackages
    udaan.control.multi_quad_rigidbody
    udaan.control.quadrotor
    udaan.control.quadrotor_cspayload
+   udaan.control.quadrotor_flexcable
 
 Module contents
 ---------------

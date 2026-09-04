@@ -152,6 +152,92 @@ def quad_payload(
     _hold_viewer(mdl)
 
 
+@run_app.command("quad-flexcable")
+def quad_flexcable(
+    time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
+    render: bool = typer.Option(True, help="Enable visualization."),
+    links: int | None = typer.Option(
+        None, "--links", "-n", help="Number of rigid links the cable is discretised into."
+    ),
+    model: str = typer.Option("mujoco", "--model", "-m", help="Flex-cable model: mujoco or base."),
+    trajectory: str = typer.Option(
+        "hover", "--trajectory", "--traj", help="Payload trajectory: hover or lissajous."
+    ),
+    cable_length: float | None = typer.Option(
+        None, "--cable-length", "-l", help="Total taut cable length in metres."
+    ),
+    cable_mass: float | None = typer.Option(None, "--cable-mass", help="Cable mass in kg."),
+    payload_mass: float | None = typer.Option(None, "--payload-mass", help="Payload mass in kg."),
+    verbose: int = typer.Option(0, "--verbose", "-v", help="Verbosity level (0-2)."),
+    record: str | None = _record_option,
+    position: str | None = typer.Option(
+        None, "--position", "-p", help="Initial payload position as 'x,y,z'."
+    ),
+):
+    """Simulate a quadrotor carrying a payload on a flexible n-link cable.
+
+    Drives the M5 payload LQR. The 'lissajous' trajectory exposes ``get_jet``,
+    so it also switches on the flatness feedforward at the full ``2n + 4``
+    derivative depth the chain needs; 'hover' is a step response — the payload
+    spawns at ``--position`` and is commanded 0.62 m away from it — and needs
+    no feedforward.
+    """
+    import logging
+
+    import numpy as np
+
+    from . import parse_vec
+
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+
+    opts = {
+        "num_links": links,
+        "cable_length": cable_length,
+        "cable_mass": cable_mass,
+        "payload_mass": payload_mass,
+    }
+    opts = {k: v for k, v in opts.items() if v is not None}
+
+    if model == "mujoco":
+        from udaan.models.quadrotor_flexcable import QuadrotorFlexCableMujoco
+
+        mdl = QuadrotorFlexCableMujoco(render=render, verbose=verbose, **opts)
+    else:
+        from udaan.models.quadrotor_flexcable import QuadrotorFlexCableBase
+
+        mdl = QuadrotorFlexCableBase(verbose=verbose, **opts)
+
+    x0 = parse_vec(position, default=np.array([0.0, 0.0, 1.0]))
+    if trajectory == "lissajous":
+        from udaan.utils.trajectory import CrazyTrajectory
+
+        # Gentle enough that no link leaves the hanging branch, which is what
+        # the flat map refuses; the chain then feeds forward on every sample.
+        traj = CrazyTrajectory(center=x0, ax=0.4, ay=0.35, az=0.25, f1=0.18, f2=0.13, f3=0.09)
+        mdl.payload_controller.setpoint = traj.get
+        x0 = traj.get(0.0)[0]
+    else:
+        # A step, not a fixed point at the spawn.  Commanding the payload to
+        # exactly where reset() puts it — hanging straight down, at rest — is
+        # already the closed-loop equilibrium, so the run measures nothing and
+        # reports 0.0000 m however good or bad the gain is.  Offsetting the
+        # target makes the demo a step response the printed error can score.
+        target = x0 + np.array([0.5, 0.3, 0.2])
+        mdl.payload_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
+
+    _setup_recording(mdl, record)
+    typer.echo(
+        f"Running quad-flexcable ({model}, {mdl.num_links} links, {trajectory}) for {time}s ..."
+    )
+    mdl.simulate(tf=time, payload_position=x0)
+    typer.echo(
+        f"  payload error {np.linalg.norm(mdl.state.payload_position - mdl.payload_controller.setpoint(mdl.t)[0]):.4f} m"
+        f"  (feedforward drops: {mdl.feedforward_drops})"
+    )
+    _hold_viewer(mdl)
+
+
 @run_app.command("multi-quad")
 def multi_quad(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),

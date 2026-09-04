@@ -356,6 +356,7 @@ from ...control.quadrotor import (
     GeometricAttitudeController,
     PositionPDController,
 )
+from ...control.quadrotor_flexcable import QuadrotorFlexCableController
 from ...core.defaults import (
     DEFAULT_ARM_LENGTH,
     DEFAULT_CABLE_LENGTH,
@@ -369,6 +370,8 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
+from ...flatness.jet import Jet
+from ...flatness.quadrotor_flexcable import QuadrotorFlexCableFlats
 from ...manif import S2, SO3, TS2, TSO3, hat
 from ...utils.logging import get_logger
 
@@ -473,9 +476,18 @@ class QuadrotorFlexCableBase:
 
     Usage::
 
-        mdl = QuadrotorFlexCableBase(num_links=5)
-        mdl.link_lengths = [0.3, 0.2, 0.2, 0.2, 0.1]
-        mdl.simulate(tf=5.0, position=np.array([0.0, 0.0, 2.0]))
+        mdl = QuadrotorFlexCableBase(num_links=3)
+        mdl.link_lengths = [0.3, 0.2, 0.1]
+        # simulate() drives the payload LQR, which regulates the *payload*
+        # onto its setpoint — so say where that is, or the run flies to the
+        # default [0, 0, 1] regardless of where it started.
+        target = np.array([0.0, 0.0, 1.5])
+        mdl.payload_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
+        mdl.simulate(tf=5.0, payload_position=np.array([0.0, 0.0, 1.0]))
+
+    Keep an eye on :meth:`stability_growth_rate` when raising ``num_links``:
+    the ZOH-Euler loop is only conditionally stable, and the default chain
+    leaves the stable region between ``n = 3`` (0.45) and ``n = 5`` (1.46).
     """
 
     INPUT_TYPE = InputType
@@ -490,6 +502,10 @@ class QuadrotorFlexCableBase:
         # The parameter setters push their new values into the controllers, and
         # the constructor runs several of them *before* those controllers exist.
         self._controllers_ready = False
+
+        #: Steps on which the flatness feedforward was refused; see
+        #: :attr:`feedforward_drops`.
+        self._feedforward_drops = 0
 
         self.state = QuadrotorFlexCableState(num_links=n)
         self.t = 0.0
@@ -537,16 +553,39 @@ class QuadrotorFlexCableBase:
         self._inner_loop_steps = kwargs.get("inner_loop_steps", 4)
         self.h = self.dt / self._inner_loop_steps
 
-        # Input/force type
-        self._input_type = InputType.ACCELERATION
+        # Input/force type.  M5's default cascade is an LQR on the quadrotor's
+        # own inputs, so it emits a wrench and not the thrust *vector* M1-M4's
+        # cascades emit — hence the WRENCH default, unlike every model before
+        # it.  ``input="acceleration"`` selects the thrust-vector pipeline,
+        # which is what :meth:`compute_station_keeping_input` produces.
+        #
+        # An unrecognised value is refused rather than silently resolved to
+        # WRENCH: the three pipelines take three incompatible input *shapes*, so
+        # a typo that falls through to the default does not mistune the loop, it
+        # runs a different one.
+        self._input_type = InputType.WRENCH
         self._force_type = ForceType.WRENCH
+        _INPUT_TYPES = {
+            "wrench": InputType.WRENCH,
+            "prop_forces": InputType.PROP_FORCES,
+            "acceleration": InputType.ACCELERATION,
+        }
         if "input" in kwargs:
-            if kwargs["input"] == "prop_forces":
-                self._input_type = InputType.PROP_FORCES
-            elif kwargs["input"] == "wrench":
-                self._input_type = InputType.WRENCH
-        if "force" in kwargs and kwargs["force"] == "prop_forces":
-            self._force_type = ForceType.PROP_FORCES
+            try:
+                self._input_type = _INPUT_TYPES[kwargs["input"]]
+            except (KeyError, TypeError):
+                raise ValueError(
+                    f"unknown input type {kwargs['input']!r}; "
+                    f"expected one of {sorted(_INPUT_TYPES)}"
+                ) from None
+        if "force" in kwargs:
+            if kwargs["force"] == "prop_forces":
+                self._force_type = ForceType.PROP_FORCES
+            elif kwargs["force"] != "wrench":
+                raise ValueError(
+                    f"unknown force type {kwargs['force']!r}; "
+                    "expected one of ['prop_forces', 'wrench']"
+                )
 
         # Allocation matrix
         self._compute_allocation_matrix()
@@ -561,21 +600,27 @@ class QuadrotorFlexCableBase:
     def _init_default_controllers(self):
         """Build the default cascade.
 
-        M5 ships **no payload-tracking cascade**: the default loop is a
-        quadrotor position PD whose feedforward carries the *whole* system
-        weight (airframe + every link mass + payload), followed by the standard
-        geometric attitude loop.  That is a station-keeping baseline — the
-        analogue of M3's
-        :meth:`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase.compute_formation_input`,
-        not of its payload cascade — and it holds the *quadrotor*, leaving the
-        chain free to swing beneath it.  Substitute a real payload controller
-        through :attr:`position_controller` when one exists.
+        The loop :meth:`simulate` drives is
+        :class:`~udaan.control.quadrotor_flexcable.QuadrotorFlexCableController`,
+        an LQR that regulates the *payload* onto its trajectory through the
+        whole chain and emits a wrench directly — no attitude loop underneath
+        it.  Its gain is solved from this model's own masses, lengths and
+        inertia, so the two always describe the same machine (see
+        :meth:`_sync_default_controllers`).
+
+        The quadrotor position PD and the geometric attitude loop are still
+        built, but they are now the *station-keeping baseline*: a loop that
+        holds the airframe where :meth:`reset` left it and lets the chain swing
+        beneath, reached through :meth:`compute_station_keeping_input`.  It is
+        the analogue of M3's
+        :meth:`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase.compute_formation_input`.
         """
         self._att_controller = GeometricAttitudeController(inertia=self._inertia)
         self._pos_controller = PositionPDController(mass=self.total_mass)
         self._prop_controller = DirectPropellerForceController(
             mass=self._mass, inertia=self._inertia
         )
+        self._payload_controller = QuadrotorFlexCableController.from_model(self)
         self._controllers_ready = True
 
     def _sync_default_controllers(self):
@@ -597,6 +642,7 @@ class QuadrotorFlexCableBase:
         for controller, attribute, value in (
             (self._att_controller, "inertia", self._inertia),
             (self._pos_controller, "mass", self.total_mass),
+            (self._payload_controller, "mass", self._mass),
         ):
             sync = getattr(controller, "sync_from_model", None)
             if sync is not None:
@@ -605,7 +651,29 @@ class QuadrotorFlexCableBase:
                 setattr(controller, attribute, value)
 
     @property
+    def payload_controller(self):
+        """The payload-tracking LQR :meth:`simulate` drives.
+
+        Pluggable at runtime, like every controller here. A substitute is
+        expected to implement ``compute(t, state[, reference]) -> (4,)`` wrench
+        and to carry a ``setpoint(t)``; one that also publishes a ``flat_map``
+        gets the flatness feedforward, and one that does not runs feedback-only
+        rather than against a reference built from parameters that may not be
+        its own.
+        """
+        return self._payload_controller
+
+    @payload_controller.setter
+    def payload_controller(self, controller):
+        self._payload_controller = controller
+
+    @property
     def position_controller(self):
+        """The station-keeping quadrotor position PD.
+
+        Not what :meth:`simulate` drives — see :attr:`payload_controller` and
+        :meth:`compute_station_keeping_input`.
+        """
         return self._pos_controller
 
     @position_controller.setter
@@ -1135,11 +1203,36 @@ class QuadrotorFlexCableBase:
 
         self._sync_quad_state()
 
-    def compute_default_input(self) -> np.ndarray:
-        """Thrust force vector from the default station-keeping position PD.
+    def compute_default_input(self, reference=None) -> np.ndarray:
+        """The wrench ``[f, M]`` from the M5 payload LQR — what :meth:`simulate` drives.
 
-        Returns a ``(3,)`` array suitable for :meth:`step` under the
-        ``ACCELERATION`` input type.
+        Args:
+            reference: optional ``(RefState, Inputs)`` pair from
+                :class:`udaan.flatness.QuadrotorFlexCable`. When ``None`` the
+                controller regulates against the hanging equilibrium at its
+                setpoint, which is the feedback-only law.
+
+        Returns a ``(4,)`` array suitable for :meth:`step` under the ``WRENCH``
+        input type, which is this model's default.
+        """
+        if reference is None:
+            return np.asarray(self._payload_controller.compute(self.t, self.state))
+        return np.asarray(self._payload_controller.compute(self.t, self.state, reference))
+
+    def compute_station_keeping_input(self) -> np.ndarray:
+        """Thrust force vector from the station-keeping quadrotor position PD.
+
+        The pre-payload-controller baseline, and the analogue of M3's
+        :meth:`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase.compute_formation_input`:
+        it holds the *airframe* where :meth:`reset` left it and lets the chain
+        swing beneath, carrying the whole system weight as feedforward. Kept as
+        a comparison point; under the default ``WRENCH`` input type
+        :meth:`simulate` drives :meth:`compute_default_input` instead.
+
+        Returns a ``(3,)`` array, so stepping it needs the ``ACCELERATION``
+        input type — construct the model with ``input="acceleration"``, which
+        is also what makes :meth:`simulate` drive *this* loop rather than the
+        payload LQR.
         """
         return np.asarray(
             self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
@@ -1154,9 +1247,158 @@ class QuadrotorFlexCableBase:
         """
         return np.array([self.total_mass * self._g, 0.0, 0.0, 0.0])
 
+    # ─── Flatness feedforward ──────────────────────────────────────
+
+    def _flatness_feedforward_fn(self):
+        """``(jet_fn, exact)`` for the bound payload trajectory, or ``(None, False)``.
+
+        The payload controller's ``setpoint`` is sniffed for a bound method, and
+        its owner for a way to differentiate the trajectory deeply enough. M5 is
+        the first system where "deeply enough" is not a constant: the flat map
+        needs the payload position through its ``2n + 4``-th derivative (see
+        :func:`udaan.flatness.chain.chain_jet_order`), so ``get_full``'s five
+        rows — position through snap — stop being sufficient at ``n = 1``.
+
+        Two protocols, in order of preference:
+
+        * ``get_jet(t, order) -> (order + 1, 3)``, which supplies every
+          derivative in closed form. This is the only one that feeds the map
+          what it actually asks for, and it is what
+          :class:`~udaan.utils.trajectory.CrazyTrajectory` implements.
+        * ``get_full(t) -> (pos, vel, acc, jerk, snap)``, zero-padded past snap.
+          The recovered position and link geometry are unaffected — the top
+          node's *acceleration* only needs the tip through order ``2n + 2`` — but
+          the recovered ``Ω``, ``Ω̇`` and ``M_d`` are built from its jerk and
+          snap, so they degrade. :meth:`simulate` warns once when it has to fall
+          back on this.
+        """
+        setpoint_fn = getattr(self._payload_controller, "setpoint", None)
+        owner = getattr(setpoint_fn, "__self__", None)
+        if owner is None:
+            return None, False
+        get_jet = getattr(owner, "get_jet", None)
+        if get_jet is not None:
+            return get_jet, True
+        get_full = getattr(owner, "get_full", None)
+        if get_full is None:
+            return None, False
+
+        def zero_padded(t, order):
+            rows = [np.asarray(row, dtype=float) for row in get_full(t)]
+            rows.extend(np.zeros(3) for _ in range(order + 1 - len(rows)))
+            return np.array(rows[: order + 1])
+
+        return zero_padded, False
+
+    @property
+    def feedforward_drops(self) -> int:
+        """How many steps have dropped the flatness feedforward.
+
+        Reset by :meth:`simulate`. A non-zero count means the reference left the
+        flat map's taut-hanging-chain certificate on those steps — a link went
+        slack, swung past horizontal, or the airframe was in free fall — and the
+        step ran against the hanging-equilibrium reference instead. The first
+        drop is logged as a warning, the rest at debug level.
+        """
+        return self._feedforward_drops
+
+    def _flat_reference(self, flat_map, jet_fn, t):
+        """``(RefState, Inputs)`` recovered from the flat output at ``t``, or ``None``.
+
+        ``None`` is a legitimate outcome, not an error: the map refuses any
+        sample whose chain is not taut and hanging, and the right response is to
+        fall back on the feedback-only reference for that step rather than to
+        abort. It is counted in :attr:`feedforward_drops`.
+
+        A malformed jet — wrong shape, wrong dimension — is a programming error
+        and is left to propagate.
+        """
+        flats = QuadrotorFlexCableFlats(
+            x_L=Jet(np.asarray(jet_fn(t, flat_map.jet_order), dtype=float)),
+            psi=Jet(np.zeros(3)),
+        )
+        try:
+            return flat_map.recover(flats)
+        except ValueError as err:
+            self._feedforward_drops += 1
+            if self._feedforward_drops == 1:
+                _logger.warning(
+                    "flatness feedforward dropped at t=%.4f (%s); this step ran "
+                    "against the hanging-equilibrium reference. Further drops are "
+                    "logged at debug level; see the feedforward_drops counter for "
+                    "the total.",
+                    t,
+                    err,
+                )
+            else:
+                _logger.debug("flatness feedforward unavailable at t=%.4f: %s", t, err)
+            return None
+
     def simulate(self, tf, **kwargs):
-        """Run closed-loop simulation to time tf."""
+        """Run closed-loop simulation to time tf.
+
+        Drives :attr:`payload_controller` — the M5 LQR — under the ``WRENCH``
+        input type. When its ``setpoint`` is a trajectory's bound method that
+        can be differentiated to the depth the chain needs, the run also picks
+        up the flatness feedforward:
+        :class:`udaan.flatness.QuadrotorFlexCable` recovers the whole reference
+        state *and* the reference wrench ``(f_d, M_d)``, and both are handed to
+        the controller. Binding such a trajectory is the whole switch.
+
+        This is the M3/M4 mechanism with one deliberate difference. Those
+        systems feed the recovered attitude and rates in as ``desired_att``,
+        because their payload cascade emits a thrust *vector* and the geometric
+        attitude loop is what consumes the feedforward. An LQR emits the body
+        moment itself, so there is no attitude loop in the path and the
+        feedforward goes where it belongs: into the reference the error state is
+        measured against, and into the wrench the correction is added to.
+
+        The flat map is taken from the payload controller's **own**
+        :attr:`~udaan.control.quadrotor_flexcable.QuadrotorFlexCableController.flat_map`,
+        never rebuilt from this model. The controller's gain was solved at its
+        own masses and lengths; a reference recovered from different ones is the
+        reference for a different machine, and the mismatch shows up as a
+        steady-state offset with no other symptom. A controller that does not
+        publish a flat map therefore gets no feedforward at all.
+
+        The two non-default input types drive their own loop instead, because
+        neither of them can consume a wrench:
+        ``input="prop_forces"`` runs
+        :attr:`~udaan.control.DirectPropellerForceController`, and
+        ``input="acceleration"`` runs the station-keeping quadrotor position PD
+        of :meth:`compute_station_keeping_input`, whose thrust *vector* is what
+        the ``ACCELERATION`` pipeline expects. Neither picks up the flatness
+        feedforward — it is a payload reference, and neither of those loops
+        regulates the payload.
+        """
         self.reset(**kwargs)
+        self._feedforward_drops = 0
+
+        jet_fn, exact = self._flatness_feedforward_fn()
+        flat_map = None
+        if jet_fn is not None and self._input_type == InputType.WRENCH:
+            flat_map = getattr(self._payload_controller, "flat_map", None)
+            if flat_map is None:
+                _logger.warning(
+                    "%s exposes no flat_map, so the reference this loop is "
+                    "regulating against is unknown; running feedback-only rather "
+                    "than feeding forward a reference built from the model's own "
+                    "parameters, which need not be the controller's.",
+                    type(self._payload_controller).__name__,
+                )
+            elif not exact and flat_map.jet_order > 4:
+                _logger.warning(
+                    "the bound trajectory supplies derivatives only through snap, "
+                    "but a %d-link chain needs the payload position through its "
+                    "%d-th derivative (2n + 4). Orders 5-%d are being taken as "
+                    "zero: the recovered positions and link directions are "
+                    "unaffected, the recovered Omega/Omega-dot and moment "
+                    "feedforward are not. A trajectory exposing "
+                    "get_jet(t, order) supplies them exactly.",
+                    self._num_links,
+                    flat_map.jet_order,
+                    flat_map.jet_order,
+                )
 
         start_t = time.time_ns()
         while self.t < tf:
@@ -1170,8 +1412,18 @@ class QuadrotorFlexCableBase:
                         self.state.angular_velocity,
                     ),
                 )
+            elif self._input_type == InputType.ACCELERATION:
+                # The ACCELERATION pipeline hands its input to the geometric
+                # attitude controller as a *thrust vector*; the payload LQR
+                # emits a wrench, and feeding one to the other is a crash, not
+                # a mistuning.  The loop that belongs on this pipeline is the
+                # station-keeping PD.
+                u = self.compute_station_keeping_input()
             else:
-                u = self.compute_default_input()
+                reference = (
+                    None if flat_map is None else self._flat_reference(flat_map, jet_fn, self.t)
+                )
+                u = self.compute_default_input(reference=reference)
 
             if self.verbose >= 2:
                 self._log_state(u)

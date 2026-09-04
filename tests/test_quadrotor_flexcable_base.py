@@ -37,6 +37,8 @@ stretched direction and a non-tangent rate deliberately; its cross-backend
 counterpart lives in ``test_quadrotor_flexcable_mujoco.py``.
 """
 
+import logging
+
 import numpy as np
 import pytest
 
@@ -817,7 +819,9 @@ class TestInputPipeline:
     """``_repackage_input`` — shared with M1/M2, exercised here for M5's state."""
 
     def test_acceleration_input_produces_a_wrench(self):
-        mdl = QuadrotorFlexCableBase(num_links=2)
+        # Explicit: M5 defaults to WRENCH, because its default controller is an
+        # LQR that emits one. The thrust-vector pipeline is opt-in here.
+        mdl = QuadrotorFlexCableBase(num_links=2, input="acceleration")
         mdl.reset(position=np.array([0.0, 0.0, 2.0]))
         wrench = mdl._repackage_input(np.array([0.0, 0.0, mdl.total_mass * GRAVITY]))
         assert wrench.shape == (4,)
@@ -842,29 +846,102 @@ class TestInputPipeline:
         mdl._repackage_input(u)
         assert u[0] == pytest.approx(1e6)
 
+    @pytest.mark.parametrize("value", ["WRENCH", "accel", "", None, 3])
+    def test_an_unrecognised_input_type_is_refused(self, value):
+        """Not silently resolved to the default.
+
+        The three pipelines take three incompatible input *shapes* — a ``(4,)``
+        wrench, a ``(4,)`` propeller vector, a ``(3,)`` thrust vector — so a
+        typo that fell through to ``WRENCH`` would not mistune the loop, it
+        would run a different one and crash somewhere unrelated.
+        """
+        with pytest.raises(ValueError, match="unknown input type"):
+            QuadrotorFlexCableBase(num_links=2, input=value)
+
+    def test_an_unrecognised_force_type_is_refused(self):
+        with pytest.raises(ValueError, match="unknown force type"):
+            QuadrotorFlexCableBase(num_links=2, force="props")
+
+    @pytest.mark.parametrize("value", ["wrench", "prop_forces", "acceleration"])
+    def test_the_recognised_input_types_are_accepted(self, value):
+        assert QuadrotorFlexCableBase(num_links=2, input=value) is not None
+
 
 class TestClosedLoop:
-    """The default station-keeping cascade."""
+    """The station-keeping baseline.
+
+    These drive ``compute_station_keeping_input()``, *not* ``simulate()``:
+    since the M5 payload LQR landed, ``simulate()`` runs that instead (see
+    ``tests/test_quadrotor_flexcable_control.py``). The quadrotor position PD
+    remains the baseline the airframe falls back on when it is told only where
+    to hover, so it keeps its own test.
+    """
 
     @pytest.mark.slow
     @pytest.mark.parametrize("n", [1, 2, 3])
     def test_quadrotor_converges_to_its_setpoint(self, n):
         target = np.array([1.0, 0.5, 2.0])
-        mdl = QuadrotorFlexCableBase(num_links=n)
+        mdl = QuadrotorFlexCableBase(num_links=n, input="acceleration")
         mdl.position_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
-        mdl.simulate(6.0, position=np.array([0.0, 0.0, 2.0]))
+        mdl.reset(position=np.array([0.0, 0.0, 2.0]))
+        while mdl.t < 6.0:
+            mdl.step(mdl.compute_station_keeping_input())
         np.testing.assert_allclose(mdl.state.position, target, atol=TOL_PHYSICAL)
         # The payload hangs below, at the chain's full length in steady state.
         assert np.linalg.norm(mdl.state.position - mdl.state.payload_position) == pytest.approx(
             mdl.cable_length, abs=TOL_PHYSICAL
         )
 
-    def test_default_input_carries_the_whole_system_weight(self):
-        mdl = QuadrotorFlexCableBase(num_links=3)
+    @pytest.mark.slow
+    @pytest.mark.parametrize("n", [1, 2, 3])
+    def test_simulate_drives_the_station_keeping_loop_under_acceleration_input(self, n):
+        """``simulate()`` has to work on the pipeline the docs advertise.
+
+        The loop above is hand-rolled precisely because ``simulate()`` used to
+        crash here: the payload LQR emits a ``(4,)`` wrench and the
+        ``ACCELERATION`` pipeline hands its input to the geometric attitude
+        controller as a *thrust vector*, so the two met inside
+        ``_repackage_input`` and raised ``incompatible dimensions for cross
+        product``. ``simulate()`` now routes ``compute_station_keeping_input()``
+        under this input type, which is the loop that belongs on it.
+        """
+        target = np.array([1.0, 0.5, 2.0])
+        mdl = QuadrotorFlexCableBase(num_links=n, input="acceleration")
+        mdl.position_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
+        mdl.simulate(6.0, position=np.array([0.0, 0.0, 2.0]))
+
+        np.testing.assert_allclose(mdl.state.position, target, atol=TOL_PHYSICAL)
+        assert np.linalg.norm(mdl.state.position - mdl.state.payload_position) == pytest.approx(
+            mdl.cable_length, abs=TOL_PHYSICAL
+        )
+
+    def test_simulate_under_acceleration_input_takes_no_flat_feedforward(self, caplog):
+        """The station-keeping loop regulates the *airframe*, so the payload
+        flat map has nothing to say to it — and must not be built, warned
+        about, or counted against ``feedforward_drops``."""
+        from udaan.utils.trajectory import CrazyTrajectory
+
+        traj = CrazyTrajectory(center=np.array([0.0, 0.0, 1.5]), ax=0.4, ay=0.35, az=0.25)
+        mdl = QuadrotorFlexCableBase(num_links=3, input="acceleration")
+        mdl.payload_controller.setpoint = traj.get
+        mdl.position_controller.setpoint = lambda t: (
+            (np.array([0.0, 0.0, 2.0]),)
+            + (
+                np.zeros(3),
+                np.zeros(3),
+            )
+        )
+        with caplog.at_level(logging.WARNING, logger="udaan.models.quadrotor_flexcable.base"):
+            mdl.simulate(1.0, position=np.array([0.0, 0.0, 2.0]))
+        assert mdl.feedforward_drops == 0
+        assert caplog.records == []
+
+    def test_station_keeping_input_carries_the_whole_system_weight(self):
+        mdl = QuadrotorFlexCableBase(num_links=3, input="acceleration")
         mdl.reset(position=np.array([0.0, 0.0, 0.0]))
         mdl.position_controller.setpoint = lambda t: (np.zeros(3), np.zeros(3), np.zeros(3))
         np.testing.assert_allclose(
-            mdl.compute_default_input(),
+            mdl.compute_station_keeping_input(),
             np.array([0.0, 0.0, mdl.total_mass * GRAVITY]),
             atol=TOL_TIGHT,
         )

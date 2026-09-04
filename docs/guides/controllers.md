@@ -21,6 +21,29 @@ expose `position_controller`, `attitude_controller`, and (for payload models)
 |---|---|---|---|
 | Cascaded geometric payload | {py:class}`~udaan.control.quadrotor_cspayload.QuadCSPayloadController` | payload position → cable attitude → quad attitude | default; see {doc}`../theory/controllers/quadrotor-payload` |
 
+## Quadrotor with a flexible ($n$-link) cable
+
+| Controller | Class | Role | Notes |
+|---|---|---|---|
+| Payload-tracking LQR | {py:class}`~udaan.control.quadrotor_flexcable.QuadrotorFlexCableController` | full-state regulation of $(x_Q, R, \{q_i\})$, feedforwarded by the flat map | default for M5; see {doc}`../theory/controllers/quadrotor-flexcable` |
+
+The odd one out, in three ways. It is **not a cascade** — a serial chain
+has no per-link body to command, so the published law is an LQR on the
+variational error and the gain comes from a Riccati solve rather than a
+gain pair. It emits a **wrench** `[f, M]` rather than a thrust vector, so
+`QuadrotorFlexCableBase` defaults to `input="wrench"` and there is no
+attitude loop underneath it. And its feedforward needs the payload
+position through its $2n+4$-th derivative, so a trajectory bound to
+`setpoint` should implement `get_jet(t, order)`; one that stops at
+`get_full`'s snap is accepted, zero-padded, and warned about once.
+
+The station-keeping quadrotor position PD is still there as a baseline,
+reached through `compute_station_keeping_input()`. It emits a thrust
+*vector*, so it runs on the `ACCELERATION` pipeline: construct the model
+with `input="acceleration"` and `simulate()` drives that loop instead of
+the payload LQR (and, since the loop does not regulate the payload, without
+the flat-map feedforward).
+
 ## Multi-quadrotor cooperative transport
 
 | Controller | Class | Role | Notes |
