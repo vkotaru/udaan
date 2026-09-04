@@ -7,6 +7,7 @@ Equations of motion for each system modelled in `udaan`.
 
 quadrotor
 quadrotor-cspayload
+quadrotor-flexcable
 multi-quad-cspointmass
 multi-quad-rigidbody
 ```

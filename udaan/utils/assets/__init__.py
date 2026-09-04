@@ -11,6 +11,9 @@ from .xml_model_generator import (
     payload_height as payload_height,
 )
 from .xml_model_generator import (
+    quad_flexcable as quad_flexcable,
+)
+from .xml_model_generator import (
     quadrotor_comparison as quadrotor_comparison,
 )
 from .xml_model_generator import (
@@ -22,6 +25,7 @@ __all__ = [
     "multi_quad_pointmass",
     "multi_quad_rigidbody",
     "payload_height",
+    "quad_flexcable",
     "quadrotor_comparison",
     "rigid_payload_height",
 ]

@@ -21,6 +21,24 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
         - TENDON: spatial tendon constraint (fast, less realistic)
         - LINKS: rigid cylinder links with ball joints (slower, most stable)
         - CABLE: MuJoCo 2.3+ composite cable (experimental)
+
+    .. note::
+
+       ``cable_model="links"`` is still the default and its behaviour is
+       **unchanged**: the MJCF's 25-link chain is simulated, but
+       :meth:`_query_state_nlink_model` then collapses it back to this class's
+       single point-mass cable — one direction from the airframe to the
+       payload, and a payload velocity obtained by finite-differencing
+       consecutive positions (exactly zero on the first query, first order
+       after that).  That is the right reading *for M2*, whose state has one
+       cable in it and nothing to put the per-link directions into.
+
+       It is no longer the only reading available.
+       :class:`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableMujoco` (M5)
+       is the same physical system with the chain kept as a chain: ``n`` link
+       directions and rates, all measured rather than differenced, and an
+       analytical model that integrates them.  Use M5 when the cable's shape
+       matters; this class remains the right one when it does not.
     """
 
     class MODEL_TYPE(enum.Enum):
@@ -52,6 +70,18 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
                 )
             elif cable_model == "links":
                 self._model_type = self.MODEL_TYPE.LINKS
+                # Explicitly asking for the link chain is the case where the
+                # collapse to one point-mass cable is most likely to be a
+                # surprise, so point at the system that keeps it. Not raised
+                # on the default path: nobody chose that.
+                _logger.info(
+                    "cable_model 'links' simulates an N-link chain but reports it as "
+                    "M2's single point-mass cable (one quad-to-payload direction, and "
+                    "a finite-differenced payload velocity). This is unchanged and "
+                    "supported; if the cable's shape matters, "
+                    "udaan.models.quadrotor_flexcable.QuadrotorFlexCableMujoco (M5) "
+                    "keeps every link's direction and rate as measured state."
+                )
             else:
                 raise ValueError(f"Invalid cable_model type: {cable_model!r}")
 

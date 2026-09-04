@@ -37,6 +37,52 @@ DEFAULT_CABLE_LENGTH = 1.0  # m
 DEFAULT_PAYLOAD_RADIUS = 0.05  # m
 
 # =============================================================================
+# Default flexible-cable parameters (M5)
+# =============================================================================
+#
+# M5 replaces M2's single taut cable with a serial chain of rigid links. The
+# chain is a *discretisation*, so its two parameters are the resolution and the
+# mass being discretised; the total length stays :data:`DEFAULT_CABLE_LENGTH`
+# and the tip mass stays :data:`DEFAULT_PAYLOAD_MASS`, which is what makes M5
+# at ``num_links=1, cable_mass=0`` literally M2.
+
+#: Number of rigid links the flexible cable is discretised into.
+#:
+#: Three, not more, because the chain's fastest internal mode grows roughly
+#: like ``n^{3/2}`` and udaan's ZOH-Euler integrator is only *conditionally*
+#: stable — see "Numerical stability" in
+#: :mod:`udaan.models.quadrotor_flexcable.base`. At the shared 1.25 ms substep
+#: this default leaves ~2x margin;
+#: :meth:`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableBase.natural_frequencies`
+#: is what to consult before raising it, and the constructor warns when the
+#: combination of ``num_links`` and ``dt`` has left the stable region. Holding
+#: this cable mass and raising only the link count, the growth exponent runs
+#: 0.008 (n=1), 0.45 (n=3), 1.46 (n=5), 6.39 (n=10), so ``num_links=10`` warns
+#: on these very defaults — expected, and the reason the default is 3.
+DEFAULT_NUM_CABLE_LINKS = 3
+
+#: Total mass of the cable itself, in kg, spread evenly over its links.
+#:
+#: A tenth of the payload mass. The cable *could* be lighter — a real 1 m
+#: tether is nearer 10 g, which is what
+#: :meth:`~udaan.utils.assets.mujoco_asset_creator.MujocoAssetCreator.create_flexible_cable_payload`
+#: still defaults to — but the fastest internal mode of a lumped-mass chain
+#: scales like ``sqrt(m_payload / m_link)``, so a 10 g cable at
+#: ``num_links = 3`` is already three times too fast for the 1.25 ms substep.
+#: Both the analytical model and :func:`udaan.utils.assets.quad_flexcable` read
+#: this constant, so they always describe the same cable whatever it is set to.
+#:
+#: This constant is **new with M5 and changes nothing that existed before it.**
+#: ``create_flexible_cable_payload`` carried ``cable_mass = 0.01`` as a
+#: hardcoded local; that literal became the function's keyword default, at the
+#: same value, and its one pre-existing caller (``_generate_xml`` in
+#: :mod:`udaan.models.mujoco.quadrotor_cspayload_fleet`) passes none of the new
+#: keywords and regenerates its ``cspayload_fleet_*`` asset byte-identically,
+#: cache hash included. The 0.1 kg here is the default for M5's *own* asset and
+#: analytical model only.
+DEFAULT_CABLE_MASS = 0.1  # kg
+
+# =============================================================================
 # Default multi-quadrotor (cooperative transport) parameters
 # =============================================================================
 

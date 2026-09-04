@@ -6,8 +6,10 @@ from ...core.defaults import (
     DEFAULT_ATTACHMENT_HEIGHT,
     DEFAULT_ATTACHMENT_RADIUS,
     DEFAULT_CABLE_LENGTH,
+    DEFAULT_CABLE_MASS,
     DEFAULT_FORMATION_RADIUS,
     DEFAULT_MJCF_TIMESTEP,
+    DEFAULT_NUM_CABLE_LINKS,
     DEFAULT_NUM_QUADROTORS,
     DEFAULT_PAYLOAD_MASS,
     DEFAULT_PAYLOAD_RADIUS,
@@ -352,6 +354,99 @@ def multi_quad_rigidbody(
     for i in range(num_quadrotors):
         writer.spatial(tendon, f"quad{i}_end1", f"pyld_poc{i}", range=[0.0, cable_length])
 
+    writer.save_to(filename, verbose=verbose)
+    return filename
+
+
+def quad_flexcable(
+    num_links: int = DEFAULT_NUM_CABLE_LINKS,
+    filename: str = "./assets/quad_flexcable.xml",
+    cable_length: float = DEFAULT_CABLE_LENGTH,
+    cable_mass: float = DEFAULT_CABLE_MASS,
+    payload_mass: float = DEFAULT_PAYLOAD_MASS,
+    quad_mass: float = DEFAULT_QUAD_MASS,
+    spawn_height: float = DEFAULT_SPAWN_HEIGHT,
+    verbose: bool = True,
+) -> str:
+    """Write the MJCF for one quadrotor carrying a payload on an ``n``-link cable.
+
+    The M5 asset: :meth:`~udaan.utils.assets.mujoco_asset_creator.MujocoAssetCreator.create_quadrotor0`
+    plus :meth:`~udaan.utils.assets.mujoco_asset_creator.MujocoAssetCreator.create_flexible_cable_payload`,
+    hung from the airframe origin.  Unlike M3's and M4's assets there is no
+    tendon anywhere: the cable is a **kinematic tree** of ball joints, so every
+    link configuration is feasible and there is no taut/slack spawn condition
+    to get wrong.  The chain spawns hanging straight down, and the payload ends
+    up at ``spawn_height - cable_length``.
+
+    Three departures from the historical hand-written ``quad_flxcbl_mj.xml``,
+    all of them there to make this asset and
+    :class:`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableBase` the same
+    machine rather than merely similar ones:
+
+    * **No damping anywhere** — not on the airframe's free joint, not on the
+      cable's ball joints, not on the payload's.  ``MujocoAssetCreator.joint``
+      defaults to ``0.1`` and ``create_flexible_cable_payload`` to ``1e-3``
+      (plus a near-welded ``1000/1000`` payload joint); the analytical model
+      has no drag term at all, so damping would be a *physics* difference
+      between the backends rather than an integration one.  The same reasoning
+      :func:`multi_quad_rigidbody` records for its free joints.
+    * **A 1.25 ms integrator timestep**, the analytical model's own inner
+      substep, so it divides the 5 ms outer ``dt`` exactly.
+    * **A free-spinning payload joint**, which is what makes the payload sphere
+      a point mass: its ball joint is anchored at its own centre, so with zero
+      stiffness and damping no torque ever reaches it and only its
+      translational inertia participates.
+
+    Args:
+        num_links: number of rigid links the cable is discretised into, >= 1.
+        filename: path to write the MJCF to.
+        cable_length: total cable length, in metres.
+        cable_mass: total mass of the cable itself, in kg.
+        payload_mass: payload mass, in kg.
+        quad_mass: total mass of the quadrotor, in kg.
+        spawn_height: height of the airframe at spawn, in metres.
+        verbose: log the generated XML.
+
+    Returns:
+        The ``filename`` written.
+
+    Raises:
+        ValueError: for a non-positive link count or cable length, or a payload
+            that would spawn at or below the ground plane.
+    """
+    if num_links < 1:
+        raise ValueError(f"num_links must be >= 1, got {num_links}")
+    if cable_length <= 0.0:
+        raise ValueError(f"cable_length must be positive, got {cable_length}")
+    z_payload = float(spawn_height) - float(cable_length)
+    if z_payload <= DEFAULT_PAYLOAD_RADIUS:
+        raise ValueError(
+            f"payload would spawn at z={z_payload:.3f} m, at or below the ground plane "
+            f"(payload radius {DEFAULT_PAYLOAD_RADIUS} m); raise spawn_height "
+            f"({spawn_height}) or shorten the cable ({cable_length})"
+        )
+
+    writer = MujocoAssetCreator("QuadFlexCable")
+    writer.option(timestep=DEFAULT_MJCF_TIMESTEP)
+    chassis, _ = writer.create_quadrotor0(
+        writer.worldbody,
+        "quad",
+        np.array([0.0, 0.0, float(spawn_height)]),
+        mass=quad_mass,
+        root_damping=0.0,
+    )
+    writer.create_flexible_cable_payload(
+        chassis,
+        "cable",
+        N=int(num_links),
+        length=float(cable_length),
+        mass=float(payload_mass),
+        cable_mass=float(cable_mass),
+        joint_damping=0.0,
+        payload_joint_damping=0.0,
+        payload_joint_stiffness=0.0,
+        payload_radius=DEFAULT_PAYLOAD_RADIUS,
+    )
     writer.save_to(filename, verbose=verbose)
     return filename
 
