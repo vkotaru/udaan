@@ -11,6 +11,7 @@ Submodules
    udaan.flatness.cable
    udaan.flatness.derivatives
    udaan.flatness.jet
+   udaan.flatness.multi_quad_cspayload
    udaan.flatness.quadrotor
    udaan.flatness.quadrotor_cspayload
 

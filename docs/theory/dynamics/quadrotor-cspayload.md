@@ -11,7 +11,7 @@ Let $q \in S^2$ be the unit vector pointing from the quadrotor to the
 payload, so that
 
 $$
-x_L = x_Q - \ell\, q, \qquad \|q\| = 1.
+x_L = x_Q + \ell\, q, \qquad \|q\| = 1.
 $$
 
 The configuration manifold is $Q = \mathbb{R}^3 \times S^2 \times SO(3)$.

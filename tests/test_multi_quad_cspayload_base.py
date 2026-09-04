@@ -18,7 +18,8 @@ import numpy as np
 import pytest
 
 from tests.conftest import TOL_ANALYTIC, TOL_INTEGRATION, TOL_TIGHT
-from udaan.core.defaults import GRAVITY
+from udaan.core.defaults import DEFAULT_FORMATION_RADIUS, GRAVITY
+from udaan.flatness import RingTensionSplit
 from udaan.manif import S2, SO3, TS2, TSO3
 from udaan.models.multi_quad_cspayload import (
     MultiQuadCsPayloadBase,
@@ -227,6 +228,34 @@ class TestParameters:
             mdl.masses = [1.0, 1.0]
         with pytest.raises(ValueError):
             MultiQuadCsPayloadBase(num_quadrotors=0)
+
+    def test_non_positive_formation_radius_rejected(self):
+        """Both doors to the ring radius validate, and on the same domain as
+        :class:`~udaan.flatness.RingTensionSplit`.
+
+        ``formation_cable_attitudes`` guards ``lengths <= radius``, which a
+        *negative* radius passes: before validation, ``mdl.formation_radius =
+        -3.0`` followed by ``reset()`` produced ``cable_attitudes = [3, 0, nan]``
+        behind nothing louder than a ``RuntimeWarning`` from ``sqrt``.
+        """
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        for bad in (-3.0, 0.0):
+            with pytest.raises(ValueError, match="formation_radius must be strictly positive"):
+                mdl.formation_radius = bad
+            with pytest.raises(ValueError, match="formation_radius must be strictly positive"):
+                MultiQuadCsPayloadBase(num_quadrotors=3, formation_radius=bad)
+        # The valid radius survived the rejected assignments.
+        assert mdl.formation_radius == pytest.approx(DEFAULT_FORMATION_RADIUS)
+
+        # And the ring re-derivation inside udaan.flatness agrees on the domain.
+        with pytest.raises(ValueError, match="strictly positive"):
+            RingTensionSplit(3, mdl.payload_mass, mdl.masses, mdl.cable_lengths, radius=-3.0)
+
+    def test_reset_stays_finite_at_a_valid_radius(self):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3, formation_radius=0.35)
+        mdl.reset()
+        for q in mdl.state.cable_attitudes:
+            assert np.all(np.isfinite(np.asarray(q)))
 
 
 class TestCableStateFromGeometry:

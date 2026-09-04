@@ -217,7 +217,9 @@ class MultiQuadCsPayloadBase:
         self._inertia_invs = np.linalg.inv(self._inertias)
         self._cable_lengths = np.full(nQ, DEFAULT_CABLE_LENGTH)
         self._payload_mass = DEFAULT_PAYLOAD_MASS
-        self._formation_radius = float(kwargs.get("formation_radius", DEFAULT_FORMATION_RADIUS))
+        # Routed through the property so the constructor kwarg and later
+        # assignment share one validation.
+        self.formation_radius = kwargs.get("formation_radius", DEFAULT_FORMATION_RADIUS)
 
         if "masses" in kwargs:
             self.masses = kwargs["masses"]
@@ -392,6 +394,30 @@ class MultiQuadCsPayloadBase:
     @cable_lengths.setter
     def cable_lengths(self, value):
         self._cable_lengths = self._broadcast(value, "cable_lengths")
+
+    @property
+    def formation_radius(self) -> float:
+        """Radius of the default ring formation used by :meth:`reset`.
+
+        Must be strictly positive, matching the domain
+        :class:`~udaan.flatness.RingTensionSplit` accepts for the same ring —
+        the two re-derivations have to agree on where the formation is defined.
+        A non-positive radius passes the ``lengths <= radius`` guard in
+        :func:`formation_cable_attitudes` and would surface only as a ``nan``
+        cable direction out of :meth:`reset`.
+        """
+        return self._formation_radius
+
+    @formation_radius.setter
+    def formation_radius(self, value: float):
+        radius = float(value)
+        if radius <= 0.0:
+            raise ValueError(
+                "formation_radius must be strictly positive: at radius 0 every "
+                "cable is vertical and the quadrotors stack on top of each "
+                f"other, and a negative radius has no geometric meaning; got {radius}"
+            )
+        self._formation_radius = radius
 
     @property
     def payload_mass(self) -> float:
