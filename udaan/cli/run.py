@@ -198,26 +198,58 @@ def multi_quad(
 def multi_quad_rigid(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
+    num_quads: int = typer.Option(4, "--num-quads", "-n", help="Number of quadrotors."),
+    cable_length: float | None = typer.Option(
+        None, "--cable-length", "-l", help="Taut cable length in metres."
+    ),
+    payload_mass: float | None = typer.Option(None, "--payload-mass", help="Payload mass in kg."),
+    attachment_radius: float | None = typer.Option(
+        None, "--attachment-radius", "-a", help="Radius of the attachment ring on the payload."
+    ),
+    formation_radius: float | None = typer.Option(
+        None,
+        "--radius",
+        help="Horizontal offset of each quadrotor from its own attachment point.",
+    ),
+    spawn_height: float | None = typer.Option(
+        None, "--height", "-z", help="Height of the quadrotor ring in metres."
+    ),
     record: str | None = _record_option,
     position: str | None = typer.Option(
         None, "--position", "-p", help="Initial payload position as 'x,y,z'."
     ),
 ):
-    """Simulate multiple quadrotors with cable-suspended rigid-body payload."""
-    import numpy as np
+    """Simulate multiple quadrotors with cable-suspended rigid-body payload.
+
+    The MJCF is generated from these knobs and cached, so the formation starts
+    taut whatever they are set to.
+    """
 
     from udaan.models.multi_quad_rigidbody import MultiQuadRigidbodyMujoco
 
     from . import parse_vec
 
-    # Absolute, exactly as `multi-quad` reads it. The retired model took the
-    # same flag under the same help text as a relative offset.
-    x0 = parse_vec(position, default=np.array([0.0, 0.0, 1.34]))
+    opts = {
+        "cable_lengths": cable_length,
+        "payload_mass": payload_mass,
+        "attachment_radius": attachment_radius,
+        "formation_radius": formation_radius,
+        "spawn_height": spawn_height,
+    }
+    opts = {k: v for k, v in opts.items() if v is not None}
     try:
-        mdl = MultiQuadRigidbodyMujoco(render=render)
-    except ValueError as err:
+        mdl = MultiQuadRigidbodyMujoco(render=render, num_quadrotors=num_quads, **opts)
+    # ValueError covers the geometry the generator refuses to build; RuntimeError
+    # covers the load-time checks (`_read_params_from_mjcf`, `_check_spawn_is_taut`)
+    # that exist precisely for a stale cached or hand-edited asset — which is a
+    # user-facing condition with a stated remedy, not a traceback.
+    except (ValueError, RuntimeError) as err:
         typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(1) from err
+    # Absolute, exactly as `multi-quad` reads it. The retired model took the
+    # same flag under the same help text as a relative offset. Defaulting to
+    # the MJCF's own spawn keeps the formation taut at t=0.
+    x0 = parse_vec(position, default=mdl.state.payload_position.copy())
     _setup_recording(mdl, record)
     typer.echo(f"Running multi-quad rigid ({mdl.num_quadrotors} quads) for {time}s ...")
     mdl.simulate(tf=time, payload_position=x0)

@@ -31,8 +31,12 @@ expose `position_controller`, `attitude_controller`, and (for payload models)
 The rigid-body cascade carries a second reference alongside `setpoint`:
 `attitude_setpoint(t) -> (R_d, Ω_d, Ω̇_d)` for the payload's attitude,
 which is independent of its position in a way it cannot be for a point
-mass. It is **provisional** — its cable feedforward waits on an M4 flat
-map, and the M4 model, not this cascade, is the verified artefact.
+mass. Binding a trajectory's `get_full` to `setpoint` switches on the M4
+flatness feedforward, exactly as it does for M3; the reference is
+allocated through the cascade's own
+{py:attr}`~udaan.control.multi_quad_rigidbody.MultiQuadRigidbodyController.tension_policy`,
+so the closed loop and the feedforward cannot split the wrench
+differently.
 
 Both cascades cache their physical parameters (masses, cable lengths,
 and for M4 the whole grasp) when they are built. Assigning a parameter

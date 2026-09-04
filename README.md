@@ -77,7 +77,7 @@ udaan run quad-payload -t 10 -m vfx                   # vpython backend
 
 # Multi-quadrotor cooperative transport
 udaan run multi-quad -n 3 -t 10                        # N-quad pointmass payload
-udaan run multi-quad-rigid -t 10                       # rigid-body payload
+udaan run multi-quad-rigid -n 4 -t 10                  # N-quad rigid-body payload
 
 # Fleet: compare controllers side-by-side
 udaan run fleet --demo l1-comparison                   # L1 adaptive vs PD

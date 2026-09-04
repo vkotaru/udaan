@@ -278,6 +278,8 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
+from ...flatness.jet import Jet
+from ...flatness.multi_quad_rigidbody import MultiQuadRigidbody, MultiQuadRigidbodyFlats
 from ...manif import S2, SO3, TS2, TSO3, hat
 from ...utils.grasp import (
     formation_cable_attitudes,
@@ -467,6 +469,10 @@ class MultiQuadRigidbodyBase:
 
         # Per-quadrotor station-keeping targets, refreshed by reset()
         self._formation_targets = [np.zeros(3) for _ in range(nQ)]
+
+        # Steps on which the flat map refused the reference and the loop fell
+        # back to feedback-only; zeroed at the start of every ``simulate()``.
+        self._feedforward_drops = 0
 
         # Default controllers
         self._init_default_controllers()
@@ -1194,23 +1200,146 @@ class MultiQuadRigidbodyBase:
             ]
         )
 
+    # ─── Flatness feedforward ──────────────────────────────────────
+
+    def _flatness_feedforward_fn(self):
+        """The bound ``get_full`` of the payload trajectory, or ``None``.
+
+        Mirrors :meth:`udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase.simulate`:
+        the payload controller's ``setpoint`` is sniffed for a bound method
+        whose owner exposes ``get_full(t) -> (pos, vel, acc, jerk, snap)``. A
+        trajectory that grows higher derivatives therefore unlocks the
+        feedforward on its own — no controller change required.
+        """
+        setpoint_fn = getattr(self._payload_controller, "setpoint", None)
+        owner = getattr(setpoint_fn, "__self__", None)
+        return getattr(owner, "get_full", None)
+
+    @property
+    def feedforward_drops(self) -> int:
+        """How many steps have dropped the flatness feedforward.
+
+        Reset by :meth:`simulate`. A non-zero count means the reference left
+        the flat map's taut-cable certificate — or the range of the grasp — on
+        those steps and the run was feedback-only there. The first drop is
+        logged as a warning.
+        """
+        return self._feedforward_drops
+
+    def _desired_attitudes(self, flat_map, flat_fn, t):
+        """Per-quadrotor ``(R_i, Ω_i, Ω̇_i)`` recovered from the flat output.
+
+        The payload's *translation* comes from the bound ``get_full``; its
+        *attitude* comes from the payload controller's
+        :attr:`~udaan.control.multi_quad_rigidbody.MultiQuadRigidbodyController.attitude_setpoint`,
+        which is where an M4 attitude manoeuvre is commanded. The two are
+        independent references for a rigid-body load in a way they cannot be
+        for M3's point mass, so both have to be read.
+
+        Returns ``None`` when the flat map refuses the sample — a cable would
+        go slack, a quadrotor is in free fall, or the requested wrench is
+        outside ``range Φ`` (which is every non-level attitude command at
+        ``nQ ≤ 2``). That is a legitimate outcome, and the right response is to
+        drop the feedforward for that step rather than to abort: the feedback
+        cascade is still stabilising. It is *not* silent — the drop is counted
+        in :attr:`feedforward_drops` and the first one warns.
+        """
+        pos, vel, acc, jerk, snap = flat_fn(t)
+        # MultiQuadRigidbodyFlats needs x_L through its sixth derivative;
+        # trajectories stop at snap, so the last two rungs are taken as zero.
+        # They enter only the moment feedforward Ω̇_i, which is exactly the
+        # approximation the M1 and M3 paths make by stopping their jets at snap.
+        x_L = Jet(np.array([pos, vel, acc, jerk, snap, np.zeros(3), np.zeros(3)], dtype=float))
+        attitude_fn = getattr(self._payload_controller, "attitude_setpoint", None)
+        if attitude_fn is None:
+            R_d, Omega_d, dOmega_d = np.eye(3), np.zeros(3), np.zeros(3)
+        else:
+            R_d, Omega_d, dOmega_d = (np.asarray(v, dtype=float) for v in attitude_fn(t))
+        # Ω_L through its fifth derivative; the setpoint protocol stops at Ω̇_d,
+        # so the rest are zero on the same grounds as x_L's tail.
+        omega = np.zeros((6, 3))
+        omega[0] = Omega_d
+        omega[1] = dOmega_d
+        flats = MultiQuadRigidbodyFlats(
+            x_L=x_L,
+            R_L=R_d,
+            Omega_L=Jet(omega),
+            psi=[Jet(np.zeros(3)) for _ in range(self._num_quadrotors)],
+        )
+        try:
+            ref, _ = flat_map.recover(flats)
+        except ValueError as err:
+            # WrenchAllocationError is a ValueError, so an out-of-range wrench
+            # lands here too — the nQ <= 2 attitude command, degraded rather
+            # than crashed.
+            self._feedforward_drops += 1
+            if self._feedforward_drops == 1:
+                _logger.warning(
+                    "flatness feedforward dropped at t=%.4f (%s); this step ran "
+                    "feedback-only. Further drops are logged at debug level; see "
+                    "the feedforward_drops counter for the total.",
+                    t,
+                    err,
+                )
+            else:
+                _logger.debug("flatness feedforward unavailable at t=%.4f: %s", t, err)
+            return None
+        return [
+            (ref.orientations[i], ref.angular_velocities[i], ref.angular_accelerations[i])
+            for i in range(self._num_quadrotors)
+        ]
+
     def simulate(self, tf, **kwargs):
         """Run closed-loop simulation to time tf.
 
-        Unlike M1/M3 there is no flatness feedforward path *wired in* yet. The
-        map itself now exists — :class:`udaan.flatness.MultiQuadRigidbody`,
-        exercised open loop in ``tests/flatness/`` — but the cascade in
-        :mod:`udaan.control.multi_quad_rigidbody` does not consume it, so
-        ``simulate`` runs feedback-only and ``desired_att`` stays ``None``.
+        When the payload controller's translation setpoint is a trajectory's
+        bound ``get_full``, the run picks up the M4 flatness feedforward:
+        :class:`udaan.flatness.MultiQuadRigidbody` recovers each quadrotor's
+        reference attitude ``R_i``, body rate ``Ω_i`` and body angular
+        acceleration ``Ω̇_i``, and all three are fed to the attitude loops as
+        ``desired_att``. Binding ``get_full`` is the whole switch.
+
+        The attitude loop consumes only the rates:
+        :meth:`udaan.control.quadrotor.GeometricAttitudeController.compute`
+        discards ``R_i`` and rebuilds its own ``R_d`` from the commanded thrust
+        direction. Passing ``R_i = I`` therefore gives a bit-identical run, and
+        the improvement the feedforward buys is entirely ``Ω_i``/``Ω̇_i``. The
+        behaviour is shared with M1 and M3; see that method's docstring.
+
+        The flat map is built from the payload controller's **own**
+        ``tension_policy``. ``Φ⁺ W`` is only half the allocation; the other
+        half is the null-space bias, so a reference built at a different bias
+        describes a different formation from the one the loop is driving
+        towards. A controller that does not publish its policy therefore gets
+        no feedforward at all — falling back on a default here would
+        manufacture exactly that mismatch, silently.
         """
         self.reset(**kwargs)
+        self._feedforward_drops = 0
+
+        flat_fn = self._flatness_feedforward_fn()
+        flat_map = None
+        if flat_fn is not None:
+            policy = getattr(self._payload_controller, "tension_policy", None)
+            if policy is None:
+                _logger.warning(
+                    "%s exposes no tension_policy, so the closed loop's wrench "
+                    "split is unknown; running feedback-only rather than feeding "
+                    "forward a reference built at a different split.",
+                    type(self._payload_controller).__name__,
+                )
+            else:
+                flat_map = MultiQuadRigidbody.from_model(self, tension_policy=policy)
 
         start_t = time.time_ns()
         while self.t < tf:
             u = self.compute_default_input()
+            desired_att = (
+                None if flat_map is None else self._desired_attitudes(flat_map, flat_fn, self.t)
+            )
             if self.verbose >= 2:
                 self._log_state(u)
-            self.step(u)
+            self.step(u, desired_att=desired_att)
 
         elapsed = (time.time_ns() - start_t) * 1e-9
         _logger.debug("Simulated %.2fs in %.3fs wall time", self.t, elapsed)

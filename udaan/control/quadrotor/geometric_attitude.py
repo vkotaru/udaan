@@ -77,16 +77,44 @@ class GeometricAttitudeController(Controller):
         Args:
             state: (R, Omega) — rotation matrix and body angular velocity.
             thrust_force: desired thrust force vector in world frame.
-            desired_att: optional (Rd, Omegad, dOmegad) from differential
-                flatness. When provided, overrides the attitude derived
-                from thrust direction and adds feedforward terms.
+            desired_att: optional ``(Rd, Omegad, dOmegad)`` from differential
+                flatness. **Only the last two are used.** ``Rd`` is always
+                recomputed from the commanded thrust direction and the supplied
+                one is discarded — see below.
 
         Returns:
             (f, M) — scalar thrust and 3D torque vector.
+
+        Note:
+            The reference attitude channel is **inert**, and deliberately so.
+            ``Rd`` is what closes the position loop: the outer loop's whole
+            output is the *direction* of ``thrust_force``, and
+            :meth:`_cmd_accel_to_cmd_att` is the only place that direction
+            becomes an attitude command. Substituting the flat map's
+            open-loop ``R_i`` for it severs the position feedback from the
+            attitude loop, and the closed loop then diverges: measured on the
+            brisk spiral of ``tests/test_multi_quad_rigidbody_control.py``,
+            payload/position tracking RMS goes from 0.170 m to 4.39 m (M1),
+            0.197 m to 4.06 m (M3) and 0.306 m to 4.00 m (M4).
+
+            So the feedforward this method actually applies is ``Ω_d`` and
+            ``Ω̇_d``. That is not a small residue — passing ``R_i = I`` and
+            keeping the rates gives a *bit-identical* run at every ``nQ``, and
+            the rates alone are worth the whole 1.38x M4 tracking improvement
+            (``Ω̇_d`` on its own, 0.07%).
+
+            Making ``Rd`` live is a cascade-wide change — the outer loop would
+            have to hand over an attitude *and* a thrust magnitude rather than
+            a force vector — so it belongs to a structural pass over M1-M4
+            together, not to one caller.
         """
         R, Omega = state
         Rd: SO3 = self._cmd_accel_to_cmd_att(thrust_force)
         if desired_att is not None:
+            # The reference attitude is dropped on purpose: Rd above is the
+            # position loop's only path into the attitude command. See the
+            # Note in this method's docstring for the measured cost of using
+            # the supplied one instead.
             _, Omegad, dOmegad = desired_att
         else:
             Omegad: TSO3 = TSO3()

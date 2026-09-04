@@ -59,8 +59,10 @@ DEFAULT_SPAWN_HEIGHT = 2.0  # m
 # The M4 payload is a *rigid body*, not a point mass, so it needs a mass, an
 # inertia tensor and a set of body-frame attachment points — the last of these
 # is what makes the system able to exert a moment on the load at all.  The
-# defaults describe a thin square slab, which is also what the shipped
-# ``multi_quad_rigidbody.xml`` encodes.
+# defaults describe a thin square slab, which is also what
+# :func:`udaan.utils.assets.multi_quad_rigidbody` emits when it is not told
+# otherwise — so the analytical model and the generated MJCF agree by
+# construction.
 
 #: Mass of the default rigid-body payload, in kg.
 DEFAULT_RIGID_PAYLOAD_MASS = 1.0  # kg
@@ -88,6 +90,17 @@ DEFAULT_ATTACHMENT_RADIUS = 0.5  # m
 #: Height of the attachment ring above the payload centre of mass, in metres.
 #: Matches the top face of the default slab.
 DEFAULT_ATTACHMENT_HEIGHT = 0.05  # m
+
+#: MuJoCo integrator timestep written into generated MJCF, in seconds.
+#:
+#: It is the analytical models' *inner* substep (a 5 ms outer loop over four
+#: 1.25 ms substeps), so the two backends integrate at the same rate and — the
+#: load-bearing part — 5 ms divides by it exactly. A MuJoCo backend takes
+#: ``round(dt / timestep)`` substeps per :meth:`step`, so at MuJoCo's own
+#: default of 2 ms that is ``round(2.5) = 2``: 4 ms of physics per step, while
+#: ``dt`` still reads 5 ms and ``self.t`` drifts against the analytical model's
+#: by 20%.
+DEFAULT_MJCF_TIMESTEP = 1.25e-3  # s
 
 # =============================================================================
 # Default control gains

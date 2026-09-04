@@ -286,16 +286,49 @@ the model's own `reset()` formation also makes the split **exact at
 hover**, since $\Phi\tau^{\mathrm{hov}} = W^{\mathrm{hov}}$ implies the
 expression returns $\tau^{\mathrm{hov}}$ identically.
 
-The cascade is **provisional**: it holds the payload's pose wherever the
-grasp allows, but its feedforward and its test coverage both wait on the
-flat map below. The verified artefact of this page is the model.
+The bias is published as
+{py:attr}`~udaan.control.multi_quad_rigidbody.MultiQuadRigidbodyController.tension_policy`,
+and the allocation itself runs through the very
+{py:class}`~udaan.flatness.WrenchAllocation` the flat map below uses, so
+there is one copy of $\Phi^{+}$ and one null-space bias rather than two
+that can drift apart.
 
 ## Differential flatness
 
-Not yet implemented. M4 has no flat-to-state map in
-{py:mod}`udaan.flatness`, so the cascade above runs feedback-only and
-the cable-direction feedforward terms M3 gets from its split policy are
-dropped rather than guessed.
+{py:class}`udaan.flatness.MultiQuadRigidbody` is the flat-to-state map,
+and {py:meth}`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase.simulate`
+consumes it: when the payload controller's `setpoint` is a trajectory's
+bound `get_full`, the map recovers each quadrotor's reference attitude
+$R_i$, body rate $\Omega_i$ and body angular acceleration $\dot\Omega_i$,
+and all three reach the attitude loops as `desired_att`.
+Binding `get_full` is the whole switch — no controller change required —
+and the payload's attitude reference is read off `attitude_setpoint` at
+the same time, so a commanded manoeuvre is fed forward as well as fed
+back.
+
+What the attitude loop then *uses* is $\Omega_i$ and $\dot\Omega_i$ only.
+{py:meth}`~udaan.control.quadrotor.GeometricAttitudeController.compute`
+discards the recovered $R_i$ and always rebuilds its $R_d$ from the
+commanded thrust direction, because that is the only path the position
+loop has into the attitude command; substituting the open-loop $R_i$
+severs it and the closed loop diverges. Passing $R_i = I$ instead of the
+recovered value gives a bit-identical run at every $n_Q$, so the entire
+1.38x tracking improvement the feedforward buys is the rate channel
+($\dot\Omega_i$ on its own is worth 0.07%). The behaviour is shared with
+M1 and M3 and is not specific to M4.
+
+The map is built from *this controller's* `tension_policy`. That is not
+housekeeping: $\Phi^{+} W$ is only half the split, and a reference
+allocated at a different null-space bias is the reference for a different
+formation. A payload controller that does not publish a policy therefore
+gets no feedforward at all rather than one built at a guessed default.
+
+References that the map refuses — a cable that would go slack, a
+quadrotor in free fall, or (at $n_Q \le 2$) a wrench outside
+$\operatorname{range}\Phi$ — degrade that step to feedback-only rather
+than aborting the run. The drops are counted in
+{py:attr}`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase.feedforward_drops`
+and the first one warns.
 
 ## References
 

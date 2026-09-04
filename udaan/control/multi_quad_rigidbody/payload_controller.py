@@ -1,16 +1,6 @@
 r"""Payload-tracking cascade for ``nQ`` quadrotors sharing one cable-suspended
 **rigid-body** payload (M4).
 
-.. admonition:: Provisional
-
-   This cascade is **provisional**.  It works — it holds the payload's pose at
-   every grasp geometry the mechanism allows — but it is deliberately not
-   finished here: the cable-direction feedforward needs an M4 flat-to-state map
-   that :mod:`udaan.flatness` does not have yet, and the controller's own test
-   coverage is thinner than the model's.  Completing and testing it, and wiring
-   the feedforward, is a later step; until then treat the M4 model, not this
-   file, as the verified artefact, and do not extend the cascade in place.
-
 The rigid-body sibling of
 :class:`~udaan.control.multi_quad_cspayload.MultiQuadCsPayloadController`.  M3
 commands a net *force* on a point mass and splits it across the cables; M4 has
@@ -43,9 +33,20 @@ is four stages:
    .. math::
        :label: m4c-split
 
-       \tau = \Phi^{+} W^d + \bigl(I - \Phi^{+}\Phi\bigr)\, \tau^{\mathrm{hov}},
+       \tau = \Phi^{+} W^d + \bigl(I - \Phi^{+}\Phi\bigr)\, \bar\tau,
        \qquad
        \Phi = \begin{bmatrix} I & \cdots & I \\ \hat r_1 & \cdots & \hat r_{n_Q}\end{bmatrix} .
+
+   That is :meth:`udaan.flatness.WrenchAllocation.allocate` verbatim, and it is
+   run through *that* object rather than re-implemented here: the flat map
+   :class:`udaan.flatness.MultiQuadRigidbody` allocates the feedforward
+   reference through the same class, and a second copy of the formula is a
+   second place for ``\Phi^{+}``'s rank cutoff or the null-space bias to drift.
+   The bias ``\bar\tau`` is this controller's
+   :attr:`~MultiQuadRigidbodyController.tension_policy`, and
+   :meth:`udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase.simulate`
+   hands that same policy object to the flat map, so feedback and feedforward
+   cannot allocate differently.
 
    ``\Phi`` is :func:`udaan.utils.grasp.grasp_map`.  **The split is only as
    good as the rank of** ``\Phi``: ``\Phi^{+}`` returns the least-squares
@@ -61,11 +62,11 @@ is four stages:
    answer to M3's tension-split policy: the least-norm solution ``\Phi^+ W^d``
    alone makes every cable force parallel and collapses the formation onto one
    line, exactly as M3's zero-internal-force split does.  Biasing the null space
-   towards the hover forces ``\tau^{\mathrm{hov}}`` of the model's own ``reset()``
+   towards the hover forces ``\bar\tau`` of the model's own ``reset()``
    formation both spreads the team and makes the allocation **exact at hover**:
-   since ``\Phi \tau^{\mathrm{hov}} = W^{\mathrm{hov}}``, at ``W^d =
-   W^{\mathrm{hov}}`` equation :eq:`m4c-split` returns ``\tau^{\mathrm{hov}}``
-   identically, not merely approximately.
+   since ``\Phi \bar\tau = W^{\mathrm{hov}}``, at ``W^d = W^{\mathrm{hov}}``
+   equation :eq:`m4c-split` returns ``\bar\tau`` identically, not merely
+   approximately.
 
 3. **Cable loop.**  Per cable, ``q_i`` is driven towards
    ``q_i^d = 𝐓_i^d/\|𝐓_i^d\|`` with the same ``S²``/``TS²`` error convention as
@@ -116,13 +117,45 @@ Substituting the hover condition (``e = 0``, ``q_i = \bar q_i``,
 :mod:`udaan.models.multi_quad_rigidbody` — which is the check that the two
 re-derivations agree.
 
-**No cable feedforward yet.**  M3 gets ``\dot q_i^d`` and ``\ddot q_i^d`` from
-its tension-split policy, which differentiates the split exactly.  The M4
-equivalent now exists — :class:`udaan.flatness.MultiQuadRigidbody` differentiates
-:eq:`m4c-split` exactly through :meth:`udaan.flatness.WrenchAllocation.allocate_jet`
-— but this cascade does not consume it yet, so the reference derivatives are
-dropped rather than guessed.  They are zero for a hover setpoint anyway; wiring
-the flat map in is what would unlock them, the same way M3's did.
+Flatness feedforward
+--------------------
+The cable loop's own reference derivatives ``\dot q_i^d``, ``\ddot q_i^d`` are
+still taken as zero here, and deliberately: this cascade is memoryless in the
+*measured* state, and the derivatives of :eq:`m4c-split` are a property of the
+reference trajectory, not of the sample.  They are supplied by the flat map
+instead, one level up.
+:meth:`udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase.simulate` sniffs
+this controller's ``setpoint`` for a bound ``get_full``, and when it finds one
+builds a :class:`udaan.flatness.MultiQuadRigidbody` **from this controller's own
+:attr:`~MultiQuadRigidbodyController.tension_policy`**, recovers the reference
+attitude ``R_i``, body rate ``Ω_i`` and body angular acceleration ``Ω̇_i`` of
+every quadrotor, and feeds all three to the attitude loops as ``desired_att``.
+Binding a trajectory's ``get_full`` is therefore the whole switch, exactly as in
+M3 — no controller change required.
+
+Of the three, the attitude loop uses only ``Ω_i`` and ``Ω̇_i``.
+:meth:`udaan.control.quadrotor.GeometricAttitudeController.compute` discards the
+recovered ``R_i`` and rebuilds ``R_d`` from the commanded thrust direction —
+the position loop's only path into the attitude command — so the attitude
+channel is inert here as it is in M1 and M3.  Substituting ``R_i = I`` gives a
+bit-identical run at every ``nQ``; the whole 1.38x tracking improvement the
+feedforward buys is the rate channel.  See that method's docstring for what
+making the channel live costs, and why the change belongs to a structural pass
+over M1-M4 rather than to this cascade.
+
+Sharing the policy is not a tidiness point.  ``\Phi^{+} W`` is only half the
+split; the other half is the null-space bias, and a feedforward built at a
+different bias is the reference for a *different formation* from the one the
+loop is driving towards.  That is why the policy is a first-class attribute
+here rather than an implementation detail of ``allocate``, and why ``simulate``
+runs feedback-only rather than defaulting one when a substituted controller does
+not publish it.
+
+The payload's *attitude* reference goes the same way: ``simulate`` reads
+:attr:`~MultiQuadRigidbodyController.attitude_setpoint` for
+``(R_d, \Omega_d, \dot\Omega_d)`` and hands it to the flat map as the payload
+attitude flat output, so a manoeuvre commanded through that callable is fed
+forward as well as fed back.
 
 References:
     K. Sreenath and V. Kumar, "Dynamics, Control and Planning for Cooperative
@@ -151,10 +184,14 @@ from ...core.defaults import (
     DEFAULT_RIGID_PAYLOAD_MASS,
     GRAVITY,
 )
+from ...flatness.allocation import (
+    FixedTensionDistribution,
+    TensionDistributionPolicy,
+    WrenchAllocation,
+)
 from ...utils import hat, vee
 from ...utils.grasp import (
     formation_cable_attitudes,
-    grasp_map,
     hover_wrench_map,
     ring_attachment_points,
 )
@@ -204,6 +241,13 @@ class MultiQuadRigidbodyController(PDController):
             map. Defaults to the ring at ``formation_radius``.
         formation_radius: radius of that default ring.
         gravity: ``g``.
+        tension_policy: an explicit
+            :class:`~udaan.flatness.TensionDistributionPolicy` naming the
+            null-space bias ``τ̄`` of :eq:`m4c-split`; defaults to the hover
+            trim of the formation above, so the controller's reference
+            formation is the model's own. Supplying one overrides
+            ``hover_cable_attitudes`` and is *not* rebuilt by
+            :meth:`sync_from_model` — it is the caller's to maintain.
         kp, kd: payload **position**-loop PD gains, in acceleration units.
         setpoint: forwarded to :class:`~udaan.control.PDController`.
     """
@@ -220,6 +264,7 @@ class MultiQuadRigidbodyController(PDController):
         hover_cable_attitudes=None,
         formation_radius: float = DEFAULT_FORMATION_RADIUS,
         gravity: float = GRAVITY,
+        tension_policy: TensionDistributionPolicy | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -261,9 +306,16 @@ class MultiQuadRigidbodyController(PDController):
         #: Payload attitude reference, ``t -> (R_d, Ω_d, Ω̇_d)``.
         self.attitude_setpoint = lambda t: (np.eye(3), np.zeros(3), np.zeros(3))
 
-        # Whether the hover formation below is ours to rebuild when the model's
-        # parameters change. A caller-supplied one is the caller's to maintain.
+        # Whether the hover formation and the policy below are ours to rebuild
+        # when the model's parameters change. Caller-supplied ones are the
+        # caller's to maintain.
         self._hover_is_default = hover_cable_attitudes is None
+        self._policy_is_default = tension_policy is None
+        if tension_policy is not None and tension_policy.num_quadrotors != nQ:
+            raise ValueError(
+                f"tension_policy is built for {tension_policy.num_quadrotors} "
+                f"quadrotors, but this controller has {nQ}"
+            )
         self._set_parameters(
             masses=masses,
             payload_mass=payload_mass,
@@ -272,6 +324,7 @@ class MultiQuadRigidbodyController(PDController):
             attachment_points=attachment_points,
             formation_radius=formation_radius,
             hover_cable_attitudes=hover_cable_attitudes,
+            tension_policy=tension_policy,
         )
 
     # ─── Parameter plumbing ────────────────────────────────────────
@@ -310,11 +363,13 @@ class MultiQuadRigidbodyController(PDController):
         attachment_points,
         formation_radius,
         hover_cable_attitudes=None,
+        tension_policy=None,
     ):
         """Validate the physical parameters and rebuild every cached quantity.
 
-        Everything derived from the geometry — ``Φ``, ``Φ⁺``, the null-space
-        projector, the hover tensions and the hover bias ``τ^hov`` of
+        Everything derived from the geometry — the
+        :class:`~udaan.flatness.WrenchAllocation` that owns ``Φ``, ``Φ⁺`` and
+        the null-space projector, the hover tensions and the bias ``τ̄`` of
         :eq:`m4c-split` — is cached, so it all has to be rebuilt together.
         :meth:`sync_from_model` is the path that does so after a model's
         parameters change; going through one routine is what keeps a re-synced
@@ -365,11 +420,40 @@ class MultiQuadRigidbodyController(PDController):
             raise ValueError(f"hover_cable_attitudes must be ({nQ}, 3); got {hover_q.shape}")
         self._hover_directions = hover_q
 
-        self._grasp = grasp_map(self._attachment_points)
-        self._grasp_pinv = np.linalg.pinv(self._grasp)
-        self._grasp_null = np.eye(3 * nQ) - self._grasp_pinv @ self._grasp
-        self._grasp_rank = int(np.linalg.matrix_rank(self._grasp))
-        if self._grasp_rank < _FULL_WRENCH_RANK:
+        wrench_map = hover_wrench_map(hover_q, self._attachment_points)
+        target = np.concatenate([-self._payload_mass * self._ge3, np.zeros(3)])
+        tensions, *_ = np.linalg.lstsq(wrench_map, target, rcond=None)
+        self._hover_residual = float(np.linalg.norm(wrench_map @ tensions - target))
+        self._hover_tensions = tensions
+        # τ̄: body-frame force each cable applies *to the load*, which is minus
+        # the force it applies to the quadrotor. At R_L = I the two frames
+        # coincide, which is the configuration this trim describes.
+        hover_forces = -tensions[:, None] * hover_q
+
+        if tension_policy is None:
+            if np.any(np.linalg.norm(hover_forces, axis=1) <= 0.0):
+                # A zero bias leaves cable direction and slack sign undefined
+                # at the reference, which is what FixedTensionDistribution
+                # refuses. Say which geometry produced it rather than letting
+                # the allocator's message name a stack of numbers.
+                raise ValueError(
+                    "the hover trim of this grasp gives a zero tension on at least one "
+                    f"cable ({tensions.tolist()}), so the null-space bias of the "
+                    "allocation is undefined there. Supply an explicit tension_policy, "
+                    "or move the attachment points off a geometry that leaves a cable "
+                    "carrying nothing."
+                )
+            tension_policy = FixedTensionDistribution(hover_forces)
+        self._tension_policy: TensionDistributionPolicy = tension_policy
+
+        # One allocation object, shared verbatim with the flat map: Φ, Φ⁺, the
+        # singular-value cutoff behind them and the null-space term all come
+        # from here rather than from a second copy of the same algebra.
+        self._allocation = WrenchAllocation(self._attachment_points, policy=self._tension_policy)
+        bias = np.asarray(self._tension_policy.bias_forces, dtype=float).reshape(-1)
+        self._null_term = bias - self._allocation.grasp_pinv @ (self._allocation.grasp @ bias)
+
+        if self._allocation.rank < _FULL_WRENCH_RANK:
             _logger.warning(
                 "grasp map of %d attachment point(s) has rank %d < 6: %d wrench "
                 "direction(s) cannot be produced at all, so the payload attitude "
@@ -377,19 +461,9 @@ class MultiQuadRigidbodyController(PDController):
                 "position while the attitude drifts. Full SE(3) authority needs "
                 "nQ >= 3 non-collinear attachment points.",
                 nQ,
-                self._grasp_rank,
-                _FULL_WRENCH_RANK - self._grasp_rank,
+                self._allocation.rank,
+                _FULL_WRENCH_RANK - self._allocation.rank,
             )
-
-        wrench_map = hover_wrench_map(hover_q, self._attachment_points)
-        target = np.concatenate([-self._payload_mass * self._ge3, np.zeros(3)])
-        tensions, *_ = np.linalg.lstsq(wrench_map, target, rcond=None)
-        self._hover_residual = float(np.linalg.norm(wrench_map @ tensions - target))
-        self._hover_tensions = tensions
-        # τ^hov: body-frame force each cable applies *to the load*, which is
-        # minus the force it applies to the quadrotor. At R_L = I the two
-        # frames coincide, which is the configuration this trim describes.
-        self._hover_forces = (-tensions[:, None] * hover_q).reshape(-1)
 
     def sync_from_model(self, model) -> None:
         """Re-read every physical parameter off ``model``, keeping the tuning.
@@ -403,9 +477,9 @@ class MultiQuadRigidbodyController(PDController):
         perfectly while tumbling the payload, and is invisible unless the
         attitude is checked.
 
-        Hover cable directions supplied explicitly at construction are kept;
-        only the default ring is rebuilt, since only that one was derived from
-        the parameters being re-read.
+        Hover cable directions and an explicitly supplied
+        :attr:`tension_policy` are kept; only the defaults are rebuilt, since
+        only those were derived from the parameters being re-read.
 
         Raises:
             ValueError: if ``model`` has a different ``num_quadrotors``. The
@@ -425,10 +499,11 @@ class MultiQuadRigidbodyController(PDController):
             attachment_points=model.attachment_points,
             formation_radius=model.formation_radius,
             hover_cable_attitudes=None if self._hover_is_default else self._hover_directions,
+            tension_policy=None if self._policy_is_default else self._tension_policy,
         )
 
     @classmethod
-    def from_model(cls, model, **kwargs):
+    def from_model(cls, model, tension_policy: TensionDistributionPolicy | None = None, **kwargs):
         """Build from a
         :class:`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase`-like
         model, so the controller and the plant agree on every parameter."""
@@ -440,6 +515,7 @@ class MultiQuadRigidbodyController(PDController):
             cable_lengths=model.cable_lengths,
             attachment_points=model.attachment_points,
             formation_radius=model.formation_radius,
+            tension_policy=tension_policy,
             **kwargs,
         )
 
@@ -453,9 +529,47 @@ class MultiQuadRigidbodyController(PDController):
         return self._attachment_points
 
     @property
+    def allocation(self) -> WrenchAllocation:
+        """The :class:`~udaan.flatness.WrenchAllocation` :eq:`m4c-split` runs through."""
+        return self._allocation
+
+    @property
+    def tension_policy(self) -> TensionDistributionPolicy:
+        """The null-space bias ``τ̄`` of :eq:`m4c-split`.
+
+        Published so that
+        :meth:`udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase.simulate`
+        can build the flatness feedforward at *this* controller's split. A
+        reference allocated at a different bias belongs to a different
+        formation, so a controller that does not expose this attribute gets no
+        feedforward at all rather than one built at a guessed default.
+        """
+        return self._tension_policy
+
+    @tension_policy.setter
+    def tension_policy(self, policy: TensionDistributionPolicy):
+        if policy.num_quadrotors != self._num_quadrotors:
+            raise ValueError(
+                f"tension_policy is built for {policy.num_quadrotors} quadrotors, "
+                f"but this controller has {self._num_quadrotors}"
+            )
+        # An assigned policy is the caller's; :meth:`sync_from_model` leaves it.
+        self._policy_is_default = False
+        self._set_parameters(
+            masses=self._masses,
+            payload_mass=self._payload_mass,
+            payload_inertia=self._payload_inertia,
+            cable_lengths=self._cable_lengths,
+            attachment_points=self._attachment_points,
+            formation_radius=self._formation_radius,
+            hover_cable_attitudes=self._hover_directions,
+            tension_policy=policy,
+        )
+
+    @property
     def grasp(self) -> np.ndarray:
         """The ``(6, 3 nQ)`` grasp matrix ``Φ`` this controller allocates with."""
-        return self._grasp
+        return self._allocation.grasp
 
     @property
     def grasp_rank(self) -> int:
@@ -467,7 +581,7 @@ class MultiQuadRigidbodyController(PDController):
         force vectors: what the taut cables can apply at a given instant is
         smaller still — see :func:`udaan.utils.grasp.grasp_map`.
         """
-        return self._grasp_rank
+        return self._allocation.rank
 
     @property
     def unachievable_wrenches(self) -> int:
@@ -488,12 +602,27 @@ class MultiQuadRigidbodyController(PDController):
 
     @property
     def hover_residual(self) -> float:
-        """Least-squares residual of the static hover conditions.
+        """Least-squares residual of the static hover conditions, in newtons.
 
-        Non-zero means the grasp geometry admits no static trim: the team
-        cannot simultaneously hold the payload's weight and zero its net
-        moment. The controller still runs — the closed loop will simply hold
-        the best wrench the geometry allows.
+        Non-zero means this *pairing* of attachment points and hover cable
+        directions admits no static trim: the team cannot simultaneously hold
+        the payload's weight and zero its net moment. The controller still
+        runs — the closed loop will simply hold the best wrench the geometry
+        allows.
+
+        Both halves of the pairing matter, and neither is a property of the
+        other. The retired M4 asset's corner attachments read 2.7208 N here
+        because they are read through the default ring's 0°/90° cable
+        directions; the *same* corners paired with the 45° directions that
+        asset's own quadrotor ring implies trim at 7e-15 N. So a non-zero
+        residual says "these directions cannot hold these attachments", not
+        "these attachments cannot be held".
+
+        This is computed entirely from the constructor's arguments and never
+        reads a simulation model. Under a MuJoCo backend the question of
+        whether the *loaded file* hovers under this trim is a different one:
+        see
+        :attr:`udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyMujoco.mjcf_hover_residual`.
         """
         return self._hover_residual
 
@@ -581,9 +710,16 @@ class MultiQuadRigidbodyController(PDController):
         :attr:`unachievable_wrenches`, with the first occurrence logged.
         """
         wrench = np.concatenate([R_L.T @ (self._payload_mass * accel_plus_g), moment])
-        tau = self._grasp_pinv @ wrench + self._grasp_null @ self._hover_forces
+        # :eq:`m4c-split`, with Φ⁺ and the null-space term taken from the same
+        # WrenchAllocation the flat map allocates the reference through. It is
+        # spelled out rather than called as ``allocation.allocate(wrench)``
+        # because the allocator *raises* on an out-of-range command — right for
+        # a reference that would otherwise not solve the equations of motion,
+        # wrong for a closed loop, which has to keep flying on the part of the
+        # command the grasp can produce and report the rest.
+        tau = self._allocation.grasp_pinv @ wrench + self._null_term
 
-        dropped = float(np.linalg.norm(self._grasp @ tau - wrench))
+        dropped = self._allocation.residual(tau, wrench)
         if dropped > _WRENCH_RESIDUAL_TOL * max(1.0, float(np.linalg.norm(wrench))):
             self._unachievable_wrenches += 1
             if self._unachievable_wrenches == 1:
@@ -594,7 +730,7 @@ class MultiQuadRigidbodyController(PDController):
                     "component. Further occurrences are logged at debug level; "
                     "see the unachievable_wrenches counter for the total.",
                     np.array2string(wrench, precision=4),
-                    self._grasp_rank,
+                    self._allocation.rank,
                     dropped,
                 )
             else:
@@ -647,7 +783,8 @@ class MultiQuadRigidbodyController(PDController):
             q_hat = hat(q)
 
             # S²/TS² errors — same convention as M2/M3. The reference
-            # derivatives q̇^d, q̈^d are zero: see "No cable feedforward yet".
+            # derivatives q̇^d, q̈^d are zero here; the flat map supplies the
+            # trajectory's feedforward instead — see "Flatness feedforward".
             err_q = q_hat @ q_hat @ qd
             err_dq = dq
 

@@ -20,7 +20,7 @@ _logger = get_logger(__name__)
 #: would freeze. Every runtime asset cache hashes it into the generated
 #: filename, so a bump makes stale cached XML unreachable instead of silently
 #: reused by an upgraded ``udaan`` with a warm asset directory.
-MJCF_GENERATOR_VERSION = 1
+MJCF_GENERATOR_VERSION = 2
 
 # Per-geom masses of the rotor assembly emitted by ``create_quadrotor0`` at the
 # default total mass. A requested total scales all four geoms uniformly (see
@@ -77,6 +77,22 @@ class MujocoAssetCreator:
         with open(filename, "w") as f:
             f.write(xmlstr)
         return
+
+    def option(self, timestep: float):
+        """Emit ``<option timestep=...>``, overriding MuJoCo's default 0.002 s.
+
+        Worth setting whenever the asset is stepped by a backend with its own
+        outer ``dt``: that backend computes ``round(dt / timestep)`` substeps,
+        so a timestep that does not divide ``dt`` makes it advance a different
+        amount of time from the one it reports. At udaan's ``dt = 5 ms`` the
+        MuJoCo default gives ``round(2.5) = 2`` — 4 ms of physics per 5 ms
+        step.
+        """
+        if float(timestep) <= 0.0:
+            raise ValueError(f"timestep must be positive, got {timestep}")
+        option = ET.SubElement(self.root, "option")
+        option.attrib["timestep"] = repr(float(timestep))
+        return option
 
     def asset(self):
         asset = ET.SubElement(self.root, "asset")
@@ -401,6 +417,14 @@ class MujocoAssetCreator:
         Keyword Args:
             mass: total quadrotor mass in kg, at least :data:`_MIN_QUAD_MASS`.
                 Omitted -> :data:`_DEFAULT_QUAD_TOTAL_MASS`.
+            root_damping: viscous damping on the free root joint, in N·s/m and
+                N·m·s/rad. Defaults to :meth:`joint`'s own ``0.1``, which is a
+                *physics* term with no counterpart in any of udaan's analytical
+                quadrotor models: it drags every translational and rotational
+                degree of freedom of the airframe. Generators whose asset is
+                meant to be compared against the analytical dynamics should
+                pass ``0.0`` — see
+                :func:`udaan.utils.assets.multi_quad_rigidbody`.
         """
         xtype = kwargs["xtype"] if "xtype" in kwargs else True
         alpha = kwargs["alpha"] if "alpha" in kwargs else 1.0
@@ -437,7 +461,12 @@ class MujocoAssetCreator:
             alpha=alpha,
             rgb=[0.15, 0.15, 0.15],
         )
-        self.joint(chassis, name + "_root_joint", "free")
+        self.joint(
+            chassis,
+            name + "_root_joint",
+            "free",
+            damping=float(kwargs.get("root_damping", 0.1)),
+        )
 
         zaxis = np.array([0, 0, 1])
         l = 0.2

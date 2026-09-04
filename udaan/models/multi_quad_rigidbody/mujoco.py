@@ -3,52 +3,55 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
+import os
 
 import mujoco
 import numpy as np
 
+from ... import _FOLDER_PATH
+from ...core.defaults import (
+    DEFAULT_ATTACHMENT_HEIGHT,
+    DEFAULT_ATTACHMENT_RADIUS,
+    DEFAULT_NUM_QUADROTORS,
+    DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS,
+    DEFAULT_SPAWN_HEIGHT,
+)
 from ...manif import SO3, TSO3
+from ...utils.assets.mujoco_asset_creator import MJCF_GENERATOR_VERSION
+from ...utils.grasp import hover_wrench_map, ring_attachment_points
 from ...utils.logging import get_logger
 from ..mujoco import MujocoModel
 from .base import MultiQuadRigidbodyBase, cable_state_from_geometry
 
 _logger = get_logger(__name__)
 
-#: Body/site name templates in ``multi_quad_rigidbody.xml``.
+_MJCF_DIR = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf")
+
+#: Body/site name templates emitted by
+#: :func:`udaan.utils.assets.multi_quad_rigidbody`.
 _QUAD_BODY = "quad{}"
 _QUAD_SITE = "quad{}_end1"
 _PAYLOAD_BODY = "pyld"
 _PAYLOAD_SITE = "pyld_poc{}"
-
-#: The shipped MJCF is hand-written and fixed at four quadrotors. The generator
-#: that would make this a parameter is a later step; until then the number is a
-#: property of the asset, and asking for any other count is an error rather
-#: than something to be silently rounded down to four.
-MJCF_NUM_QUADROTORS = 4
-
-#: The attachment points ``multi_quad_rigidbody.xml`` encodes, in the payload
-#: body frame — the four top corners of the 1.0 x 1.0 x 0.1 m slab.
-#:
-#: These are declared here, not read off the file, precisely so that the two can
-#: be *compared*: the retired ``models/mujoco/multi_quad_rigidbody.py`` carried a
-#: hardcoded 3x4 ``_grasp_map`` whose third column was ``(0.5, -0.5)`` while the
-#: matching site ``pyld_poc2`` sits at ``(-0.5, -0.5)``, leaving columns 3 and 4
-#: duplicates and one whole corner of the grasp unrepresented. Nothing checked
-#: it. :meth:`MultiQuadRigidbodyMujoco._read_params_from_mjcf` now does.
-MJCF_ATTACHMENT_POINTS = np.array(
-    [
-        [0.5, 0.5, 0.05],
-        [-0.5, 0.5, 0.05],
-        [-0.5, -0.5, 0.05],
-        [0.5, -0.5, 0.05],
-    ]
-)
 
 #: Geometry read out of the MJCF must match the declared parameters to this
 #: absolute tolerance, in metres. The file stores coordinates with full double
 #: precision, so real agreement is at round-off; anything looser would be
 #: hiding a genuine difference.
 _GEOMETRY_TOL = 1e-9
+
+#: Spawn slack, in metres, above which the loaded formation is reported as not
+#: taut. The generator derives the payload height from the cable length, so
+#: this can only fire on an asset that did not come from it.
+_SLACK_TOL = 1e-6
+
+#: Static-hover residual, in newtons, above which the loaded grasp geometry is
+#: reported as unable to hover under the controller's own trim. A file and a
+#: controller that agree read ~1e-14 N; a quadrotor ring hand-edited from
+#: 0.50 m to 0.80 m reads 20 N.
+_HOVER_RESIDUAL_TOL = 1e-6
 
 #: The reset overrides this backend can actually apply to the MJCF formation.
 #: See :meth:`MultiQuadRigidbodyMujoco.reset`.
@@ -63,58 +66,217 @@ class MultiQuadRigidbodyMujoco(MultiQuadRigidbodyBase):
     The cables are MuJoCo spatial tendons with an upper length limit, so they
     pull but never push.
 
-    The MJCF (``multi_quad_rigidbody.xml``) is a fixed, hand-written asset — the
-    generator that would make its geometry a construction parameter is a later
-    step.  Until then :data:`MJCF_NUM_QUADROTORS` and
-    :data:`MJCF_ATTACHMENT_POINTS` are what this backend is built for, and every
-    one of them is **checked** against the loaded file rather than adopted from
-    it.  Passing a different ``num_quadrotors`` or a different set of
-    ``attachment_points`` raises.
+    The MJCF is generated on demand from the construction parameters
+    (``num_quadrotors``, ``cable_lengths``, ``payload_mass``, ``masses``,
+    ``attachment_radius``, ``attachment_height``, ``payload_half_extents``,
+    ``formation_radius`` and ``spawn_height``) and cached under a filename
+    carrying a hash of them, so a changed parameter never reuses a stale asset.
+    The generated formation starts **taut** and its attachment azimuths are the
+    model's own — the two defects of the retired hand-written asset, both of
+    which are re-checked here at load time rather than trusted.
 
-    Masses, inertias, the payload's mass and inertia and the cable lengths *are*
-    read from the file, because MuJoCo is the authority on them: the body mass
-    is the sum of its geoms' masses, and the retired model's hardcoded
+    The asset also differs from a stock MuJoCo model in two ways that exist to
+    make this backend and :class:`MultiQuadRigidbodyBase` the *same machine*
+    rather than merely similar ones, and both belong on any list of what a
+    base-vs-MuJoCo comparison is and is not tolerating:
+
+    * **No free-joint damping.** ``MujocoAssetCreator.joint`` defaults to
+      ``damping=0.1``; on the quadrotors' and the payload's free joints that is
+      a viscous drag on all six degrees of freedom, and the analytical model
+      has no such term. It was the largest single contributor to backend
+      disagreement — two thirds of it.
+    * **A 1.25 ms integrator timestep**, the analytical model's own inner
+      substep. MuJoCo's default 2 ms does not divide the 5 ms outer ``dt``, so
+      this backend took ``round(2.5) = 2`` substeps and advanced 4 ms per
+      :meth:`step` while reporting 5 ms; the two backends then ran to different
+      final times under the same ``tf``.
+
+    What *is* left for the tolerance to absorb is integration: ZOH Euler on a
+    constraint-eliminated reduction where the cable is exact and inextensible,
+    against MuJoCo's solver with the cable as a soft tendon-limit constraint.
+
+    Because one MJCF encodes one ring and one tendon length, ``masses`` and
+    ``cable_lengths`` must be uniform at construction time; assign per-index
+    values afterwards (the setters write straight into MuJoCo).
+
+    ``attachment_points`` cannot be passed at construction: the generator lays
+    the sites out on the ring the *model* uses, and an arbitrary set would
+    disagree with the file. Pass ``attachment_radius``/``attachment_height``
+    instead, which move the ring in both the MJCF and the model together.
+
+    ``inertias`` cannot be passed either. MuJoCo derives the body inertia from
+    the generated geometry (``inertiafromgeom``) and
+    :meth:`_read_params_from_mjcf` adopts it, so a constructor argument would
+    be silently overwritten; it is rejected instead. Assign ``mdl.inertias``
+    after construction — that setter *does* write into MuJoCo.
+
+    Masses, inertias, the payload's mass and inertia and the cable lengths are
+    all read back from the file, because MuJoCo is the authority on them: a
+    body's mass is the sum of its geoms', and the retired model's hardcoded
     ``mQ = 0.75`` was the mass of the quadrotor's *centre box* alone — the arms
-    and propellers bring the body to 0.99 kg, so every feedforward term was 24%
-    light.
+    and propellers brought that airframe to 0.99 kg, so every feedforward term
+    was 24% light.
     """
 
     def __init__(self, **kwargs):
         self.render = kwargs.get("render", False)
         if "inertias" in kwargs:
             raise ValueError(
-                "the MuJoCo backend derives inertias from the MJCF geometry, so an "
-                "`inertias` constructor argument would be silently overwritten; "
+                "the MuJoCo backend derives inertias from the generated MJCF geometry, "
+                "so an `inertias` constructor argument would be silently overwritten; "
                 "construct the model and then assign `mdl.inertias`"
             )
-        kwargs.setdefault("num_quadrotors", MJCF_NUM_QUADROTORS)
-        if int(kwargs["num_quadrotors"]) != MJCF_NUM_QUADROTORS:
+        if "attachment_points" in kwargs:
             raise ValueError(
-                f"multi_quad_rigidbody.xml defines exactly {MJCF_NUM_QUADROTORS} "
-                f"quadrotors, but num_quadrotors={kwargs['num_quadrotors']} was "
-                "requested. The MJCF generator for this system is a later step; "
-                "until it lands the asset's count is not a parameter."
+                "the MuJoCo backend lays the pyld_poc sites out on the model's own "
+                "ring, so an `attachment_points` constructor argument would disagree "
+                "with the generated MJCF; pass attachment_radius/attachment_height "
+                "instead, which move the ring in both"
             )
-        kwargs.setdefault("attachment_points", MJCF_ATTACHMENT_POINTS)
+
+        self._payload_half_extents = np.asarray(
+            kwargs.pop("payload_half_extents", DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS), dtype=float
+        )
+        self._attachment_radius = float(kwargs.pop("attachment_radius", DEFAULT_ATTACHMENT_RADIUS))
+        self._attachment_height = float(kwargs.pop("attachment_height", DEFAULT_ATTACHMENT_HEIGHT))
+        self._spawn_height = float(kwargs.pop("spawn_height", DEFAULT_SPAWN_HEIGHT))
+
+        # The sites the generator emits *are* the model's ring, so the two are
+        # built from one call rather than declared twice and compared later.
+        # (_read_params_from_mjcf still compares them: a hand-edited asset, or
+        # a stale cache, would otherwise put the analytical grasp and the
+        # physics on different geometries — the retired asset's failure mode.)
+        nQ = int(kwargs.get("num_quadrotors", DEFAULT_NUM_QUADROTORS))
+        kwargs["attachment_points"] = ring_attachment_points(
+            nQ, self._attachment_radius, self._attachment_height
+        )
         super().__init__(**kwargs)
 
-        self._mjMdl = MujocoModel(model_path="multi_quad_rigidbody.xml", render=self.render)
+        xml_path = self._ensure_xml(
+            self._num_quadrotors,
+            self._uniform(self._cable_lengths, "cable_lengths"),
+            self._payload_mass,
+            self._uniform(self._masses, "masses"),
+            self._payload_half_extents,
+            self._attachment_radius,
+            self._attachment_height,
+            self._formation_radius,
+            self._spawn_height,
+        )
+        self._mjMdl = MujocoModel(model_path=xml_path, render=self.render)
 
         self._resolve_mj_indices()
         self._read_params_from_mjcf()
 
         self._mjDt = float(self._mjMdl.model.opt.timestep)
         self._step_iter = max(1, int(round(self.dt / self._mjDt)))
+        # `step()` advances `_step_iter * _mjDt`, which equals the requested dt
+        # only when the timestep divides it. The generated asset sets
+        # DEFAULT_MJCF_TIMESTEP so that it does; a hand-edited or stale file
+        # need not, and `dt` then names a duration this backend never takes —
+        # which is how a `while self.t < tf` loop here ended 5 ms short of the
+        # analytical model's over a 2 s run and the two were compared at
+        # different simulation times. Report what is actually taken.
+        achieved = self._step_iter * self._mjDt
+        if abs(achieved - self.dt) > 1e-12:
+            _logger.warning(
+                "MuJoCo timestep %.6g s does not divide dt = %.6g s; each step() "
+                "advances %.6g s. Reporting dt = %.6g so that self.t stays truthful.",
+                self._mjDt,
+                self.dt,
+                achieved,
+                achieved,
+            )
+            self.dt = achieved
 
         # Reinit controllers with the MuJoCo parameters
         self._init_default_controllers()
 
-        self._warn_if_spawn_is_slack()
+        self._check_spawn_is_taut()
 
         if self.verbose:
             _logger.info(
                 "MuJoCo multi-quad rigid-body payload loaded (%d quadrotors)", self._num_quadrotors
             )
+
+    # ─── MJCF generation ───────────────────────────────────────────
+
+    @staticmethod
+    def _uniform(values: np.ndarray, name: str) -> float:
+        """Collapse a per-quadrotor array to the single value the MJCF encodes.
+
+        The generator lays every quadrotor out on one ring with one tendon
+        length, so a per-index array it cannot express is an error rather than
+        a value to be silently averaged away.  The comparison is **exact**, for
+        the reason :meth:`MultiQuadCsPayloadMujoco._uniform` documents: there is
+        no tolerance this backend could honour — either the MJCF encodes the
+        value or it does not.
+        """
+        arr = np.asarray(values, dtype=float)
+        if not np.all(arr == arr.flat[0]):
+            raise ValueError(
+                f"the MuJoCo backend needs a uniform {name} at construction time, got {arr}; "
+                f"build the model uniformly and assign per-index {name} afterwards"
+            )
+        return float(arr.flat[0])
+
+    @staticmethod
+    def _ensure_xml(
+        num_quadrotors: int,
+        cable_length: float,
+        payload_mass: float,
+        quad_mass: float,
+        payload_half_extents: np.ndarray,
+        attachment_radius: float,
+        attachment_height: float,
+        formation_radius: float,
+        spawn_height: float,
+    ) -> str:
+        """Return the MJCF filename for this configuration, generating it if needed.
+
+        The filename carries a hash of every parameter that shapes the XML —
+        *and* of :data:`MJCF_GENERATOR_VERSION`, so a release that changes the
+        emitted structure cannot reuse a file an earlier one left in a warm
+        asset directory.
+        """
+        # A lone quadrotor hovers on the payload's own axis; neither ring
+        # radius is used, so neither may enter the hash either.
+        if num_quadrotors == 1:
+            formation_radius = 0.0
+            attachment_radius = 0.0
+        config = {
+            "v": MJCF_GENERATOR_VERSION,
+            "nQ": int(num_quadrotors),
+            "L": float(cable_length),
+            "mL": float(payload_mass),
+            "mQ": float(quad_mass),
+            "e": [float(v) for v in np.asarray(payload_half_extents).reshape(-1)],
+            "ra": float(attachment_radius),
+            "ha": float(attachment_height),
+            "r": float(formation_radius),
+            "z": float(spawn_height),
+        }
+        config_hash = hashlib.md5(json.dumps(config, sort_keys=True).encode()).hexdigest()[:8]
+        generated_name = f"multi_quad_rigidbody_{num_quadrotors}q_{config_hash}.xml"
+        generated_path = os.path.join(_MJCF_DIR, generated_name)
+        if not os.path.exists(generated_path):
+            from ...utils.assets import xml_model_generator
+
+            _logger.info("Generating MJCF for %d quadrotors: %s", num_quadrotors, generated_name)
+            xml_model_generator.multi_quad_rigidbody(
+                num_quadrotors=num_quadrotors,
+                filename=generated_path,
+                cable_length=cable_length,
+                payload_mass=payload_mass,
+                payload_half_extents=payload_half_extents,
+                quad_mass=quad_mass,
+                attachment_radius=attachment_radius,
+                attachment_height=attachment_height,
+                formation_radius=formation_radius,
+                spawn_height=spawn_height,
+                verbose=False,
+            )
+        return generated_name
 
     # ─── Model initialization ──────────────────────────────────────
 
@@ -232,17 +394,22 @@ class MultiQuadRigidbodyMujoco(MultiQuadRigidbodyBase):
             if names != expected:
                 raise RuntimeError(f"tendon {i} joins {names}, expected {expected}")
 
-    def _warn_if_spawn_is_slack(self):
-        """Report a spawn pose whose cables are shorter than the tendon limit.
+    def _check_spawn_is_taut(self):
+        """Refuse a spawn pose whose cables are shorter than the tendon limit.
 
-        The shipped asset spawns the quadrotors 0.61 m above attachment points
-        0.5 m inboard of them, so every cable measures 0.789 m against a 1.0 m
-        tendon limit: the formation starts **slack** and the payload drops
-        ~0.2 m before the cables catch. The analytical model has no slack mode
-        at all, so this is a real difference between the two backends, and it
-        is a defect in the asset rather than in either model — the MJCF
-        generator step is where the spawn geometry gets derived from the cable
-        length instead of chosen independently.
+        The retired hand-written asset spawned the quadrotors 0.61 m above
+        attachment points 0.5 m inboard of them, so every cable measured
+        0.7887 m against a 1.0 m tendon limit: 21% slack, no tension at ``t =
+        0``, and — the tendons carrying no stiffness — a payload that dropped
+        ~0.2 m before the limit constraint caught it. The analytical model has
+        no slack mode at all, so the two backends were not simulating the same
+        machine, and every base-vs-MuJoCo comparison would have been measuring
+        that instead of an integration difference.
+
+        :func:`udaan.utils.assets.rigid_payload_height` now derives the payload
+        height from the cable length, so this cannot happen through the
+        generator. It stays as a check rather than a comment because a stale
+        cached asset or a hand-edited file would reintroduce it in silence.
         """
         mujoco.mj_forward(self._mjMdl.model, self._mjMdl.data)
         self._query_latest_state()
@@ -252,16 +419,97 @@ class MultiQuadRigidbodyMujoco(MultiQuadRigidbodyBase):
                 for i in range(self._num_quadrotors)
             ]
         )
-        slack = self._cable_lengths - measured
-        if np.any(slack > 1e-3):
-            _logger.warning(
-                "multi_quad_rigidbody.xml spawns with slack cables: measured %s "
-                "against tendon limits %s. The payload will drop before the cables "
-                "go taut; the analytical model has no slack mode. Fixed when the "
-                "MJCF is generated from the cable length.",
-                np.array2string(measured, precision=4),
-                np.array2string(self._cable_lengths, precision=4),
+        if not np.allclose(measured, self._cable_lengths, rtol=0.0, atol=_SLACK_TOL):
+            raise RuntimeError(
+                "the loaded MJCF does not spawn taut: quadrotor-to-attachment "
+                f"distances {np.array2string(measured, precision=4)} against tendon "
+                f"limits {np.array2string(self._cable_lengths, precision=4)}. The "
+                "payload would drop before the cables caught, and the analytical "
+                "model has no slack mode to match it. Delete the cached asset so it "
+                "is regenerated from the cable length."
             )
+
+        residual = self.mjcf_hover_residual
+        if residual is not None and residual > _HOVER_RESIDUAL_TOL:
+            _logger.warning(
+                "the loaded MJCF does not hover under the payload cascade's own trim: "
+                "applying its hover tensions along the file's measured cable "
+                "directions leaves a %.4g N residual. Either the file's geometry "
+                "admits no static hover, or it is not the geometry the controller "
+                "allocates through — a stale cached asset or a hand-edited one. The "
+                "formation will not settle. Delete the cached asset so it is "
+                "regenerated from the declared parameters.",
+                residual,
+            )
+
+    @property
+    def mjcf_hover_residual(self) -> float | None:
+        """Static-hover residual of the **loaded file**, in newtons.
+
+        The payload cascade's own
+        :attr:`~udaan.control.multi_quad_rigidbody.MultiQuadRigidbodyController.hover_residual`
+        is not this number and cannot be: it is solved from the cable
+        directions the *constructor's* ``formation_radius``/
+        ``attachment_radius``/``attachment_height`` imply, and never reads the
+        MJCF at all. It therefore stays at round-off for exactly the case it
+        was meant to catch — a hand-edited asset whose quadrotor ring sits at
+        0.80 m instead of 0.50 m loads clean, passes
+        :meth:`_check_spawn_is_taut` (every cable is still exactly 1.000 m) and
+        reports 3.9e-15 N while the controller's assumed cable directions are
+        36° off the file's.
+
+        This one takes both ingredients from the file after
+        ``mj_forward``: the measured cable directions ``q_i`` and the measured
+        attachment sites ``r_i``. It then asks whether the *controller's* hover
+        tensions balance the payload on *that* geometry,
+
+        .. math::
+
+            \\bigl\\| G(q^{\\mathrm{file}}, r^{\\mathrm{file}})\\, t^{\\mathrm{ctrl}}
+              - [-m_L g e_3;\\; 0] \\bigr\\| ,
+
+        which is zero only when the file's grasp both admits a hover and is the
+        one the controller allocates through. A file/controller *pairing*
+        mismatch is what the retired asset really had — its corner attachments
+        hover at 7e-15 N under the 45° directions its own quadrotor ring
+        implies, and at 2.7208 N under the model's 0°/90° ring.
+
+        ``None`` when the payload controller publishes no ``hover_tensions``,
+        which a caller-substituted one need not.
+        """
+        tensions = getattr(self._payload_controller, "hover_tensions", None)
+        if tensions is None:
+            return None
+        model = self._mjMdl.model
+        q = np.array(
+            [np.asarray(self.state.cable_attitudes[i]) for i in range(self._num_quadrotors)]
+        )
+        r = np.array([model.site_pos[i] for i in self._attachment_site_id])
+        wrench_map = hover_wrench_map(q, r, self.state.payload_orientation)
+        target = np.concatenate([-self._payload_mass * self._ge3, np.zeros(3)])
+        return float(np.linalg.norm(wrench_map @ np.asarray(tensions) - target))
+
+    # ─── Generated geometry ────────────────────────────────────────
+
+    @property
+    def attachment_radius(self) -> float:
+        """Radius of the attachment ring in the payload body frame, in metres."""
+        return self._attachment_radius
+
+    @property
+    def attachment_height(self) -> float:
+        """Height of the attachment ring above the payload centre, in metres."""
+        return self._attachment_height
+
+    @property
+    def payload_half_extents(self) -> np.ndarray:
+        """``(a, b, c)`` half-extents of the slab the MJCF encodes, in metres."""
+        return self._payload_half_extents
+
+    @property
+    def spawn_height(self) -> float:
+        """Height of the quadrotor ring the MJCF spawns at, in metres."""
+        return self._spawn_height
 
     # ─── Property setters (sync to MuJoCo) ─────────────────────────
     #
@@ -336,7 +584,7 @@ class MultiQuadRigidbodyMujoco(MultiQuadRigidbodyBase):
         if unsupported:
             raise ValueError(
                 f"{type(self).__name__}.reset() cannot honour {unsupported}: the "
-                "initial formation is fixed by multi_quad_rigidbody.xml and its "
+                "initial formation is fixed by the generated MJCF and its "
                 "tendon constraints, and only a rigid translation of the whole "
                 f"formation ({', '.join(sorted(_SUPPORTED_RESET_KWARGS))}) can be "
                 "applied to it. Use MultiQuadRigidbodyBase for arbitrary initial "
