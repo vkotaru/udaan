@@ -117,11 +117,12 @@ Substituting the hover condition (``e = 0``, ``q_i = \bar q_i``,
 re-derivations agree.
 
 **No cable feedforward yet.**  M3 gets ``\dot q_i^d`` and ``\ddot q_i^d`` from
-its tension-split policy, which differentiates the split exactly.  M4 has no
-flat-to-state map in :mod:`udaan.flatness` yet, so the reference derivatives of
-:eq:`m4c-split` are unavailable and the corresponding feedforward terms are
-dropped rather than guessed.  They are zero for a hover setpoint anyway; adding
-them is what an M4 flat map would unlock, the same way M3's did.
+its tension-split policy, which differentiates the split exactly.  The M4
+equivalent now exists — :class:`udaan.flatness.MultiQuadRigidbody` differentiates
+:eq:`m4c-split` exactly through :meth:`udaan.flatness.WrenchAllocation.allocate_jet`
+— but this cascade does not consume it yet, so the reference derivatives are
+dropped rather than guessed.  They are zero for a hover setpoint anyway; wiring
+the flat map in is what would unlock them, the same way M3's did.
 
 References:
     K. Sreenath and V. Kumar, "Dynamics, Control and Planning for Cooperative

@@ -92,6 +92,7 @@ jet
 quadrotor
 quadrotor-cspayload
 multi-quad-cspayload
+multi-quad-rigidbody
 ```
 
 ## References

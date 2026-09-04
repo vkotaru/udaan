@@ -1197,9 +1197,11 @@ class MultiQuadRigidbodyBase:
     def simulate(self, tf, **kwargs):
         """Run closed-loop simulation to time tf.
 
-        Unlike M1/M3 there is no flatness feedforward path yet — M4 has no
-        flat-to-state map in :mod:`udaan.flatness`, so the cascade runs
-        feedback-only and ``desired_att`` stays ``None``.
+        Unlike M1/M3 there is no flatness feedforward path *wired in* yet. The
+        map itself now exists — :class:`udaan.flatness.MultiQuadRigidbody`,
+        exercised open loop in ``tests/flatness/`` — but the cascade in
+        :mod:`udaan.control.multi_quad_rigidbody` does not consume it, so
+        ``simulate`` runs feedback-only and ``desired_att`` stays ``None``.
         """
         self.reset(**kwargs)
 

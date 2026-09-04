@@ -21,7 +21,7 @@ from math import comb
 
 import numpy as np
 
-__all__ = ["leibniz_product", "leibniz_dot", "normalize_derivatives"]
+__all__ = ["leibniz_product", "leibniz_dot", "leibniz_matmul", "normalize_derivatives"]
 
 
 def leibniz_product(a: list, b: list) -> list:
@@ -56,6 +56,24 @@ def leibniz_dot(a: list[np.ndarray], b: list[np.ndarray]) -> list[float]:
             s += comb(k, j) * float(np.dot(a[j], b[k - j]))
         out.append(s)
     return out
+
+
+def leibniz_matmul(a: list[np.ndarray], b: list[np.ndarray]) -> list[np.ndarray]:
+    """Derivative tuple of the matrix product ``a(t) @ b(t)``.
+
+    The ``@`` sibling of :func:`leibniz_product`, which multiplies elementwise
+    and is therefore wrong for matrices.  Given derivative tuples of two
+    conformable array signals of equal length, return ``c`` with
+    ``c[k] = (d/dt)^k (a b) = Σ_j C(k,j) a^(j) b^(k-j)``.
+
+    ``b`` may be a stack of vectors, so this covers matrix-times-vector too —
+    which is how the rigid-body-payload map differentiates ``R_L^⊤ α`` and
+    ``R_L τ_i``, the two places a rotating payload frame enters the chain.
+    """
+    if len(a) != len(b):
+        raise ValueError("leibniz_matmul: derivative tuples must have equal length")
+    K = len(a) - 1
+    return [sum(comb(k, j) * (a[j] @ b[k - j]) for j in range(k + 1)) for k in range(K + 1)]
 
 
 def normalize_derivatives(
