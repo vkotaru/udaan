@@ -507,10 +507,9 @@ by hand, the constructor mirrors the model's `cable_mass` / `payload_mass` /
 
 The chain half is usable on its own, as
 {py:func}`udaan.flatness.cable_chain_cascade`, for anything that needs the
-tension and geometry of a hanging chain without the vehicle at the top — which
-is how M6 will consume it, passing each attached quadrotor's thrust-vector jet
-through the primitive's `node_forces` argument. Two facts about that hook are
-part of its contract:
+tension and geometry of a hanging chain without the vehicle at the top. An
+external force enters through the primitive's `node_forces` argument, and two
+facts about that hook are part of its contract:
 
 * **Nothing can be applied at node $0$.** `node_forces` has one entry per
   *link*, and entry $i$ lands at link $i$'s distal end — nodes $1 \dots n$.
@@ -522,6 +521,17 @@ part of its contract:
   $K - 2(n-i)$ — which is exactly what a vehicle at node $i+1$ gets for free,
   since that node's position comes out at $K - 2(n-1-i)$ and its thrust vector
   costs the usual two.
+
+{doc}`multi-quad-hose` is the primitive's second consumer, and it needed two
+things this page did not anticipate. Its vehicles are *interior* to the chain,
+so their thrusts are the unknowns rather than the data — what a hose knows is
+the **link force**, and `link_forces` is the dual hook that prescribes it and
+reports the applied force that balances the rung. And a hose is held up at both
+ends, so its far links point upwards on purpose and the hanging-branch test
+above has to be turned off (`require_hanging_branch=False`). Everything else —
+the depth accounting, the per-rung normalisation, the position propagation, the
+slack refusal — was reused unchanged, with M6 calling the cascade once on the
+index-reversed chain.
 
 ## References
 

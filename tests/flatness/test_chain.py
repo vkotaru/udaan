@@ -448,6 +448,144 @@ class TestSlack:
             )
 
 
+class TestAppliedForces:
+    """``applied_forces`` reports the external force at every node.
+
+    Without ``node_forces`` it is zero; with one, it is the entry that was
+    supplied; with a ``link_forces`` override it is the *recovered* force. One
+    field, one meaning, whichever end of the rung the caller knew.
+    """
+
+    def test_a_plain_chain_applies_nothing(self):
+        n = 3
+        chain = cable_chain_cascade(
+            _static_tip(chain_jet_order(n)), np.full(n, 0.1), np.full(n, 0.2)
+        )
+        assert len(chain.applied_forces) == n
+        for i in range(n):
+            assert np.allclose(np.asarray(chain.applied_forces[i]), 0.0, atol=TOL_EXACT)
+            assert len(chain.applied_forces[i]) == len(chain.forces[i])
+
+    def test_a_node_force_comes_back_out_verbatim(self):
+        n, K = 4, chain_jet_order(4)
+        push = [np.array([0.0, 0.3, 0.5])] + [np.zeros(3)] * K
+        chain = cable_chain_cascade(
+            _static_tip(K),
+            np.full(n, 0.1),
+            np.full(n, 0.2),
+            node_forces=[None, push, None, None],
+        )
+        got = np.asarray(chain.applied_forces[1])
+        assert np.allclose(got[0], push[0], atol=TOL_EXACT)
+        assert np.allclose(got[1:], 0.0, atol=TOL_EXACT)
+
+
+class TestLinkForces:
+    """The prescribed-link-force hook — the M6 generalisation.
+
+    ``node_forces`` and ``link_forces`` write the same rung from opposite ends,
+    so the sharpest test is the duality: solve once with a known applied force,
+    feed the resulting link force back in as a prescription, and the applied
+    force must come back out.
+    """
+
+    @pytest.mark.parametrize("index", [0, 1, 3])
+    def test_it_is_the_dual_of_node_forces(self, index):
+        n, K = 4, chain_jet_order(4)
+        masses, lengths = np.full(n, 0.12), np.full(n, 0.22)
+        tip = _swing_tip(K)(0.4)
+        applied = [np.array([0.05, 0.3, 0.5])] + [np.zeros(3)] * K
+        node_forces = [applied if i == index else None for i in range(n)]
+
+        forward = cable_chain_cascade(tip, masses, lengths, node_forces=node_forces)
+        prescribed = [list(forward.forces[index]) if i == index else None for i in range(n)]
+        backward = cable_chain_cascade(tip, masses, lengths, link_forces=prescribed)
+
+        # The recovered applied force is the one that produced it …
+        got = np.asarray(backward.applied_forces[index])
+        assert np.allclose(got, np.asarray(applied[: len(got)]), atol=TOL_ANALYTIC)
+        # … and every downstream quantity is identical.
+        for i in range(n):
+            assert np.allclose(
+                np.asarray(backward.forces[i]), np.asarray(forward.forces[i]), atol=TOL_ANALYTIC
+            )
+        assert np.allclose(
+            np.asarray(backward.top_position), np.asarray(forward.top_position), atol=TOL_ANALYTIC
+        )
+
+    def test_a_prescription_is_reproduced_exactly(self):
+        """Not "close to": the rung's force *is* what was handed in."""
+        n, K = 3, chain_jet_order(3)
+        entry = [np.array([0.2, -0.1, -1.4])] + [np.zeros(3)] * (K - 2 * (n - 1))
+        chain = cable_chain_cascade(
+            _static_tip(K),
+            np.full(n, 0.1),
+            np.full(n, 0.2),
+            link_forces=[None, entry, None],
+        )
+        assert np.allclose(np.asarray(chain.forces[1]), np.asarray(entry), atol=TOL_EXACT)
+
+    def test_it_decouples_the_chain_above_from_the_chain_below(self):
+        """A prescribed force is the whole of ``F_i``, so changing anything
+        below the rung leaves everything above it untouched."""
+        n, K = 4, chain_jet_order(4)
+        entry = [np.array([0.0, 0.0, -2.0])] + [np.zeros(3)] * (K - 2 * (n - 2))
+        prescribed = [None, None, entry, None]
+        light = cable_chain_cascade(
+            _static_tip(K), np.array([0.1, 0.1, 0.1, 0.1]), np.full(n, 0.2), link_forces=prescribed
+        )
+        heavy = cable_chain_cascade(
+            _static_tip(K), np.array([0.1, 0.1, 0.1, 0.9]), np.full(n, 0.2), link_forces=prescribed
+        )
+        for i in (0, 1, 2):
+            assert np.allclose(
+                np.asarray(light.forces[i]), np.asarray(heavy.forces[i]), atol=TOL_EXACT
+            )
+        # …but the recovered applied force at the prescribed rung *does* move,
+        # because that is exactly what absorbs the change.
+        assert not np.allclose(light.applied_forces[2][0], heavy.applied_forces[2][0], atol=1e-6)
+
+    def test_both_hooks_on_one_link_is_refused(self):
+        n, K = 3, chain_jet_order(3)
+        entry = [np.zeros(3)] * (K - 2 * (n - 1) + 1)
+        with pytest.raises(ValueError, match="both a node_forces and a link_forces"):
+            cable_chain_cascade(
+                _static_tip(K),
+                np.full(n, 0.1),
+                np.full(n, 0.2),
+                node_forces=[None, entry, None],
+                link_forces=[None, entry, None],
+            )
+
+    @pytest.mark.parametrize(
+        "entry,message",
+        [
+            ([np.zeros(3)] * 6, r"link_forces\[1\] must reach the 6-th derivative"),
+            ([np.zeros(2)] * 11, r"link_forces\[1\] rows must be 3-vectors"),
+        ],
+    )
+    def test_malformed_link_force_jets_are_named(self, entry, message):
+        """Same depth rule as ``node_forces``, checked by the same code path."""
+        n = 4
+        with pytest.raises(ValueError, match=message):
+            cable_chain_cascade(
+                _static_tip(chain_jet_order(n)),
+                np.full(n, 0.1),
+                np.full(n, 0.2),
+                link_forces=[None, entry, None, None],
+            )
+
+    def test_wrong_length_link_forces_is_rejected(self):
+        n = 3
+        with pytest.raises(ValueError, match="link_forces must have 3 entries"):
+            cable_chain_cascade(
+                _static_tip(chain_jet_order(n)),
+                np.full(n, 0.1),
+                np.full(n, 0.2),
+                link_forces=[None, None],
+            )
+
+
 class TestHangingBranch:
     """Crossing the slack boundary is refused, not silently followed.
 
@@ -482,6 +620,99 @@ class TestHangingBranch:
         tip[2] = np.array([1.0, 0.0, -GRAVITY + 0.01])
         chain = cable_chain_cascade(tip, np.full(n, 0.1), np.full(n, 0.2))
         assert chain.directions[0][0][2] < 0.0
+
+    @pytest.mark.parametrize("n", [1, 2, 3])
+    def test_it_can_be_turned_off(self, n):
+        """A chain held up at both ends has links that point upwards on
+        purpose, so the test is not universal — M6 turns it off, but only when
+        it has two or more vehicles. The slack refusal stays on either way."""
+        K = chain_jet_order(n)
+        tip = _static_tip(K)
+        tip[2] = -2.0 * GRAVITY * _E3
+        chain = cable_chain_cascade(
+            tip, np.full(n, 0.1), np.full(n, 0.2), require_hanging_branch=False
+        )
+        for i in range(n):
+            assert np.allclose(chain.directions[i][0], _E3, atol=TOL_TIGHT)
+        # Slack is still refused: at ẍ = -g e₃ the force vanishes outright.
+        tip[2] = -GRAVITY * _E3
+        with pytest.raises(ValueError, match="slack"):
+            cable_chain_cascade(tip, np.full(n, 0.1), np.full(n, 0.2), require_hanging_branch=False)
+
+
+# ─── The tension floor ────────────────────────────────────────────────
+
+
+class TestMinTension:
+    """``min_tension`` is what partly replaces the branch test when a caller
+    has to turn it off.
+
+    A rung whose force the recursion *derives* carries ``T_i = ‖F_i‖``, a norm,
+    so it folds through zero and comes back out positive. With the branch test
+    off there is nothing to catch that, and a floor on the derived tensions at
+    least refuses the neighbourhood of the crossing. A rung whose force the
+    caller *prescribed* needs no such help — the vector is given, sign and all
+    — and is exempt.
+    """
+
+    @staticmethod
+    def _tip_at(accel_z: float, n: int) -> list[np.ndarray]:
+        tip = _static_tip(chain_jet_order(n))
+        tip[2] = np.array([0.0, 0.0, accel_z])
+        return tip
+
+    def test_the_default_is_off(self):
+        """Zero, so the primitive's behaviour is unchanged for callers (M5)
+        that do not ask for a floor."""
+        n = 2
+        tip = self._tip_at(-GRAVITY + 0.001, n)  # T ≈ 1e-4 N, tiny but taut
+        chain = cable_chain_cascade(
+            tip, np.full(n, 0.1), np.full(n, 0.2), require_hanging_branch=False
+        )
+        assert chain.tensions[1][0] < 1e-3
+
+    @pytest.mark.parametrize("n", [1, 2, 3])
+    def test_a_derived_rung_below_the_floor_is_refused(self, n):
+        tip = self._tip_at(-GRAVITY + 0.001, n)
+        with pytest.raises(ValueError, match=rf"link {n - 1} of {n} is below the tension floor"):
+            cable_chain_cascade(
+                tip,
+                np.full(n, 0.1),
+                np.full(n, 0.2),
+                require_hanging_branch=False,
+                min_tension=0.05,
+            )
+
+    def test_a_comfortably_taut_chain_passes_the_same_floor(self):
+        n = 3
+        chain = cable_chain_cascade(
+            _static_tip(chain_jet_order(n)),
+            np.full(n, 0.1),
+            np.full(n, 0.2),
+            min_tension=0.05,
+        )
+        assert min(chain.tensions[i][0] for i in range(n)) > 0.05
+
+    def test_a_prescribed_rung_is_exempt(self):
+        """The caller handed over the force vector, so its direction is not
+        inferred from a norm and there is no branch for it to flip onto — a
+        tiny prescribed tension is a choice, not a hazard."""
+        n = 2
+        K = chain_jet_order(n)
+        # Rung 1 (the tip rung) is prescribed at 1e-4 N; rung 0 stays derived
+        # and comfortably taut.
+        tiny = [np.zeros(3) for _ in range(K - 2 * (n - 1) + 1)]
+        tiny[0] = np.array([0.0, 0.0, -1e-4])
+        chain = cable_chain_cascade(
+            _static_tip(K),
+            np.full(n, 0.1),
+            np.full(n, 0.2),
+            link_forces=[None, tiny],
+            require_hanging_branch=False,
+            min_tension=0.05,
+        )
+        assert chain.tensions[1][0] == pytest.approx(1e-4, rel=1e-9)
+        assert chain.tensions[0][0] > 0.05
 
 
 # ─── Argument validation ──────────────────────────────────────────────
