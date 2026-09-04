@@ -278,10 +278,23 @@ class TestGeometryGuards:
         assert not (mjcf_dir / "never.xml").exists()
 
     def test_model_rejects_infeasible_geometry(self):
-        with pytest.raises(ValueError, match="strictly greater than the formation"):
+        """Three independent re-derivations of the same ring agree it is infeasible.
+
+        Since the M3 payload controller became the model's default,
+        ``_init_default_controllers()`` builds a
+        :class:`~udaan.flatness.RingTensionSplit` during ``super().__init__()``
+        and *its* guard trips first — before the MJCF is ever generated, so the
+        generator's own message is no longer what surfaces here. Pin the one
+        that does: a looser matcher would accept any geometry ``ValueError`` at
+        all, including one raised for an unrelated reason.
+        """
+        with pytest.raises(
+            ValueError, match=r"formation radius 0\.5 must be strictly below every cable length"
+        ) as excinfo:
             MultiQuadCsPayloadMujoco(
                 render=False, num_quadrotors=3, cable_lengths=0.4, formation_radius=0.5
             )
+        assert "0.4" in str(excinfo.value)
 
     def test_single_quadrotor_ignores_the_radius(self, mjcf_dir):
         """One quadrotor hovers on the axis, so a wide radius is not infeasible."""

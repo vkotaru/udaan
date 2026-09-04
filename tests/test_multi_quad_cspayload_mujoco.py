@@ -158,7 +158,15 @@ def predicted_inward_drift(
 
 @pytest.mark.integration
 class TestMujocoStationKeeping:
-    """Closed-loop: the default per-quadrotor PDs hold the team steady."""
+    """Closed-loop: the per-quadrotor station-keeping PDs hold the team steady.
+
+    Driven through ``compute_formation_input()`` rather than ``simulate()``:
+    since the M3 payload controller landed, ``simulate()`` runs the payload
+    cascade (see ``tests/test_multi_quad_cspayload_control.py``), whose
+    equilibrium has no steady-state drift at all. The prediction below is a
+    statement about the *station-keeping PDs*, so it is exercised against them
+    directly.
+    """
 
     @pytest.mark.parametrize("nQ", QUAD_COUNTS)
     def test_formation_is_held(self, nQ):
@@ -183,7 +191,9 @@ class TestMujocoStationKeeping:
         """
         mdl = MultiQuadCsPayloadMujoco(render=False, num_quadrotors=nQ)
         start = np.array([-1.0, 2.0, 0.5])
-        mdl.simulate(tf=4.0, payload_position=start)
+        mdl.reset(payload_position=start)
+        while mdl.t < 4.0:
+            mdl.step(mdl.compute_formation_input())
 
         assert mdl.t >= 4.0
         # Derived from the model's own parameters and the packaged gains — not

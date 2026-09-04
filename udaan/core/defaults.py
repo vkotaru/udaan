@@ -69,3 +69,23 @@ DEFAULT_PAYLOAD_POS_KP = np.array([4.0, 4.0, 8.0])
 DEFAULT_PAYLOAD_POS_KD = np.array([3.0, 3.0, 6.0])
 DEFAULT_PAYLOAD_CABLE_KP = np.array([24.0, 24.0, 24.0])
 DEFAULT_PAYLOAD_CABLE_KD = np.array([8.0, 8.0, 8.0])
+
+# Multi-quadrotor cooperative payload gains (Sreenath & Kumar 2013).
+#
+# Kept separate from the single-quadrotor ``DEFAULT_PAYLOAD_*`` set above
+# because the two loops are normalised differently, and the units differ with
+# them. M2's gains are *force* gains (N/m, N·s/m); M3's are **acceleration**
+# gains (1/s², 1/s) for the payload loop and 1/s², 1/s for the cable loop,
+# which carries its own ``m_i l_i``. That is what makes them mean the same
+# thing at every ``nQ``: a force-space PD would have to be divided by the total
+# system mass ``m_L + Σ_i m_i``, which grows with ``nQ``, so a pair that is
+# well damped for one quadrotor is sluggish for four.
+#
+# Payload loop: ω_n ≈ 2.0-2.4 rad/s, ζ ≈ 0.75-0.8.
+# Cable loop:   ω_n ≈ 5.5 rad/s, ζ ≈ 0.91.
+# The ordering ``k_p^L ≪ k_p^q ≪ k_R`` is the time-scale separation the
+# cascade's stability argument assumes.
+DEFAULT_MULTI_PAYLOAD_POS_KP = np.array([4.0, 4.0, 6.0])
+DEFAULT_MULTI_PAYLOAD_POS_KD = np.array([3.0, 3.0, 4.0])
+DEFAULT_MULTI_PAYLOAD_CABLE_KP = np.array([30.0, 30.0, 30.0])
+DEFAULT_MULTI_PAYLOAD_CABLE_KD = np.array([10.0, 10.0, 10.0])

@@ -251,6 +251,25 @@ class TestParameters:
         with pytest.raises(ValueError, match="strictly positive"):
             RingTensionSplit(3, mdl.payload_mass, mdl.masses, mdl.cable_lengths, radius=-3.0)
 
+    def test_cable_shorter_than_the_radius_is_rejected_at_construction(self):
+        """A cable that cannot reach its ring station now fails at ``__init__``.
+
+        It used to survive construction and surface at ``reset()`` as a ``nan``
+        cable direction out of ``sqrt(l² - r²)``. Since the M3 payload cascade
+        became the default controller, ``_init_default_controllers()`` builds a
+        :class:`~udaan.flatness.RingTensionSplit` inside ``__init__`` and its
+        guard refuses first — earlier and with a message that names both
+        numbers. Pinned here because it is a change in *when* the model
+        refuses, which no other test would notice.
+        """
+        with pytest.raises(
+            ValueError, match=r"formation radius 0\.5 must be strictly below every cable length"
+        ):
+            MultiQuadCsPayloadBase(num_quadrotors=3, cable_lengths=0.4, formation_radius=0.5)
+
+        # One quadrotor hovers on the axis, so the radius does not constrain it.
+        MultiQuadCsPayloadBase(num_quadrotors=1, cable_lengths=0.4, formation_radius=0.5)
+
     def test_reset_stays_finite_at_a_valid_radius(self):
         mdl = MultiQuadCsPayloadBase(num_quadrotors=3, formation_radius=0.35)
         mdl.reset()
@@ -727,12 +746,21 @@ class TestInputPipeline:
 
 @pytest.mark.integration
 class TestStationKeeping:
-    """The default per-quadrotor controllers hold the formation."""
+    """The per-quadrotor station-keeping PDs hold the formation.
+
+    These drive ``compute_formation_input()``, *not* ``simulate()``: since the
+    M3 payload controller landed, ``simulate()`` runs the payload cascade
+    instead (see ``tests/test_multi_quad_cspayload_control.py``). The
+    station-keeping PDs remain the baseline every quadrotor falls back on when
+    it is told only where to hover, so they keep their own test.
+    """
 
     @pytest.mark.parametrize("nQ", [2, 3, 4])
-    def test_default_controllers_hold_formation(self, nQ):
+    def test_station_keeping_pds_hold_formation(self, nQ):
         mdl = MultiQuadCsPayloadBase(num_quadrotors=nQ)
         start = np.array([0.0, 0.0, 1.0])
-        mdl.simulate(tf=5.0, payload_position=start)
+        mdl.reset(payload_position=start)
+        while mdl.t < 5.0:
+            mdl.step(mdl.compute_formation_input())
         assert np.linalg.norm(mdl.state.payload_position - start) < 0.15
         assert np.linalg.norm(mdl.state.payload_velocity) < 0.15

@@ -54,6 +54,9 @@ from .multi_quad_cspayload import (
     RingTensionSplit as RingTensionSplit,
 )
 from .multi_quad_cspayload import (
+    TensionSplitContractError as TensionSplitContractError,
+)
+from .multi_quad_cspayload import (
     TensionSplitPolicy as TensionSplitPolicy,
 )
 from .quadrotor import (
@@ -93,6 +96,7 @@ __all__ = [
     "MultiQuadCsPayloadRefState",
     "Quadrotor",
     "RingTensionSplit",
+    "TensionSplitContractError",
     "TensionSplitPolicy",
     "cable_direction_jet",
     "leibniz_dot",

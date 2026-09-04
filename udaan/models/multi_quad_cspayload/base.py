@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ...control.multi_quad_cspayload import MultiQuadCsPayloadController
 from ...control.quadrotor import GeometricAttitudeController, PositionPDController
 from ...core.defaults import (
     DEFAULT_ARM_LENGTH,
@@ -60,6 +61,12 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
+from ...flatness import (
+    Jet,
+    MultiQuadCsPayload,
+    MultiQuadCsPayloadFlats,
+    TensionSplitContractError,
+)
 from ...manif import S2, SO3, TS2, TSO3, hat
 from ...utils.logging import get_logger
 
@@ -265,6 +272,10 @@ class MultiQuadCsPayloadBase:
         # Per-quadrotor station-keeping targets, refreshed by reset()
         self._formation_targets = [np.zeros(3) for _ in range(nQ)]
 
+        # Steps on which the flat map refused the reference and the loop fell
+        # back to feedback-only; zeroed at the start of every ``simulate()``.
+        self._feedforward_drops = 0
+
         # Default controllers
         self._init_default_controllers()
 
@@ -277,11 +288,20 @@ class MultiQuadCsPayloadBase:
         ]
         # Each quadrotor carries its own weight plus an equal share of the
         # payload; that share is the feedforward of its position controller.
+        # These are *station-keeping only* — they hold whatever formation
+        # ``reset()`` left behind and know nothing about the payload. They are
+        # kept because they are a useful open-loop-ish baseline and because
+        # ``compute_formation_input()`` exposes them, but ``simulate()`` runs
+        # the payload cascade below.
         self._pos_controllers = [
             PositionPDController(mass=self._masses[i] + self._payload_mass / nQ) for i in range(nQ)
         ]
         for i in range(nQ):
             self._pos_controllers[i].setpoint = self._formation_setpoint(i)
+
+        # The real cascade: payload PD -> tension split -> per-cable S² control
+        # -> per-quadrotor thrust vector.
+        self._payload_controller = MultiQuadCsPayloadController.from_model(self)
 
     def _formation_setpoint(self, i: int):
         """Station-keeping setpoint callable for quadrotor ``i``."""
@@ -289,13 +309,25 @@ class MultiQuadCsPayloadBase:
 
     @property
     def position_controllers(self) -> list:
-        """Per-quadrotor position controllers."""
+        """Per-quadrotor station-keeping position controllers.
+
+        Not what :meth:`simulate` drives — see :attr:`payload_controller`.
+        """
         return self._pos_controllers
 
     @position_controllers.setter
     def position_controllers(self, controllers: list):
         self._check_length(controllers, "position_controllers")
         self._pos_controllers = list(controllers)
+
+    @property
+    def payload_controller(self):
+        """The payload-tracking cascade driven by :meth:`simulate`."""
+        return self._payload_controller
+
+    @payload_controller.setter
+    def payload_controller(self, controller):
+        self._payload_controller = controller
 
     @property
     def attitude_controllers(self) -> list:
@@ -621,10 +653,20 @@ class MultiQuadCsPayloadBase:
             self.state.velocities[i] = self.state.payload_velocity - l_i * self.state.dq(i)
 
     def compute_default_input(self) -> np.ndarray:
-        """Per-quadrotor thrust force vectors from the station-keeping PDs.
+        """Per-quadrotor thrust force vectors from the payload cascade.
 
         Returns a ``(nQ, 3)`` array suitable for :meth:`step` under the
         ``ACCELERATION`` input type.
+        """
+        return np.asarray(self._payload_controller.compute(self.t, self.state))
+
+    def compute_formation_input(self) -> np.ndarray:
+        """Per-quadrotor thrust force vectors from the station-keeping PDs.
+
+        The pre-payload-controller baseline: every quadrotor holds the position
+        :meth:`reset` left it at, and the payload goes wherever the cables take
+        it. Kept as a comparison point; :meth:`simulate` uses
+        :meth:`compute_default_input`.
         """
         return np.array(
             [
@@ -635,16 +677,122 @@ class MultiQuadCsPayloadBase:
             ]
         )
 
+    # ─── Flatness feedforward ──────────────────────────────────────
+
+    def _flatness_feedforward_fn(self):
+        """The bound ``get_full`` of the payload trajectory, or ``None``.
+
+        Mirrors :meth:`udaan.models.quadrotor.QuadrotorBase.simulate`: the
+        payload controller's ``setpoint`` is sniffed for a bound method whose
+        owner exposes ``get_full(t) -> (pos, vel, acc, jerk, snap)``. A
+        trajectory that grows higher derivatives therefore unlocks the
+        feedforward on its own — no controller change required.
+        """
+        setpoint_fn = getattr(self._payload_controller, "setpoint", None)
+        owner = getattr(setpoint_fn, "__self__", None)
+        return getattr(owner, "get_full", None)
+
+    @property
+    def feedforward_drops(self) -> int:
+        """How many steps have dropped the flatness feedforward.
+
+        Reset by :meth:`simulate`. A non-zero count means the reference left
+        the flat map's taut-cable certificate on those steps and the run was
+        feedback-only there — the trajectory is more aggressive than the
+        formation can certify, and the first drop is logged as a warning.
+        """
+        return self._feedforward_drops
+
+    def _desired_attitudes(self, flat_map, flat_fn, t):
+        """Per-quadrotor ``(R_i, Ω_i, Ω̇_i)`` recovered from the flat output.
+
+        Only ``R_i`` is nominally part of the contract; the attitude loop of
+        :class:`~udaan.control.quadrotor.GeometricAttitudeController`
+        recomputes ``R_i^d`` from the commanded thrust vector and consumes just
+        ``Ω_i^d`` and ``Ω̇_i^d``.
+
+        Returns ``None`` when the flat map refuses the sample — a cable would
+        go slack, or a quadrotor is in free fall. That is a legitimate outcome
+        for an aggressive trajectory, and the right response is to drop the
+        feedforward for that step rather than to abort the simulation; the
+        feedback cascade is still stabilising. It is *not* silent: the drop is
+        counted in :attr:`feedforward_drops` and the first one warns.
+
+        A :class:`~udaan.flatness.TensionSplitContractError` is deliberately
+        not absorbed. A policy whose split does not add up is a programming
+        error, and degrading it to feedback-only control would hide it behind a
+        slightly worse tracking number.
+        """
+        pos, vel, acc, jerk, snap = flat_fn(t)
+        # MultiQuadCsPayloadFlats needs x_L through pop; trajectories stop at
+        # snap, so crackle and pop are taken as zero. They enter only the
+        # moment feedforward Ω̇_i, and truncating them there is exactly the
+        # approximation the M1 path makes by stopping its jet at snap.
+        x_L = Jet(np.array([pos, vel, acc, jerk, snap, np.zeros(3), np.zeros(3)], dtype=float))
+        flats = MultiQuadCsPayloadFlats(
+            x_L=x_L,
+            psi=[Jet(np.zeros(3)) for _ in range(self._num_quadrotors)],
+        )
+        try:
+            ref, _ = flat_map.recover(flats)
+        except TensionSplitContractError:
+            # The policy itself is broken — never degrade this into a silently
+            # feedback-only run.
+            raise
+        except ValueError as err:
+            self._feedforward_drops += 1
+            if self._feedforward_drops == 1:
+                _logger.warning(
+                    "flatness feedforward dropped at t=%.4f (%s); this step ran "
+                    "feedback-only. Further drops are logged at debug level; see "
+                    "the feedforward_drops counter for the total.",
+                    t,
+                    err,
+                )
+            else:
+                _logger.debug("flatness feedforward unavailable at t=%.4f: %s", t, err)
+            return None
+        return [
+            (ref.orientations[i], ref.angular_velocities[i], ref.angular_accelerations[i])
+            for i in range(self._num_quadrotors)
+        ]
+
     def simulate(self, tf, **kwargs):
         """Run closed-loop simulation to time tf."""
         self.reset(**kwargs)
+        self._feedforward_drops = 0
+
+        flat_fn = self._flatness_feedforward_fn()
+        flat_map = None
+        if flat_fn is not None:
+            # The reference must be split the same way the closed loop splits
+            # it, or the feedforward attitude belongs to a different formation
+            # than the one the controller is driving towards. A payload
+            # controller that does not expose its policy makes that agreement
+            # unknowable — falling back on a default ring here would build the
+            # reference at *this model's* radius while the loop allocates at
+            # whatever the controller uses, which is exactly the mismatch the
+            # shared policy exists to prevent. Drop the feedforward instead.
+            policy = getattr(self._payload_controller, "tension_policy", None)
+            if policy is None:
+                _logger.warning(
+                    "%s exposes no tension_policy, so the closed loop's force "
+                    "split is unknown; running feedback-only rather than "
+                    "feeding forward a reference built at a different split.",
+                    type(self._payload_controller).__name__,
+                )
+            else:
+                flat_map = MultiQuadCsPayload.from_model(self, tension_policy=policy)
 
         start_t = time.time_ns()
         while self.t < tf:
             u = self.compute_default_input()
+            desired_att = (
+                None if flat_map is None else self._desired_attitudes(flat_map, flat_fn, self.t)
+            )
             if self.verbose >= 2:
                 self._log_state(u)
-            self.step(u)
+            self.step(u, desired_att=desired_att)
 
         elapsed = (time.time_ns() - start_t) * 1e-9
         _logger.debug("Simulated %.2fs in %.3fs wall time", self.t, elapsed)

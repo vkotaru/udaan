@@ -82,6 +82,7 @@ __all__ = [
     "MultiQuadCsPayloadInputs",
     "MultiQuadCsPayloadRefState",
     "RingTensionSplit",
+    "TensionSplitContractError",
     "TensionSplitPolicy",
 ]
 
@@ -92,6 +93,20 @@ _E3 = np.array([0.0, 0.0, 1.0])
 #: :func:`~udaan.flatness.derivatives.normalize_derivatives`, but with physical
 #: units and a knob).
 DEFAULT_MIN_TENSION = 1e-6  # N
+
+
+class TensionSplitContractError(ValueError):
+    """A :class:`TensionSplitPolicy` failed ``Σ_i 𝐓_i^(k) = F_net^(k)``.
+
+    This is a *programming* error in the policy, not a physically infeasible
+    reference: unlike the slack-cable and free-fall refusals — which a caller
+    may legitimately absorb by dropping the feedforward for that step — there is
+    no trajectory for which a policy that does not add up is acceptable.  It is
+    a distinct type so that callers catching :class:`ValueError` around
+    :meth:`MultiQuadCsPayload.recover` can let it through instead of silently
+    degrading to feedback-only control (see
+    :meth:`udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase._desired_attitudes`).
+    """
 
 
 def _zeros3() -> Vec3:
@@ -779,7 +794,7 @@ class MultiQuadCsPayload(Flat2State):
         for k, net_k in enumerate(net_force):
             total_k = np.sum([f[k] for f in cable_forces], axis=0)
             if not np.allclose(total_k, net_k, rtol=1e-9, atol=1e-9):
-                raise ValueError(
+                raise TensionSplitContractError(
                     f"{type(self.tension_policy).__name__} violates the split "
                     f"contract at derivative order {k}: Σ_i 𝐓_i^({k}) = "
                     f"{np.asarray(total_k).tolist()} but F_net^({k}) = "
