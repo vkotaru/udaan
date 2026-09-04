@@ -10,4 +10,5 @@ quadrotor-cspayload
 quadrotor-flexcable
 multi-quad-cspointmass
 multi-quad-rigidbody
+multi-quad-hose
 ```

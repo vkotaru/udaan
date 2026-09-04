@@ -8,8 +8,12 @@ from ...core.defaults import (
     DEFAULT_CABLE_LENGTH,
     DEFAULT_CABLE_MASS,
     DEFAULT_FORMATION_RADIUS,
+    DEFAULT_HOSE_LENGTH,
+    DEFAULT_HOSE_MASS,
+    DEFAULT_HOSE_SAG_RATIO,
     DEFAULT_MJCF_TIMESTEP,
     DEFAULT_NUM_CABLE_LINKS,
+    DEFAULT_NUM_HOSE_LINKS,
     DEFAULT_NUM_QUADROTORS,
     DEFAULT_PAYLOAD_MASS,
     DEFAULT_PAYLOAD_RADIUS,
@@ -447,6 +451,198 @@ def quad_flexcable(
         payload_joint_stiffness=0.0,
         payload_radius=DEFAULT_PAYLOAD_RADIUS,
     )
+    writer.save_to(filename, verbose=verbose)
+    return filename
+
+
+def multi_quad_hose(
+    num_links: int = DEFAULT_NUM_HOSE_LINKS,
+    attachments=None,
+    filename: str = "./assets/multi_quad_hose.xml",
+    hose_length: float = DEFAULT_HOSE_LENGTH,
+    hose_mass: float = DEFAULT_HOSE_MASS,
+    quad_mass: float = DEFAULT_QUAD_MASS,
+    sag_ratio: float = DEFAULT_HOSE_SAG_RATIO,
+    spawn_height: float = DEFAULT_SPAWN_HEIGHT,
+    link_radius: float = 0.008,
+    vertex_radius: float = 0.02,
+    verbose: bool = True,
+) -> str:
+    """Write the MJCF for ``nQ`` quadrotors carrying one ``n``-link flexible hose.
+
+    The M6 asset, and the first in the package with no hand-written ancestor:
+    no MJCF for a hose existed anywhere.  It is a **kinematic tree**, not a
+    tendon model — the hose is a chain of ball joints, so every link
+    configuration is feasible and no link can stretch.
+
+    Body layout
+    -----------
+    ``hose_vertex0`` is the root and carries the free joint.  Link ``i`` is a
+    body ``hose_link{i}`` hinged to its parent by ``hose_joint{i}`` at its
+    **proximal** end, whose ``z`` axis points from its distal end back to that
+    joint — the convention
+    :meth:`~udaan.utils.assets.mujoco_asset_creator.MujocoAssetCreator.create_flexible_cable_payload`
+    and :class:`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableMujoco`
+    already use, so ``q_i = -R_i e_3`` reads a link direction exactly rather
+    than by finite difference.
+
+    **The hose's mass lives at the vertices, not in the links.**  Each link body
+    carries a massless cylinder for looks and a sphere of the vertex mass at its
+    distal end, so MuJoCo's ``inertiafromgeom`` puts that body's centre of mass
+    exactly where the analytical model lumps it.  Vertex 0's mass is on the root
+    body.  A quadrotor is a child of the body owning its vertex, attached by a
+    **ball joint at its own centre of mass**: free to rotate, carried
+    translationally by the hose, transmitting force but no torque — which is
+    what makes the airframe's rotational dynamics decouple from the chain, as
+    :class:`~udaan.models.multi_quad_hose.MultiQuadHoseBase` assumes.
+
+    Spawn geometry
+    --------------
+    Taut, from :func:`udaan.utils.hose.hose_spawn_directions`: every segment
+    between consecutive vehicles folds into a V whose horizontal span is
+    ``sag_ratio`` times its own length, and the infeasible case — a span the
+    hose cannot reach, or a fold it cannot close — is refused there rather than
+    clamped.  The analytical model's :meth:`reset` reads the same function, so
+    both backends spawn the same shape.
+
+    Contacts are **disabled model-wide**.  The analytical model has no contact
+    term, and this geometry deliberately allows overlap: a quadrotor's 0.4 m
+    rotor span straddles the hose running through its own vertex, and a free
+    hose end dangles back across the vehicle it hangs from.  Leaving contacts on
+    would make the two backends different machines in a way that is not subtle.
+    Damping is off everywhere for the same reason, as in
+    :func:`multi_quad_rigidbody` and :func:`quad_flexcable`.
+
+    Args:
+        num_links: number of rigid links, >= 1.
+        attachments: strictly increasing vertex indices carrying a quadrotor;
+            ``None`` puts one at each end, ``(0, num_links)``.
+        filename: path to write the MJCF to.
+        hose_length: total hose length, in metres, split evenly over the links.
+        hose_mass: total hose mass, in kg, lumped evenly onto the ``n + 1``
+            vertices. Must be strictly positive — MuJoCo refuses a body with a
+            joint and no mass, so unlike the analytical model this generator
+            cannot emit a massless vertex.
+        quad_mass: total mass of each quadrotor, in kg.
+        sag_ratio: horizontal span of each interior segment as a fraction of
+            that segment's own length.
+        spawn_height: height of the first vehicle's vertex, in metres.
+        link_radius: radius of the (massless) link cylinders, in metres.
+        vertex_radius: radius of the vertex mass spheres, in metres.
+        verbose: log the generated XML.
+
+    Returns:
+        The ``filename`` written.
+
+    Raises:
+        ValueError: for a non-positive link count, length or mass, an invalid
+            attachment list, or a spawn geometry with no solution.
+    """
+    from scipy.spatial.transform import Rotation as sp_rot
+
+    from ...manif import SO3
+    from ..hose import hose_spawn_directions, validate_attachments
+
+    if num_links < 1:
+        raise ValueError(f"num_links must be >= 1, got {num_links}")
+    if hose_length <= 0.0:
+        raise ValueError(f"hose_length must be positive, got {hose_length}")
+    if hose_mass <= 0.0:
+        raise ValueError(
+            f"hose_mass must be strictly positive, got {hose_mass}; MuJoCo refuses a body "
+            "with a joint and no mass, so a massless hose vertex cannot be emitted"
+        )
+
+    n = int(num_links)
+    indices = validate_attachments((0, n) if attachments is None else attachments, n)
+    lengths = np.full(n, float(hose_length) / n)
+    vertex_mass = float(hose_mass) / (n + 1)
+    directions = hose_spawn_directions(lengths, indices, sag_ratio)
+
+    def _quat(rotation: np.ndarray) -> np.ndarray:
+        """3x3 rotation -> ``(x, y, z, w)``, the order ``body()`` expects."""
+        return np.asarray(sp_rot.from_matrix(np.asarray(rotation, dtype=float)).as_quat())
+
+    #: Link ``i``'s body frame: third column is ``-q_i``.
+    frames = [
+        np.asarray(SO3.from_two_vectors(-directions[i], np.array([1.0, 0.0, 0.0])))
+        for i in range(n)
+    ]
+    identity = np.eye(3)
+
+    writer = MujocoAssetCreator("MultiQuadHose")
+    writer.option(timestep=DEFAULT_MJCF_TIMESTEP, contact=False)
+
+    def _attach_quadrotor(parent, vertex: int, pos, parent_frame):
+        """Bolt vehicle ``k`` onto ``parent`` at ``pos``, world-aligned at spawn."""
+        if vertex not in indices:
+            return
+        writer.create_quadrotor0(
+            parent,
+            f"quad{indices.index(vertex)}",
+            np.asarray(pos, dtype=float),
+            quat=_quat(np.asarray(parent_frame).T),
+            mass=quad_mass,
+            root_joint_type="ball",
+            root_damping=0.0,
+        )
+
+    root = writer.body(
+        writer.worldbody, "hose_vertex0", pos=np.array([0.0, 0.0, float(spawn_height)])
+    )
+    writer.sphere(
+        root, "hose_vertex_geom0", radius=vertex_radius, mass=vertex_mass, rgb=[0.15, 0.35, 0.7]
+    )
+    writer.joint(root, "hose_root_joint", "free", damping=0.0)
+    _attach_quadrotor(root, 0, np.zeros(3), identity)
+
+    parent = root
+    parent_frame = identity
+    for i in range(n):
+        half = 0.5 * float(lengths[i])
+        # Midpoint of link i relative to the parent's origin: half of the
+        # previous link plus half of this one, rotated into the parent's frame.
+        offset_world = half * directions[i]
+        if i > 0:
+            offset_world = offset_world + 0.5 * float(lengths[i - 1]) * directions[i - 1]
+        link = writer.body(
+            parent,
+            f"hose_link{i}",
+            pos=parent_frame.T @ offset_world,
+            quat=_quat(parent_frame.T @ frames[i]),
+        )
+        writer.joint(
+            link,
+            f"hose_joint{i}",
+            "ball",
+            pos=np.array([0.0, 0.0, half]),
+            damping=0.0,
+            stiffness=0.0,
+        )
+        # Massless: the hose's mass is at the vertices, so MuJoCo's derived
+        # body centre of mass lands on the distal sphere, where the analytical
+        # model lumps it.
+        writer.cylinder(
+            link,
+            f"hose_geom{i}",
+            radius=link_radius,
+            length=float(lengths[i]),
+            mass=0.0,
+            density=0.0,
+            rgb=[0.2, 0.2, 0.2],
+        )
+        writer.sphere(
+            link,
+            f"hose_vertex_geom{i + 1}",
+            pos=np.array([0.0, 0.0, -half]),
+            radius=vertex_radius,
+            mass=vertex_mass,
+            rgb=[0.15, 0.35, 0.7],
+        )
+        _attach_quadrotor(link, i + 1, np.array([0.0, 0.0, -half]), frames[i])
+        parent = link
+        parent_frame = frames[i]
+
     writer.save_to(filename, verbose=verbose)
     return filename
 

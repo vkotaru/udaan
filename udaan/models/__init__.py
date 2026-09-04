@@ -5,7 +5,13 @@ Provides quadrotor and payload models with multiple backend support:
 - mujoco: MuJoCo physics (requires mujoco package)
 """
 
-from . import base, multi_quad_cspayload, multi_quad_rigidbody, quadrotor_flexcable
+from . import (
+    base,
+    multi_quad_cspayload,
+    multi_quad_hose,
+    multi_quad_rigidbody,
+    quadrotor_flexcable,
+)
 
 # MuJoCo is optional
 try:
@@ -24,6 +30,7 @@ except ImportError:
 __all__ = [
     "base",
     "multi_quad_cspayload",
+    "multi_quad_hose",
     "multi_quad_rigidbody",
     "quadrotor_flexcable",
     "mujoco",

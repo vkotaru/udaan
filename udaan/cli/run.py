@@ -342,6 +342,90 @@ def multi_quad_rigid(
     _hold_viewer(mdl)
 
 
+@run_app.command("hose")
+def hose(
+    time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
+    model: str = typer.Option("mujoco", "--model", "-m", help="Backend: 'mujoco' or 'base'."),
+    render: bool = typer.Option(True, help="Enable visualization."),
+    num_links: int = typer.Option(4, "--num-links", "-n", help="Links the hose is split into."),
+    attachments: str | None = typer.Option(
+        None,
+        "--attachments",
+        "-a",
+        help="Vertex indices carrying a quadrotor, e.g. '0,2,4'. Default: both ends.",
+    ),
+    hose_length: float | None = typer.Option(
+        None, "--length", "-l", help="Total hose length in metres."
+    ),
+    hose_mass: float | None = typer.Option(None, "--hose-mass", help="Total hose mass in kg."),
+    quad_mass: float | None = typer.Option(None, "--quad-mass", help="Mass of each airframe, kg."),
+    sag_ratio: float | None = typer.Option(
+        None, "--sag", help="Spawn span of each hose segment, as a fraction of its length."
+    ),
+    spawn_height: float | None = typer.Option(
+        None, "--height", "-z", help="Height of vertex 0 at spawn, in metres."
+    ),
+    record: str | None = _record_option,
+    position: str | None = typer.Option(
+        None, "--position", "-p", help="Initial position of vertex 0 as 'x,y,z'."
+    ),
+):
+    """Simulate several quadrotors carrying one flexible hose (M6).
+
+    The MJCF is generated from these knobs and cached. Raising ``--num-links``
+    past about 5 leaves the analytical backend's stability envelope and it will
+    say so; the MuJoCo backend has no such limit.
+    """
+    import numpy as np
+
+    from . import parse_vec
+
+    opts = {
+        "hose_length": hose_length,
+        "hose_mass": hose_mass,
+        "masses": quad_mass,
+        "sag_ratio": sag_ratio,
+        "spawn_height": spawn_height,
+    }
+    opts = {k: v for k, v in opts.items() if v is not None}
+    if attachments is not None:
+        try:
+            opts["attachments"] = tuple(int(v) for v in attachments.split(","))
+        except ValueError:
+            typer.echo(f"Invalid attachments: '{attachments}'. Expected e.g. '0,2,4'.", err=True)
+            raise typer.Exit(1) from None
+
+    if model == "mujoco":
+        from udaan.models.multi_quad_hose import MultiQuadHoseMujoco as Model
+    else:
+        from udaan.models.multi_quad_hose import MultiQuadHoseBase as Model
+
+        opts.pop("spawn_height", None)
+        render = False
+
+    try:
+        mdl = Model(render=render, num_links=num_links, **opts)
+    # ValueError covers the spawn geometry the generator refuses to build and
+    # the parameter guards; RuntimeError covers the load-time checks that exist
+    # for a stale cached or hand-edited asset. Both are user-facing conditions
+    # with a stated remedy, not tracebacks.
+    except (ValueError, RuntimeError) as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
+
+    default_root = np.asarray(mdl.state.root_position).copy()
+    if model != "mujoco" and position is None:
+        default_root = np.array([0.0, 0.0, 2.0])
+    x0 = parse_vec(position, default=default_root)
+    _setup_recording(mdl, record)
+    typer.echo(
+        f"Running hose ({model}, {mdl.num_links} links, "
+        f"{mdl.num_quadrotors} quads at {mdl.attachments}) for {time}s ..."
+    )
+    mdl.simulate(tf=time, root_position=x0)
+    _hold_viewer(mdl)
+
+
 @run_app.command("cspayload-fleet")
 def cspayload_fleet(
     time: float = typer.Option(8.0, "--time", "-t", help="Simulation duration in seconds."),

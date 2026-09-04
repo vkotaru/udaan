@@ -9,6 +9,7 @@ from .grasp import (
     hover_wrench_map,
     ring_attachment_points,
 )
+from .hose import hose_spawn_directions, hose_vertex_positions, validate_attachments
 from .logging import LoggerMixin, get_logger, setup_logging
 
 __all__ = [
@@ -26,4 +27,8 @@ __all__ = [
     "grasp_map",
     "hover_wrench_map",
     "ring_attachment_points",
+    # Hose spawn geometry (M6)
+    "hose_spawn_directions",
+    "hose_vertex_positions",
+    "validate_attachments",
 ]

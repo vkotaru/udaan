@@ -20,7 +20,32 @@ _logger = get_logger(__name__)
 #: would freeze. Every runtime asset cache hashes it into the generated
 #: filename, so a bump makes stale cached XML unreachable instead of silently
 #: reused by an upgraded ``udaan`` with a warm asset directory.
-MJCF_GENERATOR_VERSION = 2
+#:
+#: History:
+#:
+#: * ``3`` — two shared-code changes that both alter emitted text:
+#:
+#:   1. :meth:`MujocoAssetCreator.sphere` began emitting the ``pos`` it had
+#:      always accepted but silently dropped. Every pre-existing caller passes
+#:      the default ``[0, 0, 0]``, which is MJCF's own, so this is text-only:
+#:      ``multi_quad_pointmass`` (1q–4q), ``quad_flexcable`` (1/2/3/5 links)
+#:      and ``cspayload_fleet`` (2q–4q) each gain one ``pos="0.0 0.0 0.0"`` per
+#:      sphere geom, and a compile-and-compare of every pair over
+#:      ``body_mass``/``inertia``/``pos``/``quat``/``ipos``/``iquat``,
+#:      ``geom_pos``/``quat``/``size``, ``jnt_pos``, ``dof_damping`` and
+#:      ``tendon_range`` finds *zero* difference.
+#:   2. ``body``, ``geom`` and ``site`` quaternions went from ``%g`` to
+#:      ``%.17g``. Unlike (1) this is not purely textual: the four rotor-arm
+#:      boxes of ``create_quadrotor0`` sit at ±45°/±135°, so *every* generated
+#:      family's text changes and the compiled model moves — ``geom_quat`` by
+#:      5.3e-7, ``body_inertia`` by 6e-10 (relative ~1e-7). The motion is
+#:      *toward* the exact value: six significant digits of a rotation is
+#:      ~1e-7 of placement error, and down a chain of ball joints that is a
+#:      backend disagreement no amount of integration care can remove.
+#:
+#:   Either change alone means a file frozen on disk under the version-2 hash
+#:   is no longer what this module emits, which is what the bump is for.
+MJCF_GENERATOR_VERSION = 3
 
 # Per-geom masses of the rotor assembly emitted by ``create_quadrotor0`` at the
 # default total mass. A requested total scales all four geoms uniformly (see
@@ -78,7 +103,7 @@ class MujocoAssetCreator:
             f.write(xmlstr)
         return
 
-    def option(self, timestep: float):
+    def option(self, timestep: float, **flags):
         """Emit ``<option timestep=...>``, overriding MuJoCo's default 0.002 s.
 
         Worth setting whenever the asset is stepped by a backend with its own
@@ -87,11 +112,26 @@ class MujocoAssetCreator:
         amount of time from the one it reports. At udaan's ``dt = 5 ms`` the
         MuJoCo default gives ``round(2.5) = 2`` — 4 ms of physics per 5 ms
         step.
+
+        Keyword Args:
+            **flags: MuJoCo ``<flag>`` switches, as ``name=True/False`` (or a
+                literal ``"enable"``/``"disable"``). ``contact=False`` is the
+                one udaan uses: an analytical model with no contact term and an
+                asset that can collide with itself are two different machines,
+                and for a model whose bodies are deliberately allowed to
+                overlap — see :func:`udaan.utils.assets.multi_quad_hose` — the
+                difference is not subtle.
         """
         if float(timestep) <= 0.0:
             raise ValueError(f"timestep must be positive, got {timestep}")
         option = ET.SubElement(self.root, "option")
         option.attrib["timestep"] = repr(float(timestep))
+        if flags:
+            flag = ET.SubElement(option, "flag")
+            for name, value in flags.items():
+                if isinstance(value, bool):
+                    value = "enable" if value else "disable"
+                flag.attrib[name] = str(value)
         return option
 
     def asset(self):
@@ -217,7 +257,18 @@ class MujocoAssetCreator:
         body = ET.SubElement(parent, "body")
         body.attrib["name"] = name
         body.attrib["pos"] = " ".join([str(x) for x in pos])
-        body.attrib["quat"] = "%g %g %g %g" % (quat[3], quat[0], quat[1], quat[2])
+        # Full precision, not ``%g``. A body's ``quat`` is a *structural*
+        # rotation: MuJoCo composes it into the world orientation and, for a
+        # child with a ball joint, into the joint anchor as well, so six
+        # significant digits put the anchor ~1e-7 m out of place — which
+        # accumulates down a chain and shows up as a backend disagreement no
+        # amount of integration care can remove. M6 is the first caller to pass
+        # a non-identity quaternion here; every pre-existing one passes the
+        # identity, whose ``%.17g`` and ``%g`` renderings are the same text, so
+        # this line on its own changes nothing already on disk. (The same
+        # change to ``geom`` below is *not* text-neutral — see the note there
+        # and :data:`MJCF_GENERATOR_VERSION`.)
+        body.attrib["quat"] = "%.17g %.17g %.17g %.17g" % (quat[3], quat[0], quat[1], quat[2])
         # body.attrib["mass"] = str(mass)
         # body.attrib["inertia"] = " ".join([str(x) for x in inertia])
         return body
@@ -260,6 +311,13 @@ class MujocoAssetCreator:
         geom.attrib["name"] = name
         geom.attrib["type"] = "sphere"
         geom.attrib["size"] = "%g" % (radius)
+        # `pos` was accepted and silently dropped until M6 needed a sphere
+        # offset inside its body (the vertex mass at a link's distal end).
+        # Emitting it matches `box`/`cylinder`; every pre-existing caller passes
+        # the default, which is MJCF's own, so no shipped asset changes meaning
+        # — but the emitted *text* does gain a `pos="0.0 0.0 0.0"` per sphere,
+        # which is why `MJCF_GENERATOR_VERSION` moved to 3.
+        geom.attrib["pos"] = " ".join([str(x) for x in pos])
         geom.attrib["mass"] = str(mass)
         geom.attrib["density"] = str(density)
         geom.attrib["rgba"] = " ".join([str(x) for x in rgb + [alpha]])
@@ -281,7 +339,14 @@ class MujocoAssetCreator:
         geom.attrib["name"] = name
         geom.attrib["type"] = "box"
         geom.attrib["pos"] = " ".join([str(x) for x in pos])
-        geom.attrib["quat"] = "%g %g %g %g" % (quat[3], quat[0], quat[1], quat[2])
+        # Full precision, for the same reason as ``body`` above: six digits of
+        # a rotation is ~1e-7 of placement error. Unlike ``body``, this one
+        # *does* have non-identity callers today — the four rotor-arm boxes of
+        # ``create_quadrotor0`` at ±45°/±135° — so every generated family's
+        # text changes, and its compiled ``geom_quat`` moves 5.3e-7 (and
+        # ``body_inertia`` 6e-10) closer to the exact value. Hence
+        # ``MJCF_GENERATOR_VERSION`` 3.
+        geom.attrib["quat"] = "%.17g %.17g %.17g %.17g" % (quat[3], quat[0], quat[1], quat[2])
         geom.attrib["size"] = " ".join([str(x) for x in size])
         geom.attrib["mass"] = str(mass)
         geom.attrib["density"] = str(density)
@@ -331,7 +396,8 @@ class MujocoAssetCreator:
         site.attrib["name"] = name
         site.attrib["type"] = type
         site.attrib["pos"] = " ".join([str(x) for x in pos])
-        site.attrib["quat"] = "%g %g %g %g" % (quat[3], quat[0], quat[1], quat[2])
+        # Full precision — see ``body`` above.
+        site.attrib["quat"] = "%.17g %.17g %.17g %.17g" % (quat[3], quat[0], quat[1], quat[2])
         site.attrib["size"] = " ".join([str(x) for x in size])
         site.attrib["rgba"] = " ".join([str(x) for x in rgba])
         return site
@@ -425,6 +491,17 @@ class MujocoAssetCreator:
                 meant to be compared against the analytical dynamics should
                 pass ``0.0`` — see
                 :func:`udaan.utils.assets.multi_quad_rigidbody`.
+            root_joint_type: ``"free"`` (default) for a free-flying airframe, or
+                ``"ball"`` for one pinned to its parent at its own centre of
+                mass — free to rotate, carried translationally by whatever it
+                is bolted to. The geometry emitted here is symmetric about the
+                body origin, so that origin *is* the centre of mass and a ball
+                joint there transmits force but no torque: exactly the
+                frictionless spherical attachment
+                :class:`~udaan.models.multi_quad_hose.MultiQuadHoseBase`
+                assumes between an airframe and its hose vertex.
+            quat: orientation of the chassis relative to its parent, as
+                ``(x, y, z, w)``. Defaults to identity.
         """
         xtype = kwargs["xtype"] if "xtype" in kwargs else True
         alpha = kwargs["alpha"] if "alpha" in kwargs else 1.0
@@ -451,7 +528,9 @@ class MujocoAssetCreator:
         else:
             unmodeled_mass_loc = np.array([0.0, 0.0, 0.0])
 
-        chassis = self.body(parent, name, pos)
+        chassis = self.body(
+            parent, name, pos, quat=np.asarray(kwargs.get("quat", [0.0, 0.0, 0.0, 1.0]))
+        )
         self.box(
             chassis,
             name + "_geom",
@@ -464,7 +543,7 @@ class MujocoAssetCreator:
         self.joint(
             chassis,
             name + "_root_joint",
-            "free",
+            str(kwargs.get("root_joint_type", "free")),
             damping=float(kwargs.get("root_damping", 0.1)),
         )
 

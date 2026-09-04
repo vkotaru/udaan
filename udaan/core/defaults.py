@@ -137,6 +137,59 @@ DEFAULT_ATTACHMENT_RADIUS = 0.5  # m
 #: Matches the top face of the default slab.
 DEFAULT_ATTACHMENT_HEIGHT = 0.05  # m
 
+# =============================================================================
+# Default flexible-hose parameters (M6)
+# =============================================================================
+#
+# M6 is one flexible hose — a serial chain of ``n`` rigid links joined by ideal
+# spherical joints — with quadrotors bolted to some of its ``n + 1`` vertices.
+# It is M5's chain with the single airframe at the top replaced by an arbitrary
+# attachment pattern, so the constants below are the chain constants again,
+# sized for a *carried* hose rather than a hanging tether.
+
+#: Number of rigid links the hose is discretised into.
+#:
+#: Chosen the way :data:`DEFAULT_NUM_CABLE_LINKS` was: the ZOH-Euler loop is
+#: only conditionally stable, and
+#: :meth:`~udaan.models.multi_quad_hose.MultiQuadHoseBase.stability_growth_rate`
+#: is the number that says where the limit is. Holding the other defaults and
+#: raising only the link count, the growth exponent runs 0.006 (n=1), 0.09
+#: (n=2), 0.49 (n=4), 1.13 (n=6), 2.02 (n=8) and 8.2 (n=16), so four links sit
+#: at roughly half the warning threshold and ``num_links=6`` warns straight out
+#: of the constructor — intended, and the reason the default is four.
+#:
+#: That row is for the default pattern, a vehicle at each end, and it is not
+#: the envelope. Enumerating every attachment pattern instead: none of the 31
+#: at ``n = 4`` crosses the threshold (worst 1.00, at ``(2, 3, 4)``), but 23 of
+#: the 63 at ``n = 5`` do (worst 1.94, at ``(2, 3, 4, 5)``). Four links is
+#: therefore safe at any ``n_Q``; five is not, and above four the limit is
+#: pattern-dependent.
+DEFAULT_NUM_HOSE_LINKS = 4
+
+#: Total length of the hose, in metres, split evenly over its links.
+DEFAULT_HOSE_LENGTH = 2.0  # m
+
+#: Total mass of the hose itself, in kg, lumped evenly onto its ``n + 1``
+#: vertices. The quadrotor masses are *added* to the vertices they sit on, so
+#: the mass that enters the dynamics at vertex ``j`` is ``m_j + m_{Q_j}``.
+#:
+#: 0.25 kg/m over the default 2 m — a real layflat hose of that bore. It is
+#: also about the lightest the ZOH-Euler loop tolerates: the fastest internal
+#: mode of a lumped chain scales like the square root of the heavy/light vertex
+#: mass ratio, and against a 0.9 kg airframe at each end a 0.2 kg hose already
+#: puts :data:`DEFAULT_NUM_HOSE_LINKS` links at a growth exponent of 1.05, past
+#: the warning threshold. At 0.5 kg the same configuration sits at 0.49.
+DEFAULT_HOSE_MASS = 0.5  # kg
+
+#: Horizontal span of each hose segment at spawn, as a fraction of that
+#: segment's own length.
+#:
+#: 1.0 would be a straight, perfectly taut segment between two quadrotors and
+#: 0 would stack them on top of each other; 0.8 leaves a visible sag while
+#: keeping every link taut. See :func:`udaan.utils.hose.hose_spawn_directions`
+#: for the triangle this closes and the feasibility condition it has to meet.
+DEFAULT_HOSE_SAG_RATIO = 0.8
+
 #: MuJoCo integrator timestep written into generated MJCF, in seconds.
 #:
 #: It is the analytical models' *inner* substep (a 5 ms outer loop over four
