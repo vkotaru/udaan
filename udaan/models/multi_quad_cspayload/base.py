@@ -61,13 +61,15 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
+from ...core.validation import MIN_PHYSICAL_MASS, check_positive
 from ...flatness import (
     Jet,
     MultiQuadCsPayload,
     MultiQuadCsPayloadFlats,
     TensionSplitContractError,
+    yaw_jet,
 )
-from ...manif import S2, SO3, TS2, TSO3, hat
+from ...manif import S2, SO3, TS2, TSO3, hat, zoh_step
 from ...utils.grasp import formation_cable_attitudes
 from ...utils.logging import get_logger
 
@@ -254,6 +256,9 @@ class MultiQuadCsPayloadBase:
         # back to feedback-only; zeroed at the start of every ``simulate()``.
         self._feedforward_drops = 0
 
+        # Feedforward yaw reference shared by every quadrotor; None is ψ ≡ 0.
+        self._yaw_setpoint = None
+
         # Default controllers
         self._init_default_controllers()
 
@@ -336,6 +341,29 @@ class MultiQuadCsPayloadBase:
         self._payload_controller = controller
 
     @property
+    def yaw_setpoint(self):
+        r"""Yaw reference for the flatness feedforward: ``ψ(t) -> (ψ, ψ̇, ψ̈)``.
+
+        One callable, shared by every quadrotor — a formation flies one
+        heading. Yaw is the only channel the recovered ``R_i`` adds on top of
+        the position loop (see
+        :meth:`~udaan.control.quadrotor.GeometricAttitudeController.compute`),
+        so without this the feedforward runs at ψ ≡ 0 and the attitude
+        composition is close to a no-op.
+
+        ``None`` (the default) means ψ ≡ 0, so binding nothing changes nothing.
+        Same protocol and same default as
+        :attr:`udaan.models.quadrotor.QuadrotorBase.yaw_setpoint`.
+        """
+        return self._yaw_setpoint
+
+    @yaw_setpoint.setter
+    def yaw_setpoint(self, setpoint):
+        if setpoint is not None and not callable(setpoint):
+            raise TypeError("yaw_setpoint must be callable psi(t) -> (psi, dpsi, ddpsi), or None")
+        self._yaw_setpoint = setpoint
+
+    @property
     def attitude_controllers(self) -> list:
         """Per-quadrotor attitude controllers."""
         return self._att_controllers
@@ -370,7 +398,9 @@ class MultiQuadCsPayloadBase:
 
     @masses.setter
     def masses(self, value):
-        self._masses = self._broadcast(value, "masses")
+        masses = self._broadcast(value, "masses")
+        check_positive(masses, "masses", warn_below=MIN_PHYSICAL_MASS)
+        self._masses = masses
         self._sync_default_controllers()
 
     @property
@@ -433,7 +463,9 @@ class MultiQuadCsPayloadBase:
 
     @cable_lengths.setter
     def cable_lengths(self, value):
-        self._cable_lengths = self._broadcast(value, "cable_lengths")
+        lengths = self._broadcast(value, "cable_lengths")
+        check_positive(lengths, "cable_lengths")
+        self._cable_lengths = lengths
         self._sync_default_controllers()
 
     @property
@@ -463,10 +495,22 @@ class MultiQuadCsPayloadBase:
 
     @property
     def payload_mass(self) -> float:
+        r"""Payload mass ``m_L``. Must be strictly positive.
+
+        ``m_L > 0`` is exactly the condition under which the payload mass
+        matrix ``m_L I + Σ_i m_i q_i q_iᵀ`` of the module docstring is positive
+        definite. At ``m_L = 0`` the rank-one sum is all that is left, and with
+        parallel cables (the ``nQ = 1`` case, and the ring at radius → 0) it is
+        singular — ``np.linalg.solve`` then raises out of the middle of
+        :meth:`_zoh`, several frames from the assignment that caused it. At
+        ``m_L < 0`` it is indefinite and the solve happily returns an
+        acceleration that describes nothing.
+        """
         return self._payload_mass
 
     @payload_mass.setter
     def payload_mass(self, value: float):
+        check_positive(value, "payload_mass", warn_below=MIN_PHYSICAL_MASS)
         self._payload_mass = float(value)
         self._sync_default_controllers()
 
@@ -489,9 +533,12 @@ class MultiQuadCsPayloadBase:
         #
         # The centripetal coefficient is ‖q̇_i‖², not ‖ω_i‖²: the exact identity
         # is q_i · q̈_i = -‖q̇_i‖², and ‖q̇_i‖² = ‖ω_i‖² - (q_i·ω_i)² coincides
-        # with ‖ω_i‖² only while ω_i is exactly tangent.  ZOH-Euler lets q·ω
-        # drift off zero (see test_cable_rates_stay_tangent), so the two forms
-        # are not interchangeable.  This matches the single-quadrotor model
+        # with ‖ω_i‖² only while ω_i is exactly tangent.  The integrator now
+        # keeps it exactly tangent (`manif.zoh_step`, see
+        # test_cable_rates_stay_tangent), so the two agree *along a run* — but
+        # they are still not interchangeable, because nothing stops a caller
+        # handing `reset()` a rate with a component along q_i, and only the
+        # ‖q̇_i‖² form is right then.  This matches the single-quadrotor model
         # ``udaan/models/quadrotor_cspayload/base.py``.
         mass_matrix = self._payload_mass * np.eye(3)
         rhs = np.zeros(3)
@@ -520,8 +567,15 @@ class MultiQuadCsPayloadBase:
 
             # cable attitude dynamics
             domega = (q_hat @ accel_plus_g) / l_i - (q_hat @ u_perp[i]) / (self._masses[i] * l_i)
-            self.state.cable_attitudes[i] = self.state.cable_attitudes[i].step(omega[i] * h)
-            self.state.cable_angular_velocities[i] += TS2(domega * h)
+            (
+                self.state.cable_attitudes[i],
+                self.state.cable_angular_velocities[i],
+            ) = zoh_step(
+                self.state.cable_attitudes[i],
+                self.state.cable_angular_velocities[i],
+                domega,
+                h,
+            )
 
             # quadrotor attitude dynamics
             Omega = np.asarray(self.state.angular_velocities[i]).copy()
@@ -717,10 +771,13 @@ class MultiQuadCsPayloadBase:
     def _desired_attitudes(self, flat_map, flat_fn, t):
         """Per-quadrotor ``(R_i, Ω_i, Ω̇_i)`` recovered from the flat output.
 
-        Only ``R_i`` is nominally part of the contract; the attitude loop of
-        :class:`~udaan.control.quadrotor.GeometricAttitudeController`
-        recomputes ``R_i^d`` from the commanded thrust vector and consumes just
-        ``Ω_i^d`` and ``Ω̇_i^d``.
+        All three are used. The attitude loop of
+        :class:`~udaan.control.quadrotor.GeometricAttitudeController` keeps
+        ``b₃`` of ``R_i^d`` from the commanded thrust vector and takes from the
+        recovered ``R_i`` the one remaining degree of freedom, the heading of
+        ``b₁`` about ``b₃``. With the default ψ ≡ 0 that heading is the world
+        ``x`` axis and the composition is close to a no-op; bind
+        :attr:`yaw_setpoint` to command a heading that is not zero.
 
         Returns ``None`` when the flat map refuses the sample — a cable would
         go slack, or a quadrotor is in free fall. That is a legitimate outcome
@@ -740,9 +797,10 @@ class MultiQuadCsPayloadBase:
         # moment feedforward Ω̇_i, and truncating them there is exactly the
         # approximation the M1 path makes by stopping its jet at snap.
         x_L = Jet(np.array([pos, vel, acc, jerk, snap, np.zeros(3), np.zeros(3)], dtype=float))
+        psi = yaw_jet(self._yaw_setpoint, t)
         flats = MultiQuadCsPayloadFlats(
             x_L=x_L,
-            psi=[Jet(np.zeros(3)) for _ in range(self._num_quadrotors)],
+            psi=[psi for _ in range(self._num_quadrotors)],
         )
         try:
             ref, _ = flat_map.recover(flats)

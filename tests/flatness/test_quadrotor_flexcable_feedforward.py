@@ -357,6 +357,7 @@ class TestOpenLoopZoh:
             assert value < 5e-2, f"n={n} lissajous {key} = {value:.3e}"
 
     @pytest.mark.parametrize("n", [1, 2, 3])
+    @pytest.mark.slow
     def test_zoh_error_shrinks_with_the_step(self, n):
         """First-order convergence: a 4x smaller step gives a 4x smaller
         residual (the measured ratio is 0.250 at every ``n`` tried).

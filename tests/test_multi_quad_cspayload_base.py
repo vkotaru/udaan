@@ -681,33 +681,33 @@ class TestDynamics:
 
     @pytest.mark.parametrize("nQ", [2, 3, 4])
     def test_cable_rates_stay_tangent(self, nQ):
-        """q·ω drift is O(h¹) accumulated, and is *not* small under thrust.
+        """``q·ω`` stays at machine precision, at any step size.
 
-        ω̇ is exactly tangent, so q·ω is conserved in continuous time. The ZOH
-        update steps ``q`` first and then adds ``h·ω̇(q_old)``, so each step
-        leaves an O(h) tangency residual that accumulates: halving ``dt``
-        halves the drift (measured ratio 2.00 across refinements), i.e. O(h¹),
-        not O(h²).
+        ``ω̇`` is exactly tangent, so ``q·ω`` is conserved in continuous time.
+        The old ZOH update stepped ``q`` first and then added ``h·ω̇(q_old)``,
+        which left an ``O(h)`` residual along the *new* ``q``; it accumulated
+        at first order, reaching 1.03e-2 here at ``nQ = 3``, ``dt = 1/200``
+        over 2 s of thrusting flight (7.2e-2 at ``nQ = 2``), and 2.1e-1 in M5
+        and 1.0 in M6.
 
-        Exercised with thrust and tilted attitudes on purpose — under zero
-        input the drift is ~5e-5 and any bound above that passes for free.
-        Measured worst-case at ``dt = 1/200`` over 2 s: 1.0e-2 (nQ=3) to
-        7.2e-2 (nQ=2). The magnitude bound below is therefore deliberately
-        loose; the *order* is what the convergence assertion pins.
+        :func:`udaan.manif.zoh_step` now projects the updated rate back onto
+        ``T_q S²`` at the ``q`` the same substep produced. Hence a **flat**
+        bound rather than a convergence rate: there is no longer an order to
+        measure, and this test now pins the invariant itself.
 
-        :class:`udaan.manif.S2.TS2` already has ``transport``, which would
-        reproject ω onto ``T_q S²`` and kill this uniformly across every
-        cable-suspended model. It is not applied here because the same
-        ordering is baked into the trusted single-quadrotor model
-        ``udaan/models/quadrotor_cspayload/base.py`` (which drifts to
-        9.4651e-03 in the same regime, identical to this model at nQ=1); fixing
-        one and not the other would make them diverge.
+        The projected component is gauge in the *continuous* dynamics —
+        ``q̇ = ω × q`` annihilates it — but not in the discrete step, because
+        ``q_next = expm(hat(ω h)) q`` reads the whole of ``ω``. Every model's
+        closed-loop trajectory therefore moves a little: 9.97e-05 m of payload
+        position over a 3 s brisk spiral here, against 2.81e-04 m (M2),
+        5.83e-04 m (M4) and 4.58e-05 m (M5). Every tolerance in this suite
+        absorbs that, and no agreement or conservation assertion changes. See
+        :func:`udaan.manif.zoh_step` for the full accounting, including the
+        second path M5 and M6 have through their LQR error states.
         """
         worst = {dt: self._worst_tangency_drift(nQ, dt) for dt in (1.0 / 200.0, 1.0 / 400.0)}
-        assert worst[1 / 200] < 0.15, f"q·ω drifted to {worst[1 / 200]:.3e}"
-        assert worst[1 / 200] > 1e-3, "thrust is too weak to exercise the real drift"
-        ratio = worst[1 / 200] / worst[1 / 400]
-        assert 1.8 < ratio < 2.2, f"drift is not O(h¹): halving dt scaled it by {ratio:.3f}"
+        for dt, value in worst.items():
+            assert value < 1e-12, f"q·ω drifted to {value:.3e} at dt={dt}"
 
     @staticmethod
     def _worst_tangency_drift(nQ, dt):
@@ -820,3 +820,139 @@ class TestStationKeeping:
             mdl.step(mdl.compute_formation_input())
         assert np.linalg.norm(mdl.state.payload_position - start) < 0.15
         assert np.linalg.norm(mdl.state.payload_velocity) < 0.15
+
+
+class TestParameterValidation:
+    """Non-physical parameters are refused at assignment, not inside ``_zoh``.
+
+    The payload mass matrix is ``m_L I + Σ_i m_i q_i q_iᵀ`` (module docstring).
+    The rank-one sum alone is singular whenever the cables are parallel — which
+    is every ``nQ = 1`` model, and the ring in the limit of a small radius — so
+    ``m_L ≤ 0`` was not a merely inaccurate model: ``np.linalg.solve`` raised a
+    ``LinAlgError`` from inside the integrator, several frames from the
+    assignment that caused it. ``m_L < 0`` is worse, because the solve
+    *succeeds* and returns an acceleration for an indefinite system.
+    """
+
+    @pytest.mark.parametrize("value", [0.0, -1.0])
+    def test_non_positive_payload_mass_is_refused(self, value):
+        with pytest.raises(ValueError, match="strictly positive"):
+            MultiQuadCsPayloadBase(num_quadrotors=3, payload_mass=value)
+
+    @pytest.mark.parametrize("value", [0.0, -1.0])
+    def test_non_positive_payload_mass_is_refused_on_assignment(self, value):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        with pytest.raises(ValueError, match="strictly positive"):
+            mdl.payload_mass = value
+
+    @pytest.mark.parametrize("name", ["masses", "cable_lengths"])
+    @pytest.mark.parametrize("value", [0.0, -1.0])
+    def test_non_positive_per_index_parameters_are_refused(self, name, value):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        with pytest.raises(ValueError, match="strictly positive"):
+            setattr(mdl, name, value)
+
+    def test_one_bad_entry_in_a_per_index_array_is_enough(self):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        with pytest.raises(ValueError, match="strictly positive"):
+            mdl.masses = [1.0, -0.5, 1.0]
+
+    @pytest.mark.parametrize("value", [np.nan, np.inf])
+    def test_non_finite_payload_mass_is_refused(self, value):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=2)
+        with pytest.raises(ValueError, match="finite"):
+            mdl.payload_mass = value
+
+    def test_a_refused_assignment_leaves_the_model_untouched(self):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        before = mdl.masses.copy()
+        with pytest.raises(ValueError):
+            mdl.masses = [1.0, -0.5, 1.0]
+        np.testing.assert_allclose(mdl.masses, before)
+
+    def test_the_singular_solve_this_prevents(self):
+        """Show the failure mode, so the guard cannot be removed as cosmetic.
+
+        With ``m_L = 0`` and one quadrotor the mass matrix is ``m q qᵀ``, rank
+        one, and the solve that ``_zoh`` performs every substep is singular.
+        """
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=1)
+        q = np.asarray(mdl.state.cable_attitudes[0])
+        singular = 0.0 * np.eye(3) + mdl.masses[0] * np.outer(q, q)
+        assert np.linalg.matrix_rank(singular) == 1
+        with pytest.raises(np.linalg.LinAlgError):
+            np.linalg.solve(singular, np.ones(3))
+
+    def test_valid_assignments_still_work(self):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        mdl.payload_mass = 0.4
+        mdl.masses = [0.9, 1.0, 1.1]
+        mdl.cable_lengths = 1.2
+        assert mdl.payload_mass == 0.4
+        np.testing.assert_allclose(mdl.masses, [0.9, 1.0, 1.1])
+        np.testing.assert_allclose(mdl.cable_lengths, [1.2, 1.2, 1.2])
+
+
+class TestYawSetpoint:
+    r"""``yaw_setpoint`` is what makes the recovered ``R_i`` carry a heading.
+
+    The feedforward path hardcoded ψ ≡ 0 before, which made the attitude
+    composition in
+    :meth:`~udaan.control.quadrotor.GeometricAttitudeController.compute` a near
+    no-op and left the capability unreachable through the public API. The
+    default is still ψ ≡ 0, so binding nothing changes nothing.
+    """
+
+    @staticmethod
+    def _flat_map(mdl):
+        from udaan.flatness import MultiQuadCsPayload
+
+        return MultiQuadCsPayload.from_model(
+            mdl, tension_policy=mdl.payload_controller.tension_policy
+        )
+
+    @staticmethod
+    def _hover_flat_fn(mdl):
+        """A ``get_full``-shaped callable holding the formation at its spawn."""
+        target = np.asarray(mdl.state.payload_position, dtype=float).copy()
+        return lambda t: (target, *(np.zeros(3) for _ in range(4)))
+
+    def test_the_default_is_unbound(self):
+        assert MultiQuadCsPayloadBase(num_quadrotors=3).yaw_setpoint is None
+
+    def test_a_non_callable_is_refused(self):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        with pytest.raises(TypeError):
+            mdl.yaw_setpoint = 0.5
+
+    def test_it_reaches_the_recovered_attitudes(self):
+        """Bound and unbound must not recover the same ``R_i``."""
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        mdl.reset(payload_position=np.array([0.0, 0.0, 2.0]))
+        flat_map, flat_fn = self._flat_map(mdl), self._hover_flat_fn(mdl)
+
+        unbound = mdl._desired_attitudes(flat_map, flat_fn, 0.0)
+        mdl.yaw_setpoint = lambda t: (0.9, 0.0, 0.0)
+        bound = mdl._desired_attitudes(flat_map, flat_fn, 0.0)
+
+        assert unbound is not None and bound is not None
+        for (R_a, _, _), (R_b, _, _) in zip(unbound, bound, strict=True):
+            assert np.linalg.norm(np.asarray(R_a) - np.asarray(R_b)) > 0.5
+
+    def test_unbound_is_exactly_psi_zero(self):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        mdl.reset(payload_position=np.array([0.0, 0.0, 2.0]))
+        flat_map, flat_fn = self._flat_map(mdl), self._hover_flat_fn(mdl)
+
+        unbound = mdl._desired_attitudes(flat_map, flat_fn, 0.0)
+        mdl.yaw_setpoint = lambda t: (0.0, 0.0, 0.0)
+        explicit = mdl._desired_attitudes(flat_map, flat_fn, 0.0)
+        for (R_a, _, _), (R_b, _, _) in zip(unbound, explicit, strict=True):
+            np.testing.assert_array_equal(np.asarray(R_a), np.asarray(R_b))
+
+    def test_a_malformed_setpoint_is_refused_where_it_is_read(self):
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        mdl.reset(payload_position=np.array([0.0, 0.0, 2.0]))
+        mdl.yaw_setpoint = lambda t: (0.0, 0.0)
+        with pytest.raises(ValueError, match="psi, dpsi, ddpsi"):
+            mdl._desired_attitudes(self._flat_map(mdl), self._hover_flat_fn(mdl), 0.0)

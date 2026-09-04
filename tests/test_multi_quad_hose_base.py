@@ -773,12 +773,17 @@ class TestDynamics:
             assert abs(np.linalg.norm(np.asarray(q)) - 1.0) < TOL_TIGHT
 
     @pytest.mark.parametrize("n,attachments", [(2, (0, 2)), (4, (0, 4))])
-    def test_link_rates_drift_off_tangent_at_first_order(self, n, attachments):
-        """``q_i · ω_i`` is exactly zero in the continuous dynamics.
+    def test_link_rates_stay_tangent(self, n, attachments):
+        """``q_i · ω_i`` is exactly zero in the continuous dynamics, and now in ZOH too.
 
         The gauge row ``M_ii I`` makes ``ω̇_i · q_i = 0`` an equation of the
-        solve, so the residual is a pure ZOH-Euler artefact and falls with the
-        substep — the same trade M2-M5 make.
+        solve, so any residual was a pure ZOH-Euler artefact. It used to fall
+        with the substep but never vanish — the worst here reached 1.0 at
+        ``n = 4``, ``dt = 1/200``, the largest of any model in the suite,
+        because a hose has the most links to accumulate it over.
+        :func:`udaan.manif.S2.zoh_step` reprojects the updated rate onto
+        ``T_q S²``, which removes a gauge component the dynamics never read —
+        the same fix M2-M5 now share — so the invariant holds outright.
         """
         drifts = []
         for dt in (1 / 100.0, 1 / 200.0, 1 / 400.0):
@@ -798,7 +803,7 @@ class TestDynamics:
                     for i in range(n)
                 )
             )
-        assert drifts[0] > drifts[1] > drifts[2]
+        assert max(drifts) < 1e-12, f"q·ω drifted to {max(drifts):.3e}"
 
     @pytest.mark.slow
     @pytest.mark.parametrize("n,attachments", [(2, (0, 2)), (4, (0, 4)), (4, (0, 2, 4))])

@@ -76,7 +76,7 @@ DEFAULT_NUM_CABLE_LINKS = 3
 #: ``create_flexible_cable_payload`` carried ``cable_mass = 0.01`` as a
 #: hardcoded local; that literal became the function's keyword default, at the
 #: same value, and its one pre-existing caller (``_generate_xml`` in
-#: :mod:`udaan.models.mujoco.quadrotor_cspayload_fleet`) passes none of the new
+#: :mod:`udaan.models.fleet.quadrotor_cspayload_fleet`) passes none of the new
 #: keywords and regenerates its ``cspayload_fleet_*`` asset byte-identically,
 #: cache hash included. The 0.1 kg here is the default for M5's *own* asset and
 #: analytical model only.
@@ -201,6 +201,15 @@ DEFAULT_HOSE_SAG_RATIO = 0.8
 #: by 20%.
 DEFAULT_MJCF_TIMESTEP = 1.25e-3  # s
 
+#: Outer control-loop period shared by every model, in seconds.
+#:
+#: The analytical models take it as ``dt`` and subdivide it into four
+#: :data:`DEFAULT_MJCF_TIMESTEP` substeps; the MuJoCo backends take
+#: ``round(dt / DEFAULT_MJCF_TIMESTEP) = 4`` integrator steps per
+#: :meth:`step`. The exact division is the point — see
+#: :data:`DEFAULT_MJCF_TIMESTEP`.
+DEFAULT_SIM_DT = 5e-3  # s
+
 # =============================================================================
 # Default control gains
 # =============================================================================
@@ -212,6 +221,28 @@ DEFAULT_POS_KD = np.array([3.0, 3.0, 9.0])
 # Attitude geometric controller gains (Lee 2010)
 DEFAULT_ATT_KP = np.array([2.4, 2.4, 1.35])
 DEFAULT_ATT_KD = np.array([0.35, 0.35, 0.225])
+
+#: Smallest ``‖b₃ × b₁_hint‖`` the commanded-attitude construction will use a
+#: raw heading hint at.
+#:
+#: :meth:`udaan.manif.SO3.from_two_vectors` divides by that norm, so the hint's
+#: usable heading information vanishes as ``b₁_hint`` swings onto ``b₃``.
+#: The flatness reference's own ``b₁`` is a *tilted* hint — unlike the fixed
+#: world ``x`` it replaced, it degenerates whenever the commanded thrust
+#: direction approaches the reference's forward axis, which a yawing reference
+#: at high tilt reaches. Measured on an M1 spiral at 8 m/s, radius 2 m and
+#: ``ψ̇ = 3 rad/s``: raw hint 0.0065 minimum conditioning and a **153°**
+#: commanded-attitude jump in one 5 ms step; guarded at this threshold, 0.30
+#: and 31°, the same as the well-conditioned world-``x`` hint gives.
+#:
+#: Below it,
+#: :meth:`~udaan.control.quadrotor.GeometricAttitudeController._cmd_accel_to_cmd_att`
+#: blends the hint toward the reference frame carried onto ``b₃`` by the
+#: minimal rotation, which is orthogonal to ``b₃`` by construction. ``0.3`` is
+#: ``sin 17.5°``: close enough to the singularity that the raw hint's heading
+#: is already unreliable, far enough that a well-tracked reference never
+#: reaches it (measured minima above 0.6 on every spiral the suite flies).
+MIN_ATTITUDE_HINT_CONDITIONING = 0.3
 
 # Payload controller gains (Sreenath 2013)
 DEFAULT_PAYLOAD_POS_KP = np.array([4.0, 4.0, 8.0])

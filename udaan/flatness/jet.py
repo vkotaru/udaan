@@ -230,3 +230,33 @@ class Jet:
         else:
             vals = ", ".join(np.array2string(row, precision=4, separator=", ") for row in self.data)
         return f"Jet(order={self.order}, dim={self.dim}; [{vals}])"
+
+
+def yaw_jet(setpoint, t: float) -> Jet:
+    """Order-2 scalar yaw jet ``(ψ, ψ̇, ψ̈)`` for a flat map's ``psi`` input.
+
+    Every flat map in this package takes yaw as its second flat output and
+    needs it through ``ψ̈``. The models expose that as a *yaw setpoint*: a
+    callable ``ψ(t) -> (ψ, ψ̇, ψ̈)``, mirroring the position setpoint protocol
+    ``get(t) -> (pos, vel, acc)``.
+
+    Args:
+        setpoint: the callable, or ``None`` for the ψ ≡ 0 default — heading
+            hold at zero yaw, which is what every model did before a yaw
+            setpoint could be bound.
+        t: time to evaluate at.
+
+    Returns:
+        A scalar :class:`Jet` of order 2.
+
+    Raises:
+        ValueError: if the callable does not return exactly three numbers.
+    """
+    if setpoint is None:
+        return Jet(np.zeros(3))
+    values = np.asarray(setpoint(t), dtype=float).reshape(-1)
+    if values.size != 3:
+        raise ValueError(
+            f"a yaw setpoint must return (psi, dpsi, ddpsi); got {values.size} value(s)"
+        )
+    return Jet(values)

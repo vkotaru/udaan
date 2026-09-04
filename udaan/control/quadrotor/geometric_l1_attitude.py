@@ -97,7 +97,10 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
             t: current time.
             state: (R, Omega) — SO3 rotation and TSO3 angular velocity.
             thrust_force: desired thrust force vector in world frame.
-            desired_att: optional (Rd, Omegad, dOmegad) feedforward.
+            desired_att: optional (Rd, Omegad, dOmegad) feedforward. ``Rd``
+                contributes its heading only, exactly as in
+                :meth:`GeometricAttitudeController.compute`; ``b₃`` stays with
+                the thrust command so the position loop keeps its path in.
 
         Returns:
             (f, M) — scalar thrust and 3D torque vector.
@@ -107,8 +110,12 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
         J: np.ndarray = self.inertia
         Jinv: np.ndarray = self._inertia_inv
 
-        # Desired attitude
-        Rd: SO3 = self._cmd_accel_to_cmd_att(thrust_force)
+        # Desired attitude: b3 from the thrust command, heading from the
+        # reference attitude when there is one. See
+        # :meth:`GeometricAttitudeController._cmd_accel_to_cmd_att`.
+        Rd: SO3 = self._cmd_accel_to_cmd_att(
+            thrust_force, reference=None if desired_att is None else desired_att[0]
+        )
         Omegad: TSO3
         dOmegad: Vec3
         if desired_att is not None:

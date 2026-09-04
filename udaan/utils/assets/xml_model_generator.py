@@ -111,6 +111,11 @@ def multi_quad_pointmass(
     angles = np.linspace(0.0, 2 * np.pi, num_quadrotors, endpoint=False)
 
     writer = MujocoAssetCreator("MultiQuadPointMass")
+    # 1.25 ms, so that the M3 backend's `round(dt / timestep)` is exactly 4 at
+    # the shared 5 ms outer loop. Left at MuJoCo's 2 ms default this was
+    # `round(2.5) = 2` — 4 ms of physics per step while `dt` still read 5 ms,
+    # and `self.t` 5 ms short of the analytical model's after a 2 s run.
+    writer.option(timestep=DEFAULT_MJCF_TIMESTEP)
     for i in range(num_quadrotors):
         writer.create_quadrotor0(
             writer.worldbody,

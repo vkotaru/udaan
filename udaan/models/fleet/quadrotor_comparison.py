@@ -5,9 +5,9 @@ from scipy.spatial.transform import Rotation as sp_rot
 
 from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
-from .. import base
+from ..backend import MujocoModel
 from ..quadrotor import QuadrotorBase
-from . import MujocoModel
+from . import _base as base
 
 _logger = get_logger(__name__)
 
@@ -30,14 +30,30 @@ class QuadrotorComparison(base.BaseModel):
         self.render = kwargs["render"] if "render" in kwargs else False
         filename = kwargs["filename"] if "filename" in kwargs else "quadrotor_comparison.xml"
 
-        self._mjDt = 1.0 / 500.0
-        self._step_iter = int(self.sim_timestep / self._mjDt)
+        # loading mujoco model
+        self._mjMdl = MujocoModel(filename, render=self.render)
+
+        # Read the integrator step from the loaded asset rather than assuming
+        # it. `quadrotor_comparison.xml` is hand-written and carries no
+        # `<option>`, so this is MuJoCo's 2 ms default and divides
+        # `sim_timestep` exactly — but a hardcoded 1/500 would silently stop
+        # being true the moment the asset gained one, and `step()` would then
+        # advance a different amount of time from the one it reports.
+        self._mjDt = float(self._mjMdl.model.opt.timestep)
+        self._step_iter = max(1, int(round(self.sim_timestep / self._mjDt)))
         self._nFrames = 1
+        achieved = self._step_iter * self._mjDt
+        if abs(achieved - self.sim_timestep) > 1e-12:
+            _logger.warning(
+                "MuJoCo timestep %.6g s does not divide sim_timestep = %.6g s; each "
+                "step() advances %.6g s instead.",
+                self._mjDt,
+                self.sim_timestep,
+                achieved,
+            )
         if self._attitude_zoh:
             self._step_iter, self._nFrames = self._nFrames, self._step_iter
 
-        # loading mujoco model
-        self._mjMdl = MujocoModel(filename, render=self.render)
         self._plant_body_index = 1
         self._reference_body_index = 2
         self._plant_ctrl_index = 0

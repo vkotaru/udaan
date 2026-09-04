@@ -626,19 +626,22 @@ class TestDynamics:
 
     @pytest.mark.parametrize("n", [1, 2, 3])
     def test_link_rates_stay_tangent(self, n):
-        """Validation 6, second half: ``q_i . omega_i`` drifts at O(h), like M2-M4.
+        """Validation 6, second half: ``q_i . omega_i`` is now exactly conserved.
 
         The continuous dynamics conserve it exactly — the ``M_ii I`` diagonal
         makes ``omega_dot_i . q_i = 0`` an *equation of the solve* rather than
-        an accident — so the residual is pure integration error and its
-        first-order convergence is a check on the integrator, not the model.
-        A nonzero thrust is essential: at zero input the whole system is in
-        free fall, every ``omega_dot_i`` is zero and the drift never starts.
-        Which is also why the horizon is short and the link counts small — a
-        taut chain is where the stability limit lives, and past it the drift
-        stops being integration error and becomes the instability instead.
-        Measured at ``dt = 5 ms`` over 0.5 s: 2.8e-3 (n=1), 6.5e-2 (n=2),
-        2.1e-1 (n=3), each falling by ~4x at ``dt = 1.25 ms``.
+        an accident. The old ZOH update broke that by evaluating
+        ``omega_dot_i`` at the pre-step ``q_i``, and the residual accumulated
+        at first order: measured at ``dt = 5 ms`` over 0.5 s, 2.8e-3 (n=1),
+        6.5e-2 (n=2), 2.1e-1 (n=3), each falling by ~4x at ``dt = 1.25 ms``.
+        :func:`udaan.manif.S2.zoh_step` now reprojects onto ``T_q S^2`` at the
+        updated ``q``, and the drift is gone at every step size.
+
+        A nonzero thrust is still essential to make this test mean anything:
+        at zero input the whole system is in free fall, every ``omega_dot_i``
+        is zero and the drift would never have started. Which is also why the
+        horizon is short and the link counts small — a taut chain is where the
+        stability limit lives.
         """
         drifts = []
         for dt in (1.0 / 200.0, 1.0 / 800.0):
@@ -659,9 +662,7 @@ class TestDynamics:
                     for i in range(n)
                 )
             )
-        assert drifts[0] < 0.3
-        # A 4x smaller step must give roughly 4x less drift (first order).
-        assert drifts[1] < 0.35 * drifts[0]
+        assert max(drifts) < 1e-12, f"q.omega drifted to {max(drifts):.3e}"
 
     @pytest.mark.slow
     @pytest.mark.parametrize("n", LINK_COUNTS)

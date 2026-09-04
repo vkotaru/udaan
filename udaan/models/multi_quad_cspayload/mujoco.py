@@ -5,22 +5,20 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import os
 
 import mujoco
 import numpy as np
 
-from ... import _FOLDER_PATH
 from ...core.defaults import DEFAULT_SPAWN_HEIGHT
 from ...manif import SO3, TSO3
+from ...utils.assets.cache import ensure_generated
 from ...utils.assets.mujoco_asset_creator import MJCF_GENERATOR_VERSION
 from ...utils.logging import get_logger
-from ..mujoco import MujocoModel
+from ..backend import MujocoModel
 from .base import MultiQuadCsPayloadBase, cable_state_from_geometry
 
 _logger = get_logger(__name__)
 
-_MJCF_DIR = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf")
 
 #: Body-name templates used by the MJCF generator.
 _QUAD_BODY = "quad{}"
@@ -127,12 +125,17 @@ class MultiQuadCsPayloadMujoco(MultiQuadCsPayloadBase):
         formation_radius: float,
         spawn_height: float,
     ) -> str:
-        """Return the MJCF filename for this configuration, generating it if needed.
+        """Return the MJCF path for this configuration, generating it if needed.
 
         The filename carries a hash of every parameter that shapes the XML —
         *and* of :data:`MJCF_GENERATOR_VERSION`, so a release that changes the
         emitted structure cannot reuse a file an earlier one left in a warm
         asset directory.
+
+        The file lives in the user asset cache
+        (:func:`udaan.utils.assets.cache.generated_mjcf_dir`), not inside the
+        installed package, and an absolute path is returned rather than a bare
+        name so the caller loads exactly the file this wrote.
         """
         # A lone quadrotor hovers on the axis; the ring radius is unused, so it
         # must not enter the hash either.
@@ -149,14 +152,14 @@ class MultiQuadCsPayloadMujoco(MultiQuadCsPayloadBase):
         }
         config_hash = hashlib.md5(json.dumps(config, sort_keys=True).encode()).hexdigest()[:8]
         generated_name = f"multi_quad_pointmass_{num_quadrotors}q_{config_hash}.xml"
-        generated_path = os.path.join(_MJCF_DIR, generated_name)
-        if not os.path.exists(generated_path):
+
+        def build(path: str) -> None:
             from ...utils.assets import xml_model_generator
 
             _logger.info("Generating MJCF for %d quadrotors: %s", num_quadrotors, generated_name)
             xml_model_generator.multi_quad_pointmass(
                 num_quadrotors=num_quadrotors,
-                filename=generated_path,
+                filename=path,
                 cable_length=cable_length,
                 payload_mass=payload_mass,
                 quad_mass=quad_mass,
@@ -164,7 +167,11 @@ class MultiQuadCsPayloadMujoco(MultiQuadCsPayloadBase):
                 spawn_height=spawn_height,
                 verbose=False,
             )
-        return generated_name
+
+        # Generated assets go to the user cache, not into the installed
+        # package, and the write is atomic — see
+        # :func:`udaan.utils.assets.cache.ensure_generated`.
+        return ensure_generated(generated_name, build)
 
     def _resolve_mj_indices(self):
         """Look up body ids and per-body qpos/qvel addresses by name."""

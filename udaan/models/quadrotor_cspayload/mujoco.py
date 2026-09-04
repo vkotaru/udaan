@@ -7,7 +7,7 @@ import numpy as np
 
 from ...manif import S2, SO3, TS2, TSO3
 from ...utils.logging import get_logger
-from ..mujoco import MujocoModel
+from ..backend import MujocoModel
 from .base import QuadrotorCsPayloadBase
 
 _logger = get_logger(__name__)
@@ -187,7 +187,7 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
     def cable_length(self, value):
         QuadrotorCsPayloadBase.cable_length.fset(self, value)
         if self._mjMdl is not None and self._mj_cable_index is not None:
-            from ..mujoco import mujoco
+            from ..backend import mujoco
 
             self._mjMdl.model.tendon_length0[self._mj_cable_index] = value
             self._mjMdl.model.tendon_limited[self._mj_cable_index] = True

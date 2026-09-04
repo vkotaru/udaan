@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from tests.conftest import TOL_ANALYTIC, TOL_TIGHT
-from udaan.core.defaults import DEFAULT_POS_KP, GRAVITY
+from udaan.core.defaults import DEFAULT_MJCF_TIMESTEP, DEFAULT_POS_KP, GRAVITY
 from udaan.manif import S2, SO3, TS2, TSO3
 from udaan.models.multi_quad_cspayload import MultiQuadCsPayloadMujoco
 
@@ -219,3 +219,44 @@ class TestMujocoStationKeeping:
             # The ring contracts by exactly the predicted amount.
             radius = np.linalg.norm(mdl.state.positions[i][:2] - mdl.state.payload_position[:2])
             assert mdl._formation_radius - radius == pytest.approx(expected_drift, rel=0.02)
+
+
+class TestTimestep:
+    """``step()`` must advance the time it reports.
+
+    The backend takes ``round(dt / timestep)`` MuJoCo substeps. The generated
+    asset used to leave MuJoCo's 2 ms default in place, and 2 ms does not
+    divide the model's 5 ms ``dt``: ``round(2.5) = 2``, so each ``step()``
+    advanced 4 ms while ``dt`` still read 5 ms. Over a 2 s run the backend
+    finished 5 ms short of the analytical model and every cross-backend
+    comparison was reading two different simulation times. The asset now sets
+    :data:`~udaan.core.defaults.DEFAULT_MJCF_TIMESTEP`, which divides ``dt``
+    exactly — the same fix M4 and M6 already had.
+    """
+
+    @pytest.mark.parametrize("nQ", [1, 2, 3])
+    def test_the_integrator_step_divides_dt_exactly(self, nQ):
+        mdl = MultiQuadCsPayloadMujoco(num_quadrotors=nQ)
+        assert mdl._mjDt == pytest.approx(DEFAULT_MJCF_TIMESTEP)
+        assert mdl._step_iter * mdl._mjDt == pytest.approx(mdl.dt, abs=TOL_TIGHT)
+
+    def test_reported_time_matches_elapsed_physics(self):
+        mdl = MultiQuadCsPayloadMujoco(num_quadrotors=3)
+        mdl.reset(payload_position=np.array([0.0, 0.0, 1.0]))
+        steps = 100
+        for _ in range(steps):
+            mdl.step(mdl.compute_default_input())
+        assert mdl.t == pytest.approx(steps * mdl.dt, abs=TOL_TIGHT)
+
+    def test_it_stays_on_the_analytical_model_s_time_grid(self):
+        """Both backends must land on the same samples, or comparisons are meaningless."""
+        from udaan.models.multi_quad_cspayload import MultiQuadCsPayloadBase
+
+        mj = MultiQuadCsPayloadMujoco(num_quadrotors=3)
+        base = MultiQuadCsPayloadBase(num_quadrotors=3)
+        mj.reset(payload_position=np.array([0.0, 0.0, 1.0]))
+        base.reset(payload_position=np.array([0.0, 0.0, 1.0]))
+        while mj.t < 2.0:
+            mj.step(mj.compute_default_input())
+            base.step(base.compute_default_input())
+        assert mj.t == pytest.approx(base.t, abs=TOL_TIGHT)

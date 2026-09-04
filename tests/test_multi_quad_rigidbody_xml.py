@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import shutil
 import xml.etree.ElementTree as ET
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import mujoco
 import numpy as np
@@ -53,19 +53,21 @@ from udaan.core.defaults import (
 )
 from udaan.models.multi_quad_rigidbody import MultiQuadRigidbodyMujoco
 from udaan.models.multi_quad_rigidbody import mujoco as mj_module
-from udaan.models.multi_quad_rigidbody.mujoco import _MJCF_DIR
 from udaan.utils.assets import (
     MJCF_GENERATOR_VERSION,
     multi_quad_rigidbody,
     rigid_payload_height,
 )
+from udaan.utils.assets.cache import PACKAGED_MJCF_DIR, generated_mjcf_dir
 from udaan.utils.grasp import ring_attachment_points
 
 pytestmark = pytest.mark.mujoco
 
 QUAD_COUNTS = [1, 2, 3, 4, 6]
 
-ASSET_DIR = Path(_MJCF_DIR)
+#: Where generated MJCF now lands: a user cache directory, not the installed
+#: package. ``scene.xml`` is still shipped, so the two are separate.
+ASSET_DIR = generated_mjcf_dir()
 
 #: The spawn geometry of the retired hand-written asset, kept named so the
 #: regression stays legible: a quadrotor ring at 45° azimuths, corner sites,
@@ -78,7 +80,7 @@ _RETIRED_SPAWN_DISTANCE = 0.7887331614684397
 @pytest.fixture
 def mjcf_dir(tmp_path) -> Path:
     """Scratch dir the generated MJCF can ``<include>`` its scene.xml from."""
-    shutil.copy(ASSET_DIR / "scene.xml", tmp_path / "scene.xml")
+    shutil.copy(PACKAGED_MJCF_DIR / "scene.xml", tmp_path / "scene.xml")
     return tmp_path
 
 
@@ -534,14 +536,19 @@ class TestConfigHash:
             cfg["spawn_height"],
         )
 
+    @staticmethod
+    def _basename(generated: str) -> str:
+        """``_ensure_xml`` returns a full path now that assets live in a cache."""
+        return PurePath(generated).name
+
     def test_identical_config_reuses_the_same_file(self, scratch_assets):
         first = self._name()
-        stat = (ASSET_DIR / first).stat()
+        stat = (ASSET_DIR / self._basename(first)).stat()
         second = self._name()
         assert first == second
-        assert first.startswith("multi_quad_rigidbody_3q_")
+        assert self._basename(first).startswith("multi_quad_rigidbody_3q_")
         # Reused, not rewritten.
-        assert (ASSET_DIR / first).stat().st_mtime_ns == stat.st_mtime_ns
+        assert (ASSET_DIR / self._basename(first)).stat().st_mtime_ns == stat.st_mtime_ns
 
     @pytest.mark.parametrize(
         "override",
@@ -569,8 +576,8 @@ class TestConfigHash:
         assert self._name() != first
 
     def test_generated_files_differ_in_content(self, scratch_assets):
-        base = ASSET_DIR / self._name()
-        other = ASSET_DIR / self._name(cable_length=1.15)
+        base = Path(self._name())
+        other = Path(self._name(cable_length=1.15))
         assert base.read_text() != other.read_text()
         np.testing.assert_allclose(_cable_spans(base), 1.05, atol=TOL_ANALYTIC)
         np.testing.assert_allclose(_cable_spans(other), 1.15, atol=TOL_ANALYTIC)

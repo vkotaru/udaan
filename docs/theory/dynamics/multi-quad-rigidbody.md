@@ -306,16 +306,26 @@ and the payload's attitude reference is read off `attitude_setpoint` at
 the same time, so a commanded manoeuvre is fed forward as well as fed
 back.
 
-What the attitude loop then *uses* is $\Omega_i$ and $\dot\Omega_i$ only.
+The attitude loop uses all three, but it splits them by degree of
+freedom.
 {py:meth}`~udaan.control.quadrotor.GeometricAttitudeController.compute`
-discards the recovered $R_i$ and always rebuilds its $R_d$ from the
-commanded thrust direction, because that is the only path the position
-loop has into the attitude command; substituting the open-loop $R_i$
-severs it and the closed loop diverges. Passing $R_i = I$ instead of the
-recovered value gives a bit-identical run at every $n_Q$, so the entire
-1.38x tracking improvement the feedforward buys is the rate channel
-($\dot\Omega_i$ on its own is worth 0.07%). The behaviour is shared with
-M1 and M3 and is not specific to M4.
+always rebuilds $b_3$ of its $R_d$ from the commanded thrust direction,
+because that is the only path the position loop has into the attitude
+command — substituting the open-loop $R_i$ *whole* severs it and the
+closed loop diverges. What it takes from $R_i$ is the one degree of
+freedom left over: the heading of $b_1$ about $b_3$.
+
+$R_i$ used to be discarded outright, and $R_i = I$ then gave a
+bit-identical run at every $n_Q$, with the entire 1.38x tracking
+improvement carried by the rate channel ($\dot\Omega_i$ on its own is
+worth 0.07%). That is no longer so: $R_i = I$ commands $\psi = 0$
+instead of the reference's heading. On the default $\psi \equiv 0$
+reference the two still agree to within 0.2%, because the heading the
+composition supplies is then the world $x$ axis the fallback would have
+used anyway; the channel earns its place when
+{py:attr}`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase.yaw_setpoint`
+commands a heading that is not zero. The behaviour is shared with M1 and
+M3 and is not specific to M4.
 
 The map is built from *this controller's* `tension_policy`. That is not
 housekeeping: $\Phi^{+} W$ is only half the split, and a reference

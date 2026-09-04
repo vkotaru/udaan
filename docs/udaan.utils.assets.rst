@@ -7,6 +7,7 @@ Submodules
 .. toctree::
    :maxdepth: 2
 
+   udaan.utils.assets.cache
    udaan.utils.assets.mujoco_asset_creator
    udaan.utils.assets.xml_model_generator
 

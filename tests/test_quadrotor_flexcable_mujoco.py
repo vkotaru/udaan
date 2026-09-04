@@ -30,6 +30,8 @@ in both.  It exists because a helper that only ever feeds already-valid input
 (:func:`swinging_state`) cannot see a divergence in the repair.
 """
 
+from pathlib import PurePath
+
 import numpy as np
 import pytest
 
@@ -164,7 +166,7 @@ class TestMujocoSetup:
         }
         baseline = QuadrotorFlexCableMujoco._ensure_xml(**args)
         assert QuadrotorFlexCableMujoco._ensure_xml(**args) == baseline
-        assert baseline.startswith("quad_flexcable_2l_")
+        assert PurePath(baseline).name.startswith("quad_flexcable_2l_")
         variants = {
             "num_links": 3,
             "cable_length": 0.5,

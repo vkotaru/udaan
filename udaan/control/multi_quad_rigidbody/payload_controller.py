@@ -133,15 +133,18 @@ every quadrotor, and feeds all three to the attitude loops as ``desired_att``.
 Binding a trajectory's ``get_full`` is therefore the whole switch, exactly as in
 M3 — no controller change required.
 
-Of the three, the attitude loop uses only ``Ω_i`` and ``Ω̇_i``.
-:meth:`udaan.control.quadrotor.GeometricAttitudeController.compute` discards the
-recovered ``R_i`` and rebuilds ``R_d`` from the commanded thrust direction —
-the position loop's only path into the attitude command — so the attitude
-channel is inert here as it is in M1 and M3.  Substituting ``R_i = I`` gives a
-bit-identical run at every ``nQ``; the whole 1.38x tracking improvement the
-feedforward buys is the rate channel.  See that method's docstring for what
-making the channel live costs, and why the change belongs to a structural pass
-over M1-M4 rather than to this cascade.
+All three are used, but they enter on different degrees of freedom.
+:meth:`udaan.control.quadrotor.GeometricAttitudeController.compute` keeps
+``b₃`` with the commanded thrust direction — the position loop's only path into
+the attitude command — and takes from ``R_i`` just the *heading* of ``b₁``
+about it.  ``R_i`` used to be discarded outright, and substituting ``R_i = I``
+then gave a bit-identical run at every ``nQ``, with the whole 1.38x tracking
+improvement carried by the rate channel.  That is no longer true: the heading
+composition is live, and ``R_i = I`` commands ψ = 0 rather than the reference's
+heading.  With a ψ ≡ 0 reference the two still agree to within 0.2% — see that
+method's docstring for the measured numbers, and
+:attr:`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase.yaw_setpoint`
+for how to command a heading that is not zero.
 
 Sharing the policy is not a tidiness point.  ``\Phi^{+} W`` is only half the
 split; the other half is the null-space bias, and a feedforward built at a

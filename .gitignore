@@ -1,6 +1,9 @@
 MUJOCO_LOG.TXT
 
-# Runtime-generated MJCF files
+# Runtime-generated MJCF now goes to a user cache directory ($UDAAN_ASSET_DIR,
+# else the platform user cache) rather than into the package, so there is
+# nothing here left to ignore. The patterns below stay only to keep a working
+# tree left over from an older checkout clean.
 udaan/models/assets/mjcf/multi_quad_pointmass_*.xml
 udaan/models/assets/mjcf/multi_quad_rigidbody_*.xml
 udaan/models/assets/mjcf/fleet_*.xml

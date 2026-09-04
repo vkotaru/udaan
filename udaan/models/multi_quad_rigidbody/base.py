@@ -278,9 +278,10 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
-from ...flatness.jet import Jet
+from ...core.validation import check_positive
+from ...flatness.jet import Jet, yaw_jet
 from ...flatness.multi_quad_rigidbody import MultiQuadRigidbody, MultiQuadRigidbodyFlats
-from ...manif import S2, SO3, TS2, TSO3, hat
+from ...manif import S2, SO3, TS2, TSO3, hat, zoh_step
 from ...utils.grasp import (
     formation_cable_attitudes,
     grasp_map,
@@ -474,6 +475,9 @@ class MultiQuadRigidbodyBase:
         # back to feedback-only; zeroed at the start of every ``simulate()``.
         self._feedforward_drops = 0
 
+        # Feedforward yaw reference shared by every quadrotor; None is ψ ≡ 0.
+        self._yaw_setpoint = None
+
         # Default controllers
         self._init_default_controllers()
 
@@ -558,6 +562,30 @@ class MultiQuadRigidbodyBase:
         self._payload_controller = controller
 
     @property
+    def yaw_setpoint(self):
+        r"""Yaw reference for the flatness feedforward: ``ψ(t) -> (ψ, ψ̇, ψ̈)``.
+
+        One callable, shared by every quadrotor — a formation flies one
+        heading, and the payload's own attitude reference is separate
+        (``attitude_setpoint`` on the payload controller). Yaw is the only
+        channel the recovered ``R_i`` adds on top of the position loop (see
+        :meth:`~udaan.control.quadrotor.GeometricAttitudeController.compute`),
+        so without this the feedforward runs at ψ ≡ 0 and the attitude
+        composition is close to a no-op.
+
+        ``None`` (the default) means ψ ≡ 0, so binding nothing changes nothing.
+        Same protocol and same default as
+        :attr:`udaan.models.quadrotor.QuadrotorBase.yaw_setpoint`.
+        """
+        return self._yaw_setpoint
+
+    @yaw_setpoint.setter
+    def yaw_setpoint(self, setpoint):
+        if setpoint is not None and not callable(setpoint):
+            raise TypeError("yaw_setpoint must be callable psi(t) -> (psi, dpsi, ddpsi), or None")
+        self._yaw_setpoint = setpoint
+
+    @property
     def attitude_controllers(self) -> list:
         """Per-quadrotor attitude controllers."""
         return self._att_controllers
@@ -592,12 +620,11 @@ class MultiQuadRigidbodyBase:
         returns a solution to an equation that describes nothing, while a zero
         cable length divides by zero in :eq:`m4-cable` and only surfaces as a
         ``nan`` behind a ``RuntimeWarning``.
+
+        Delegates to :func:`udaan.core.validation.check_positive`, which M2, M3,
+        M5 and M6 share.
         """
-        arr = np.atleast_1d(np.asarray(values, dtype=float))
-        if not np.all(np.isfinite(arr)):
-            raise ValueError(f"{name} must be finite; got {arr.tolist()}")
-        if not np.all(arr > 0.0):
-            raise ValueError(f"{name} must be strictly positive; got {arr.tolist()}")
+        check_positive(values, name)
 
     @property
     def num_quadrotors(self) -> int:
@@ -983,8 +1010,9 @@ class MultiQuadRigidbodyBase:
 
         The centripetal coefficient inside ``b_i`` is ‖q̇_i‖², not ‖ω_i‖²: the
         exact identity is ``q_i · q̈_i = -‖q̇_i‖²``, and the two agree only while
-        ``ω_i`` is exactly tangent, which ZOH-Euler does not guarantee. Same
-        reasoning as M3 and M2.
+        ``ω_i`` is exactly tangent. :func:`udaan.manif.zoh_step` keeps it so
+        along a run, but ``reset()`` will accept a rate that is not, and only
+        the ‖q̇_i‖² form is right then. Same reasoning as M3 and M2.
 
         Args:
             thrusts: ``(nQ,)`` thrust magnitudes ``f_i``.
@@ -1013,8 +1041,15 @@ class MultiQuadRigidbodyBase:
 
         for i in range(nQ):
             # cable attitude dynamics
-            self.state.cable_attitudes[i] = self.state.cable_attitudes[i].step(omega[i] * h)
-            self.state.cable_angular_velocities[i] += TS2(acc["cable_ang_accels"][i] * h)
+            (
+                self.state.cable_attitudes[i],
+                self.state.cable_angular_velocities[i],
+            ) = zoh_step(
+                self.state.cable_attitudes[i],
+                self.state.cable_angular_velocities[i],
+                acc["cable_ang_accels"][i],
+                h,
+            )
 
             # quadrotor attitude dynamics
             self.state.orientations[i] = self.state.orientations[i].step(Omegas[i] * h)
@@ -1260,11 +1295,12 @@ class MultiQuadRigidbodyBase:
         omega = np.zeros((6, 3))
         omega[0] = Omega_d
         omega[1] = dOmega_d
+        psi = yaw_jet(self._yaw_setpoint, t)
         flats = MultiQuadRigidbodyFlats(
             x_L=x_L,
             R_L=R_d,
             Omega_L=Jet(omega),
-            psi=[Jet(np.zeros(3)) for _ in range(self._num_quadrotors)],
+            psi=[psi for _ in range(self._num_quadrotors)],
         )
         try:
             ref, _ = flat_map.recover(flats)
@@ -1299,12 +1335,16 @@ class MultiQuadRigidbodyBase:
         acceleration ``Ω̇_i``, and all three are fed to the attitude loops as
         ``desired_att``. Binding ``get_full`` is the whole switch.
 
-        The attitude loop consumes only the rates:
+        The attitude loop splits the three by degree of freedom:
         :meth:`udaan.control.quadrotor.GeometricAttitudeController.compute`
-        discards ``R_i`` and rebuilds its own ``R_d`` from the commanded thrust
-        direction. Passing ``R_i = I`` therefore gives a bit-identical run, and
-        the improvement the feedforward buys is entirely ``Ω_i``/``Ω̇_i``. The
-        behaviour is shared with M1 and M3; see that method's docstring.
+        rebuilds ``b₃`` of its ``R_d`` from the commanded thrust direction and
+        takes the heading of ``b₁`` about it from ``R_i``. Passing ``R_i = I``
+        therefore commands ψ = 0 rather than the reference's heading — it used
+        to give a bit-identical run, back when ``R_i`` was discarded outright.
+        With the default ψ ≡ 0 reference the difference is under 0.2% and the
+        improvement is still carried by ``Ω_i``/``Ω̇_i``; bind
+        :attr:`yaw_setpoint` for a heading that is not zero. The behaviour is
+        shared with M1 and M3; see that method's docstring.
 
         The flat map is built from the payload controller's **own**
         ``tension_policy``. ``Φ⁺ W`` is only half the allocation; the other

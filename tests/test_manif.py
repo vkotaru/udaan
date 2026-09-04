@@ -13,6 +13,7 @@ from udaan.manif import (
     hat,
     rodrigues_expm,
     vee,
+    zoh_step,
 )
 
 
@@ -536,3 +537,66 @@ class TestS2Operators:
         q = S2()
         with pytest.raises(TypeError):
             q + "invalid"
+
+
+class TestZohStep:
+    """``zoh_step`` is the S2 substep every cable/link model shares."""
+
+    @staticmethod
+    def _random_tangent_state(seed):
+        rng = np.random.default_rng(seed)
+        q = rng.normal(size=3)
+        q /= np.linalg.norm(q)
+        omega = rng.normal(size=3)
+        omega -= float(omega @ q) * q  # exactly tangent
+        omega_dot = np.cross(q, rng.normal(size=3))  # tangent at q, as every model's is
+        return S2(q), TS2(omega), omega_dot
+
+    def test_result_stays_on_the_sphere(self):
+        q, omega, omega_dot = self._random_tangent_state(1)
+        q_next, _ = zoh_step(q, omega, omega_dot, 0.01)
+        assert abs(np.linalg.norm(np.asarray(q_next)) - 1.0) < 1e-15
+
+    @pytest.mark.parametrize("h", [1e-1, 1e-2, 1e-3])
+    def test_rate_is_exactly_tangent_to_the_updated_direction(self, h):
+        """The whole point: ``ω`` lands in ``T_q S²`` at the *new* ``q``.
+
+        The naive update leaves ``h ω̇ · q_next``, an ``O(h)`` residual that
+        accumulates at first order over a run. Here it is at machine epsilon
+        for every step size.
+        """
+        q, omega, omega_dot = self._random_tangent_state(2)
+        q_next, omega_next = zoh_step(q, omega, omega_dot, h)
+        assert abs(float(np.asarray(omega_next) @ np.asarray(q_next))) < 1e-15
+
+    def test_the_naive_update_is_what_this_repairs(self):
+        """Pin the defect, so the fix cannot be silently reverted."""
+        q, omega, omega_dot = self._random_tangent_state(3)
+        h = 0.01
+        q_next = q.step(np.asarray(omega) * h)
+        naive = np.asarray(omega) + np.asarray(omega_dot) * h
+        assert abs(float(naive @ np.asarray(q_next))) > 1e-8
+
+    def test_only_the_normal_component_is_removed(self):
+        """``q̇ = ω × q`` is untouched — the substep's own output is unchanged.
+
+        That is a statement about *one* substep. The projection still moves a
+        run, because the next substep feeds ``ω`` to ``expm(hat(ω h))``, which
+        reads the component this removed. See :func:`udaan.manif.zoh_step`.
+        """
+        q, omega, omega_dot = self._random_tangent_state(4)
+        h = 0.01
+        q_next, omega_next = zoh_step(q, omega, omega_dot, h)
+        naive = np.asarray(omega) + np.asarray(omega_dot) * h
+        np.testing.assert_allclose(
+            np.cross(np.asarray(omega_next), np.asarray(q_next)),
+            np.cross(naive, np.asarray(q_next)),
+            atol=1e-15,
+        )
+
+    def test_a_tangent_rate_with_zero_acceleration_is_transported_unchanged(self):
+        """Free rotation about a fixed axis: nothing to project away."""
+        q, omega, _ = self._random_tangent_state(5)
+        q_next, omega_next = zoh_step(q, omega, np.zeros(3), 0.05)
+        np.testing.assert_allclose(np.asarray(omega_next), np.asarray(omega), atol=1e-15)
+        assert abs(float(np.asarray(omega_next) @ np.asarray(q_next))) < 1e-15

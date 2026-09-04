@@ -7,7 +7,7 @@ from scipy.spatial.transform import Rotation as sp_rot
 
 from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
-from ..mujoco import MujocoModel
+from ..backend import MujocoModel
 from .base import QuadrotorBase
 
 _logger = get_logger(__name__)

@@ -401,8 +401,9 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
+from ...core.validation import check_positive
 from ...flatness.multi_quad_hose import NotFlatError
-from ...manif import S2, SO3, TS2, TSO3, hat
+from ...manif import S2, SO3, TS2, TSO3, hat, zoh_step
 from ...utils.hose import hose_spawn_directions, validate_attachments
 from ...utils.logging import get_logger
 
@@ -763,9 +764,8 @@ class MultiQuadHoseBase:
 
     @staticmethod
     def _check_positive(values, name: str):
-        arr = np.asarray(values, dtype=float)
-        if not np.all(arr > 0.0):
-            raise ValueError(f"{name} must be strictly positive; got {arr.tolist()}")
+        """Delegates to :func:`udaan.core.validation.check_positive`, shared with M2-M6."""
+        check_positive(values, name, warn_below=_MIN_PHYSICAL_MASS if "mass" in name else None)
 
     @staticmethod
     def _check_length(value, name: str, expected: int):
@@ -1104,9 +1104,11 @@ class MultiQuadHoseBase:
         M00, M0i, Mij = self._mass_coefficients()
         q = [np.asarray(self.state.link_attitudes[i], dtype=float) for i in range(n)]
         q_hat = [hat(q[i]) for i in range(n)]
-        # c_i = ‖q̇_i‖², not ‖ω_i‖² — the two agree on the tangent manifold and
-        # ZOH-Euler lets q·ω drift off it at O(h). M2-M5 all use ‖q̇_i‖², and
-        # using it here is what makes the M5 reduction exact rather than close.
+        # c_i = ‖q̇_i‖², not ‖ω_i‖² — the two agree only on the tangent
+        # manifold. `manif.zoh_step` now keeps the integrator on it, but
+        # `reset()` will still accept a non-tangent rate. M2-M5 all use ‖q̇_i‖²,
+        # and using it here is what makes the M5 reduction exact rather than
+        # close.
         c = np.array([float(np.dot(self.state.dq(i), self.state.dq(i))) for i in range(n)])
 
         forces = self.vertex_forces(thrusts)
@@ -1239,8 +1241,15 @@ class MultiQuadHoseBase:
 
         # link attitude dynamics
         for i in range(n):
-            self.state.link_attitudes[i] = self.state.link_attitudes[i].step(omega[i] * h)
-            self.state.link_angular_velocities[i] += TS2(acc["link_ang_accels"][i] * h)
+            (
+                self.state.link_attitudes[i],
+                self.state.link_angular_velocities[i],
+            ) = zoh_step(
+                self.state.link_attitudes[i],
+                self.state.link_angular_velocities[i],
+                acc["link_ang_accels"][i],
+                h,
+            )
 
         # vehicle attitude dynamics
         for k in range(self._num_quadrotors):

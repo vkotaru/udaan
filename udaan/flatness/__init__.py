@@ -76,6 +76,7 @@ from .derivatives import leibniz_matmul as leibniz_matmul
 from .derivatives import leibniz_product as leibniz_product
 from .derivatives import normalize_derivatives as normalize_derivatives
 from .jet import Jet as Jet
+from .jet import yaw_jet as yaw_jet
 from .multi_quad_cspayload import (
     DEFAULT_MIN_TENSION as DEFAULT_MIN_TENSION,
 )
@@ -217,6 +218,7 @@ __all__ = [
     "point_mass_cable_force",
     "rotation_jet",
     "tension_direction_jet",
+    "yaw_jet",
     "QuadrotorCsPayload",
     "QuadrotorCsPayloadFlats",
     "QuadrotorCsPayloadInputs",

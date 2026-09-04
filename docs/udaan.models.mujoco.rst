@@ -1,18 +1,5 @@
-udaan.models.mujoco package
-===========================
-
-Submodules
-----------
-
-.. toctree::
-   :maxdepth: 2
-
-   udaan.models.mujoco.quadrotor_comparison
-   udaan.models.mujoco.quadrotor_cspayload_fleet
-   udaan.models.mujoco.quadrotor_fleet
-
-Module contents
----------------
+udaan.models.mujoco module
+==========================
 
 .. automodule:: udaan.models.mujoco
    :members:

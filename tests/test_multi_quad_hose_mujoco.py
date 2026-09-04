@@ -28,15 +28,16 @@ import numpy as np
 import pytest
 
 from tests.conftest import TOL_ANALYTIC, TOL_EXACT, TOL_INTEGRATION, TOL_TIGHT
-from udaan import _FOLDER_PATH
 from udaan.core.defaults import DEFAULT_MJCF_TIMESTEP, GRAVITY
 from udaan.manif import S2, SO3, TS2, TSO3, rodrigues_expm
 from udaan.models.multi_quad_hose import MultiQuadHoseBase, MultiQuadHoseMujoco
+from udaan.utils.assets.cache import generated_mjcf_dir
 from udaan.utils.hose import hose_spawn_directions
 
 pytestmark = pytest.mark.mujoco
 
-_MJCF_DIR = Path(_FOLDER_PATH) / "udaan" / "models" / "assets" / "mjcf"
+#: Generated assets live in the user cache now, not inside the package.
+_GENERATED_DIR = generated_mjcf_dir()
 
 #: ``(num_links, attachments)`` pairs. Each generates its own cached MJCF, so
 #: the list is deliberately shorter than the analytical one.
@@ -207,8 +208,9 @@ class TestMujocoSetup:
         assert len(set(variants)) == len(variants)
         assert base not in variants
         for name in [base, *variants]:
-            assert (_MJCF_DIR / name).exists()
-        assert list(_MJCF_DIR.glob("multi_quad_hose_*.xml"))
+            assert Path(name).exists()
+            assert Path(name).parent == _GENERATED_DIR
+        assert list(_GENERATED_DIR.glob("multi_quad_hose_*.xml"))
 
     def test_a_changed_parameter_reaches_the_model(self):
         light = build(hose_mass=0.3)

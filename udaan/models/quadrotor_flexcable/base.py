@@ -370,9 +370,10 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
+from ...core.validation import check_positive
 from ...flatness.jet import Jet
 from ...flatness.quadrotor_flexcable import QuadrotorFlexCableFlats
-from ...manif import S2, SO3, TS2, TSO3, hat
+from ...manif import S2, SO3, TS2, TSO3, hat, zoh_step
 from ...utils.logging import get_logger
 
 _logger = get_logger(__name__)
@@ -692,17 +693,8 @@ class QuadrotorFlexCableBase:
 
     @staticmethod
     def _check_positive(values, name: str):
-        arr = np.asarray(values, dtype=float)
-        if not np.all(arr > 0.0):
-            raise ValueError(f"{name} must be strictly positive; got {arr.tolist()}")
-        if np.any(arr < _MIN_PHYSICAL_MASS) and "mass" in name:
-            _logger.warning(
-                "%s contains a value below %g kg (%s); the dynamics stay well posed "
-                "but this is almost certainly a typo or a unit error",
-                name,
-                _MIN_PHYSICAL_MASS,
-                arr.tolist(),
-            )
+        """Delegates to :func:`udaan.core.validation.check_positive`, shared with M2-M6."""
+        check_positive(values, name, warn_below=_MIN_PHYSICAL_MASS if "mass" in name else None)
 
     def _broadcast(self, value, name: str) -> np.ndarray:
         """Scalar -> ``(n,)`` array, or validate a per-index sequence."""
@@ -1025,8 +1017,15 @@ class QuadrotorFlexCableBase:
 
         # link attitude dynamics
         for i in range(n):
-            self.state.link_attitudes[i] = self.state.link_attitudes[i].step(omega[i] * h)
-            self.state.link_angular_velocities[i] += TS2(acc["link_ang_accels"][i] * h)
+            (
+                self.state.link_attitudes[i],
+                self.state.link_angular_velocities[i],
+            ) = zoh_step(
+                self.state.link_attitudes[i],
+                self.state.link_angular_velocities[i],
+                acc["link_ang_accels"][i],
+                h,
+            )
 
         # quadrotor attitude dynamics
         Omega = np.asarray(self.state.angular_velocity).copy()

@@ -12,8 +12,8 @@ _logger = get_logger(__name__)
 
 #: Version of the MJCF *structure* emitted by this module and the generators
 #: built on it (:mod:`udaan.utils.assets.xml_model_generator`,
-#: :class:`~udaan.models.mujoco.QuadrotorFleet`,
-#: :class:`~udaan.models.mujoco.QuadrotorCsPayloadFleet`).
+#: :class:`~udaan.models.fleet.QuadrotorFleet`,
+#: :class:`~udaan.models.fleet.QuadrotorCsPayloadFleet`).
 #:
 #: **Bump this whenever the emitted XML changes shape** — geom masses, actuator
 #: names or order, body/site layout, tendon wiring, anything a file on disk
@@ -22,6 +22,13 @@ _logger = get_logger(__name__)
 #: reused by an upgraded ``udaan`` with a warm asset directory.
 #:
 #: History:
+#:
+#: * ``4`` — ``multi_quad_pointmass`` (M3) and both fleet generators gained
+#:   ``<option timestep="0.00125"/>``. They were the last generators still
+#:   leaving MuJoCo's 2 ms default in place, which does not divide the 5 ms
+#:   outer loop: their backends took ``round(2.5) = 2`` substeps and advanced
+#:   4 ms per ``step()`` while reporting 5, so ``self.t`` ran 5 ms short of the
+#:   analytical model's over a 2 s run. M4 and M6 already emitted it.
 #:
 #: * ``3`` — two shared-code changes that both alter emitted text:
 #:
@@ -45,7 +52,7 @@ _logger = get_logger(__name__)
 #:
 #:   Either change alone means a file frozen on disk under the version-2 hash
 #:   is no longer what this module emits, which is what the bump is for.
-MJCF_GENERATOR_VERSION = 3
+MJCF_GENERATOR_VERSION = 4
 
 # Per-geom masses of the rotor assembly emitted by ``create_quadrotor0`` at the
 # default total mass. A requested total scales all four geoms uniformly (see
@@ -88,19 +95,38 @@ class MujocoAssetCreator:
         self._actuator = None
 
     def save_to(self, filename="mujoco_asset.xml", verbose=False):
-        """Save the asset to a file
+        """Write the asset to ``filename``, with the scene it includes beside it.
+
+        Every asset this class builds opens with ``<include file="scene.xml"/>``
+        (see :meth:`__init__`), and MuJoCo resolves an include relative to the
+        *including file's own directory*. Writing the XML alone therefore
+        produced a file that could not be loaded from where it was written —
+        ``udaan generate-xml multi-quad -o out.xml`` emitted an ``out.xml`` that
+        ``mj_loadXML`` refused, and it was only ever "fine" because the one
+        directory that happened to hold a ``scene.xml`` was the packaged asset
+        directory the generators used to write into.
+
+        So the scene travels with the asset:
+        :func:`~udaan.utils.assets.cache.ensure_scene_beside` copies it next to
+        ``filename`` if it is not already there. That covers the generated
+        cache and a user-chosen ``-o`` path alike, and is a no-op when writing
+        into the packaged directory.
 
         Args:
             filename (str, optional): Name of the file to save to. Defaults to "mujoco_asset.xml".
+            verbose (bool, optional): Log the generated XML.
         """
         # Pretty printing to Python shell for testing purposes
         from xml.dom import minidom
+
+        from .cache import ensure_scene_beside
 
         xmlstr = minidom.parseString(ET.tostring(self.root)).toprettyxml(indent="   ")
         if verbose:
             _logger.debug("Generated XML:\n%s", xmlstr)
         with open(filename, "w") as f:
             f.write(xmlstr)
+        ensure_scene_beside(filename)
         return
 
     def option(self, timestep: float, **flags):
@@ -632,40 +658,6 @@ class MujocoAssetCreator:
             gear=np.array([0, 0.0, 0.0, 0.0, 0.0, 1.0]),
         )
         return chassis, actuator
-
-    def create_cable_payload(self, parent, name, pos, length=1, mass=0.15):
-        cable = self.body(parent, name, pos)
-        cable_joint = self.joint(
-            cable,
-            "cable_quad_joint",
-            "ball",
-            pos=np.array([0.0, 0.0, 0.5 * length]),
-            damping=0.01,
-        )
-        cable_geom = self.cylinder(
-            cable,
-            "cable",
-            radius=0.005,
-            length=length,
-            mass=0.1,
-            density=50,
-            rgb=[0.2, 0.2, 0.2],
-        )
-        pyld = self.body(cable, "pyld", pos=np.array([0.0, 0.0, -0.5 * length]))
-        pyld_geom = self.sphere(
-            pyld, "pyld", radius=0.05, mass=mass, density=50, rgb=[0.0, 0.8, 0.2]
-        )
-        pyld_joint = self.joint(
-            pyld,
-            "pyld_joint",
-            "hinge",
-            pos=np.array([0.0, 0.0, 0]),
-            range=np.array([-0.001, 0.001]),
-            stiffness=1000,
-            damping=1000,
-            armature=0.0,
-        )
-        return cable
 
     def create_flexible_cable_payload(
         self,

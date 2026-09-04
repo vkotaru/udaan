@@ -20,7 +20,7 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
-from ...flatness import Jet, Quadrotor, QuadrotorFlats
+from ...flatness import Jet, Quadrotor, QuadrotorFlats, yaw_jet
 from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
 
@@ -94,6 +94,9 @@ class QuadrotorBase:
         # Allocation matrix
         self._compute_allocation_matrix()
 
+        # Feedforward yaw reference; None is ψ ≡ 0.
+        self._yaw_setpoint = None
+
         # Default controllers
         self._init_default_controllers()
 
@@ -121,6 +124,35 @@ class QuadrotorBase:
     @attitude_controller.setter
     def attitude_controller(self, controller):
         self._att_controller = controller
+
+    @property
+    def yaw_setpoint(self):
+        r"""Yaw reference for the flatness feedforward: ``ψ(t) -> (ψ, ψ̇, ψ̈)``.
+
+        Yaw is the quadrotor's second flat output, and it is the *only* channel
+        the reference attitude adds on top of the position loop — the thrust
+        command already fixes ``b₃``, so ``ψ`` is what
+        :meth:`~udaan.control.quadrotor.GeometricAttitudeController.compute`
+        composes in. Without a yaw setpoint the feedforward runs at ψ ≡ 0 and
+        the composition is close to a no-op, which is exactly what it was
+        before this hook existed.
+
+        ``None`` (the default) means ψ ≡ 0, so binding nothing changes nothing.
+        Set it beside the position trajectory::
+
+            mdl.position_controller.setpoint = traj.get
+            mdl.yaw_setpoint = lambda t: (0.5 * t, 0.5, 0.0)
+
+        It is read only on the feedforward path — that is, only when the bound
+        trajectory exposes ``get_full`` (see :meth:`simulate`).
+        """
+        return self._yaw_setpoint
+
+    @yaw_setpoint.setter
+    def yaw_setpoint(self, setpoint):
+        if setpoint is not None and not callable(setpoint):
+            raise TypeError("yaw_setpoint must be callable psi(t) -> (psi, dpsi, ddpsi), or None")
+        self._yaw_setpoint = setpoint
 
     # ─── Properties ────────────────────────────────────────────────
 
@@ -259,7 +291,7 @@ class QuadrotorBase:
                     pos, vel, acc, jerk, snap = flat_fn(self.t)
                     flats = QuadrotorFlats(
                         x=Jet(np.array([pos, vel, acc, jerk, snap])),  # order-4, dim-3
-                        psi=Jet(np.zeros(3)),  # ψ ≡ 0 (order-2 scalar jet)
+                        psi=yaw_jet(self._yaw_setpoint, self.t),
                     )
                     ref, _ = flat_map.recover(flats)
                     desired_att = (ref.orientation, ref.angular_velocity, ref.angular_acceleration)

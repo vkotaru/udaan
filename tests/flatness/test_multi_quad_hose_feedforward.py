@@ -478,6 +478,7 @@ class TestOpenLoopZoh:
             assert value < 5e-2, f"n={n} {attachments} lissajous {key} = {value:.3e}"
 
     @pytest.mark.parametrize(("n", "attachments"), ZOH_CONFIGS)
+    @pytest.mark.slow
     def test_zoh_error_shrinks_with_the_step(self, n, attachments):
         """First-order convergence: a 4x smaller step gives a ~4x smaller
         residual. This is what identifies the ZOH residual as integrator error —

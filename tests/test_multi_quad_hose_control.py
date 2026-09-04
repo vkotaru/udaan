@@ -1078,7 +1078,16 @@ def track(n, attachments, *, feedforward, trajectory=None, tf=6.0, offset=None, 
     return model, float(np.sqrt(np.mean(np.square(samples)))), final, model.feedforward_drops
 
 
+@pytest.mark.slow
+@pytest.mark.integration
 class TestTracking:
+    """Closed-loop runs of 6-8 s each; the slowest class in the M6 suite.
+
+    Marked ``slow``/``integration`` so ``-m 'not slow'`` is a usable inner
+    loop. CI still runs the whole suite — the marker deselects nothing by
+    default.
+    """
+
     @pytest.mark.parametrize(("n", "attachments"), CONFIGS)
     def test_step_response_settles(self, n, attachments):
         """A 0.44 m step on the root, from the spawn shape, against the trim.

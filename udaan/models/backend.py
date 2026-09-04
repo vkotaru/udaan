@@ -1,17 +1,27 @@
-"""MuJoCo physics backend for Udaan.
+"""MuJoCo backend infrastructure: model loading, stepping, and the GLFW viewer.
 
-Requires mujoco package.
-Install with: pip install udaan
+This is the plumbing every MuJoCo-backed model in :mod:`udaan.models` sits on,
+and nothing else:
+
+* :class:`MujocoModel` — resolves an MJCF by name, loads it, steps it, and
+  keeps the sim synchronised to the wall clock when rendering.
+* :class:`_GlfwViewer` — the interactive window, with trails, start/target
+  markers and GIF/MP4 recording.
+
+It used to live in ``udaan.models.mujoco`` alongside the multi-agent fleet
+*models*, which made "the MuJoCo package" mean two unrelated things and left
+every per-system backend importing its infrastructure from what read like a
+legacy location. The fleets now live in :mod:`udaan.models.fleet`;
+``udaan.models.mujoco`` remains as a compatibility re-export.
 """
 
-import os
 import time
 
 import mujoco
 import numpy as np
 
-from ... import _FOLDER_PATH
-from ...utils.logging import get_logger
+from ..utils.assets.cache import resolve_mjcf
+from ..utils.logging import get_logger
 
 _logger = get_logger(__name__)
 
@@ -285,10 +295,17 @@ class _GlfwViewer:
 
 
 class MujocoModel:
+    """Load and step one MJCF model, optionally with a viewer.
+
+    ``model_path`` may be a bare filename — resolved by
+    :func:`~udaan.utils.assets.cache.resolve_mjcf` against the packaged assets
+    first and the generated cache second — or a full path to an MJCF anywhere
+    on disk. The two-directory lookup is what lets generated assets live in a
+    user cache rather than inside the installed package.
+    """
+
     def __init__(self, model_path, render=False, record=None):
-        self.full_path = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf", model_path)
-        if not os.path.exists(self.full_path):
-            raise OSError(f"File {self.full_path} does not exist")
+        self.full_path = resolve_mjcf(model_path)
 
         self.render = render
         self._record = record
@@ -367,15 +384,4 @@ class MujocoModel:
         pass
 
 
-from ..quadrotor.mujoco import QuadrotorMujoco as Quadrotor
-from .quadrotor_comparison import QuadrotorComparison as QuadrotorComparison
-from .quadrotor_cspayload_fleet import QuadrotorCsPayloadFleet as QuadrotorCsPayloadFleet
-from .quadrotor_fleet import QuadrotorFleet as QuadrotorFleet
-
-__all__ = [
-    "MujocoModel",
-    "Quadrotor",
-    "QuadrotorComparison",
-    "QuadrotorCsPayloadFleet",
-    "QuadrotorFleet",
-]
+__all__ = ["MujocoModel"]

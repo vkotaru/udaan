@@ -5,22 +5,20 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import os
 
 import mujoco
 import numpy as np
 
-from ... import _FOLDER_PATH
 from ...core.defaults import DEFAULT_HOSE_MASS, DEFAULT_SPAWN_HEIGHT
 from ...manif import S2, SO3, TS2, TSO3
+from ...utils.assets.cache import ensure_generated
 from ...utils.assets.mujoco_asset_creator import MJCF_GENERATOR_VERSION
 from ...utils.logging import get_logger
-from ..mujoco import MujocoModel
+from ..backend import MujocoModel
 from .base import MultiQuadHoseBase
 
 _logger = get_logger(__name__)
 
-_MJCF_DIR = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf")
 
 #: Body/joint name templates emitted by
 #: :func:`udaan.utils.assets.xml_model_generator.multi_quad_hose`.
@@ -211,12 +209,17 @@ class MultiQuadHoseMujoco(MultiQuadHoseBase):
         sag_ratio: float,
         spawn_height: float,
     ) -> str:
-        """Return the MJCF filename for this configuration, generating it if needed.
+        """Return the MJCF path for this configuration, generating it if needed.
 
         The filename carries a hash of every parameter that shapes the XML —
         *and* of :data:`MJCF_GENERATOR_VERSION`, so a release that changes the
         emitted structure cannot reuse a file an earlier one left in a warm
         asset directory.
+
+        The file lives in the user asset cache
+        (:func:`udaan.utils.assets.cache.generated_mjcf_dir`), not inside the
+        installed package, and an absolute path is returned rather than a bare
+        name so the caller loads exactly the file this wrote.
         """
         config = {
             "v": MJCF_GENERATOR_VERSION,
@@ -230,8 +233,8 @@ class MultiQuadHoseMujoco(MultiQuadHoseBase):
         }
         config_hash = hashlib.md5(json.dumps(config, sort_keys=True).encode()).hexdigest()[:8]
         generated_name = f"multi_quad_hose_{num_links}l_{len(attachments)}q_{config_hash}.xml"
-        generated_path = os.path.join(_MJCF_DIR, generated_name)
-        if not os.path.exists(generated_path):
+
+        def build(path: str) -> None:
             from ...utils.assets import xml_model_generator
 
             _logger.info(
@@ -243,7 +246,7 @@ class MultiQuadHoseMujoco(MultiQuadHoseBase):
             xml_model_generator.multi_quad_hose(
                 num_links=num_links,
                 attachments=attachments,
-                filename=generated_path,
+                filename=path,
                 hose_length=hose_length,
                 hose_mass=hose_mass,
                 quad_mass=quad_mass,
@@ -251,7 +254,11 @@ class MultiQuadHoseMujoco(MultiQuadHoseBase):
                 spawn_height=spawn_height,
                 verbose=False,
             )
-        return generated_name
+
+        # Generated assets go to the user cache, not into the installed
+        # package, and the write is atomic — see
+        # :func:`udaan.utils.assets.cache.ensure_generated`.
+        return ensure_generated(generated_name, build)
 
     # ─── Model initialization ──────────────────────────────────────
 

@@ -750,12 +750,16 @@ class TestDynamics:
 
     @pytest.mark.parametrize("nQ", [2, 4])
     def test_cable_rates_stay_tangent(self, nQ):
-        """``q_i · ω_i`` is a conserved quantity, so the drift must vanish with h.
+        """``q_i · ω_i`` is a conserved quantity, and the integrator now conserves it.
 
         The continuous dynamics preserve it exactly — ``ω̇_i`` is a cross
-        product with ``q_i``, so ``d(q·ω)/dt = ω · (ω x q) = 0`` — which makes
-        the residual pure integration error and its first-order convergence a
-        real check on the integrator, not on the model.
+        product with ``q_i``, so ``d(q·ω)/dt = ω · (ω x q) = 0``. The ZOH
+        update used to break that by evaluating ``ω̇_i`` at the pre-step
+        ``q_i``, leaving a first-order residual (7.1e-4 here at ``nQ = 4``,
+        ``dt = 1/200``). :func:`udaan.manif.S2.zoh_step` reprojects onto
+        ``T_q S²`` at the updated ``q``, which removes a gauge component no
+        right-hand side reads, so the invariant is now exact and there is no
+        convergence rate left to measure.
         """
         drifts = []
         for dt in (1.0 / 200.0, 1.0 / 800.0):
@@ -776,9 +780,7 @@ class TestDynamics:
                     for i in range(nQ)
                 )
             )
-        assert drifts[0] < 1e-3
-        # A 4x smaller step must give roughly 4x less drift (first order).
-        assert drifts[1] < 0.35 * drifts[0]
+        assert max(drifts) < 1e-12, f"q·ω drifted to {max(drifts):.3e}"
 
     @pytest.mark.slow
     @pytest.mark.parametrize("nQ", QUAD_COUNTS)
@@ -1099,3 +1101,58 @@ def test_default_payload_inertia_is_the_slab_it_claims_to_be():
     a, b, c = 0.5, 0.5, 0.05
     expected = (DEFAULT_RIGID_PAYLOAD_MASS / 3.0) * np.diag([b**2 + c**2, a**2 + c**2, a**2 + b**2])
     np.testing.assert_allclose(DEFAULT_RIGID_PAYLOAD_INERTIA, expected, atol=TOL_EXACT)
+
+
+class TestYawSetpoint:
+    r"""``yaw_setpoint`` is what makes the recovered ``R_i`` carry a heading.
+
+    Distinct from the payload controller's ``attitude_setpoint``, which
+    commands the *payload's* attitude: this one is the quadrotors' own yaw flat
+    output, the single degree of freedom the attitude loop takes from ``R_i``.
+    The feedforward path hardcoded ψ ≡ 0 before, and that is still the default.
+    """
+
+    @staticmethod
+    def _flat_map(mdl):
+        from udaan.flatness import MultiQuadRigidbody
+
+        return MultiQuadRigidbody.from_model(
+            mdl, tension_policy=mdl.payload_controller.tension_policy
+        )
+
+    @staticmethod
+    def _hover_flat_fn(mdl):
+        target = np.asarray(mdl.state.payload_position, dtype=float).copy()
+        return lambda t: (target, *(np.zeros(3) for _ in range(4)))
+
+    def test_the_default_is_unbound(self):
+        assert MultiQuadRigidbodyBase(num_quadrotors=3).yaw_setpoint is None
+
+    def test_a_non_callable_is_refused(self):
+        mdl = MultiQuadRigidbodyBase(num_quadrotors=3)
+        with pytest.raises(TypeError):
+            mdl.yaw_setpoint = 0.5
+
+    def test_it_reaches_the_recovered_attitudes(self):
+        mdl = MultiQuadRigidbodyBase(num_quadrotors=3)
+        mdl.reset()
+        flat_map, flat_fn = self._flat_map(mdl), self._hover_flat_fn(mdl)
+
+        unbound = mdl._desired_attitudes(flat_map, flat_fn, 0.0)
+        mdl.yaw_setpoint = lambda t: (0.9, 0.0, 0.0)
+        bound = mdl._desired_attitudes(flat_map, flat_fn, 0.0)
+
+        assert unbound is not None and bound is not None
+        for (R_a, _, _), (R_b, _, _) in zip(unbound, bound, strict=True):
+            assert np.linalg.norm(np.asarray(R_a) - np.asarray(R_b)) > 0.5
+
+    def test_unbound_is_exactly_psi_zero(self):
+        mdl = MultiQuadRigidbodyBase(num_quadrotors=3)
+        mdl.reset()
+        flat_map, flat_fn = self._flat_map(mdl), self._hover_flat_fn(mdl)
+
+        unbound = mdl._desired_attitudes(flat_map, flat_fn, 0.0)
+        mdl.yaw_setpoint = lambda t: (0.0, 0.0, 0.0)
+        explicit = mdl._desired_attitudes(flat_map, flat_fn, 0.0)
+        for (R_a, _, _), (R_b, _, _) in zip(unbound, explicit, strict=True):
+            np.testing.assert_array_equal(np.asarray(R_a), np.asarray(R_b))

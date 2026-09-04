@@ -9,22 +9,21 @@ written once per step.
 import copy
 import hashlib
 import json
-import os
 
 import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
-from ... import _FOLDER_PATH
+from ...core.defaults import DEFAULT_MJCF_TIMESTEP, DEFAULT_SIM_DT
 from ...manif import S2, SO3, TS2, TSO3
+from ...utils.assets.cache import ensure_generated, generated_mjcf_dir
 from ...utils.logging import get_logger
-from .. import base
+from ..backend import MujocoModel
 from ..quadrotor_cspayload import QuadrotorCsPayloadBase
-from . import MujocoModel
+from . import _base as base
 
 _logger = get_logger(__name__)
 
-_MJCF_DIR = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf")
 
 # X-spacing between adjacent agents, used both at XML-generation time
 # (per-agent spawn offset) and at runtime (per-agent lane offsets).
@@ -80,9 +79,29 @@ class QuadrotorCsPayloadFleet(base.BaseModel):
         )
         self._mjMdl = MujocoModel(model_path=xml_path, render=self.render)
 
-        self._mjDt = 1.0 / 500.0
-        self._step_iter = int(self.sim_timestep / self._mjDt)
+        # The fleets inherited a 2 ms `sim_timestep` from the legacy `BaseModel`
+        # default, which nothing chose: the per-agent models they drive all run
+        # at `DEFAULT_SIM_DT`, and 2 ms is not divisible by the 1.25 ms the
+        # generated asset now sets. Adopt the shared outer loop so the division
+        # below is exact.
+        self.sim_timestep = DEFAULT_SIM_DT
+
+        # Read the integrator step from the model rather than assuming it: the
+        # generated asset now sets `DEFAULT_MJCF_TIMESTEP`, and a hardcoded
+        # value that disagreed with it would make `step()` advance a different
+        # amount of time from the one it reports.
+        self._mjDt = float(self._mjMdl.model.opt.timestep)
+        self._step_iter = max(1, int(round(self.sim_timestep / self._mjDt)))
         self._nFrames = 1
+        achieved = self._step_iter * self._mjDt
+        if abs(achieved - self.sim_timestep) > 1e-12:
+            _logger.warning(
+                "MuJoCo timestep %.6g s does not divide sim_timestep = %.6g s; each "
+                "step() advances %.6g s instead.",
+                self._mjDt,
+                self.sim_timestep,
+                achieved,
+            )
 
         self._offsets = _agent_offsets(self.nQ)
 
@@ -115,12 +134,15 @@ class QuadrotorCsPayloadFleet(base.BaseModel):
         )
         config_hash = hashlib.md5(config_key.encode()).hexdigest()[:8]
         filename = f"cspayload_fleet_{nQ}q_{config_hash}.xml"
-        filepath = os.path.join(_MJCF_DIR, filename)
-        if os.path.exists(filepath):
-            return filename
+        cached = generated_mjcf_dir() / filename
+        if cached.exists():
+            return str(cached)
 
         _logger.info("Generating cspayload fleet MJCF for %d agents", nQ)
         writer = MujocoAssetCreator(f"CsPayloadFleet{nQ}")
+        # 1.25 ms, so `round(sim_timestep / timestep)` is exactly 4 at the
+        # shared 5 ms outer loop. See `DEFAULT_MJCF_TIMESTEP`.
+        writer.option(timestep=DEFAULT_MJCF_TIMESTEP)
 
         offsets = _agent_offsets(nQ)
 
@@ -160,8 +182,10 @@ class QuadrotorCsPayloadFleet(base.BaseModel):
                     for bj in bodies_j:
                         writer.exclude_contact(bi, bj)
 
-        writer.save_to(filepath, verbose=False)
-        return filename
+        # Generated assets go to the user cache, not into the installed package,
+        # and the write is atomic — see
+        # :func:`udaan.utils.assets.cache.ensure_generated`.
+        return ensure_generated(filename, lambda path: writer.save_to(path, verbose=False))
 
     # ─── Index / address resolution after MuJoCo load ─────────────────
 
