@@ -213,7 +213,7 @@ magnitudes come out $\bar T_i = c\, \ell_i$: every cable pulls with the
 same *horizontal* force $c\,r$, while longer (hence more vertical) cables
 carry proportionally more of the weight. The resulting $\bar q_i$
 coincide with
-{py:func}`~udaan.models.multi_quad_cspayload.formation_cable_attitudes`,
+{py:func}`~udaan.utils.grasp.formation_cable_attitudes`,
 so the flat reference at hover *is* the simulation model's default reset
 configuration.
 

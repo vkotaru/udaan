@@ -21,6 +21,25 @@ expose `position_controller`, `attitude_controller`, and (for payload models)
 |---|---|---|---|
 | Cascaded geometric payload | {py:class}`~udaan.control.quadrotor_cspayload.QuadCSPayloadController` | payload position → cable attitude → quad attitude | default; see {doc}`../theory/controllers/quadrotor-payload` |
 
+## Multi-quadrotor cooperative transport
+
+| Controller | Class | Role | Notes |
+|---|---|---|---|
+| Point-mass payload cascade | {py:class}`~udaan.control.multi_quad_cspayload.MultiQuadCsPayloadController` | payload position → tension split → per-cable attitude → per-quad attitude | default for M3; the split is a pluggable {py:class}`~udaan.flatness.TensionSplitPolicy` |
+| Rigid-body payload cascade | {py:class}`~udaan.control.multi_quad_rigidbody.MultiQuadRigidbodyController` | payload **pose** → grasp-map wrench split → per-cable attitude → per-quad attitude | default for M4; needs $n_Q \ge 3$ non-collinear attachments to hold an attitude — see {doc}`../theory/dynamics/multi-quad-rigidbody` |
+
+The rigid-body cascade carries a second reference alongside `setpoint`:
+`attitude_setpoint(t) -> (R_d, Ω_d, Ω̇_d)` for the payload's attitude,
+which is independent of its position in a way it cannot be for a point
+mass. It is **provisional** — its cable feedforward waits on an M4 flat
+map, and the M4 model, not this cascade, is the verified artefact.
+
+Both cascades cache their physical parameters (masses, cable lengths,
+and for M4 the whole grasp) when they are built. Assigning a parameter
+on the model afterwards re-synchronises them, so
+`mdl.attachment_points = ...` and passing `attachment_points=` to the
+constructor give the same closed loop.
+
 ## Swapping a controller
 
 All controllers follow a `compute(t, state) -> input` contract, so swapping

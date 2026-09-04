@@ -68,43 +68,17 @@ from ...flatness import (
     TensionSplitContractError,
 )
 from ...manif import S2, SO3, TS2, TSO3, hat
+from ...utils.grasp import formation_cable_attitudes
 from ...utils.logging import get_logger
 
 _logger = get_logger(__name__)
 
-
-def formation_cable_attitudes(
-    num_quadrotors: int,
-    cable_lengths: np.ndarray,
-    radius: float = DEFAULT_FORMATION_RADIUS,
-) -> list[S2]:
-    """Cable directions for a ring formation of ``num_quadrotors`` quadrotors.
-
-    The quadrotors sit on a horizontal circle of ``radius`` centred above the
-    payload; each cable is taut, so quadrotor ``i`` is lifted by
-    ``sqrt(l_i² - radius²)``.  Returns the unit vectors pointing *from* each
-    quadrotor *to* the payload.
-    """
-    if num_quadrotors < 1:
-        raise ValueError(f"num_quadrotors must be >= 1, got {num_quadrotors}")
-    if num_quadrotors == 1:
-        # A lone quadrotor hovers directly above the payload — no ring, so the
-        # radius (and its taut-cable constraint) does not apply.
-        return [S2(np.array([0.0, 0.0, -1.0]))]
-
-    lengths = np.asarray(cable_lengths, dtype=float)
-    if np.any(lengths <= radius):
-        raise ValueError(
-            f"formation radius {radius} must be strictly below every cable length {lengths}"
-        )
-
-    angles = np.linspace(0.0, 2 * np.pi, num_quadrotors, endpoint=False)
-    attitudes: list[S2] = []
-    for i, theta in enumerate(angles):
-        dz = np.sqrt(lengths[i] ** 2 - radius**2)
-        offset = np.array([radius * np.cos(theta), radius * np.sin(theta), dz])
-        attitudes.append(S2(-offset / lengths[i]))
-    return attitudes
+__all__ = [
+    "MultiQuadCsPayloadBase",
+    "MultiQuadCsPayloadState",
+    "cable_state_from_geometry",
+    "formation_cable_attitudes",
+]
 
 
 def cable_state_from_geometry(
@@ -214,6 +188,10 @@ class MultiQuadCsPayloadBase:
             raise ValueError(f"num_quadrotors must be >= 1, got {self._num_quadrotors}")
         nQ = self._num_quadrotors
 
+        # The parameter setters push their new values into the controllers, and
+        # the constructor runs several of them *before* those controllers exist.
+        self._controllers_ready = False
+
         self.state = MultiQuadCsPayloadState(num_quadrotors=nQ)
         self.t = 0.0
         self.verbose = kwargs.get("verbose", 0)
@@ -302,6 +280,34 @@ class MultiQuadCsPayloadBase:
         # The real cascade: payload PD -> tension split -> per-cable S² control
         # -> per-quadrotor thrust vector.
         self._payload_controller = MultiQuadCsPayloadController.from_model(self)
+        self._controllers_ready = True
+
+    def _sync_default_controllers(self):
+        """Push the current physical parameters into the default controllers.
+
+        Every controller in the cascade caches parameters at construction — the
+        attitude loops hold ``J_i``, the station-keeping PDs hold their share of
+        the system mass, and the payload cascade holds every mass *and* its
+        tension-split policy. A setter that writes only ``self._…`` therefore
+        leaves the closed loop driving a different machine than the one being
+        integrated: assigning ``payload_mass = 3.0`` after construction used to
+        leave the cascade splitting a 0.2 kg load's weight, and the payload
+        settled 1.6 m below its setpoint.
+
+        A controller the caller has substituted for one of ours is left alone
+        unless it opts in with a ``sync_from_model`` hook.
+        """
+        if not self._controllers_ready:
+            return
+        for i, att_controller in enumerate(self._att_controllers):
+            if hasattr(att_controller, "inertia"):
+                att_controller.inertia = self._inertias[i]
+        for i, pos_controller in enumerate(self._pos_controllers):
+            if hasattr(pos_controller, "mass"):
+                pos_controller.mass = self._masses[i] + self._payload_mass / self._num_quadrotors
+        sync = getattr(self._payload_controller, "sync_from_model", None)
+        if sync is not None:
+            sync(self)
 
     def _formation_setpoint(self, i: int):
         """Station-keeping setpoint callable for quadrotor ``i``."""
@@ -365,6 +371,7 @@ class MultiQuadCsPayloadBase:
     @masses.setter
     def masses(self, value):
         self._masses = self._broadcast(value, "masses")
+        self._sync_default_controllers()
 
     @property
     def inertias(self) -> np.ndarray:
@@ -394,6 +401,7 @@ class MultiQuadCsPayloadBase:
             self._check_inertia_tensor(arr[i], f"inertias[{i}]")
         self._inertias = arr
         self._inertia_invs = np.linalg.inv(arr)
+        self._sync_default_controllers()
 
     @staticmethod
     def _check_inertia_tensor(tensor: np.ndarray, name: str):
@@ -426,6 +434,7 @@ class MultiQuadCsPayloadBase:
     @cable_lengths.setter
     def cable_lengths(self, value):
         self._cable_lengths = self._broadcast(value, "cable_lengths")
+        self._sync_default_controllers()
 
     @property
     def formation_radius(self) -> float:
@@ -450,6 +459,7 @@ class MultiQuadCsPayloadBase:
                 f"other, and a negative radius has no geometric meaning; got {radius}"
             )
         self._formation_radius = radius
+        self._sync_default_controllers()
 
     @property
     def payload_mass(self) -> float:
@@ -458,6 +468,7 @@ class MultiQuadCsPayloadBase:
     @payload_mass.setter
     def payload_mass(self, value: float):
         self._payload_mass = float(value)
+        self._sync_default_controllers()
 
     # ─── Dynamics ──────────────────────────────────────────────────
 

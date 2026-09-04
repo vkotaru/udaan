@@ -19,6 +19,7 @@ Submodules
    :maxdepth: 2
 
    udaan.utils.geometry
+   udaan.utils.grasp
    udaan.utils.logging
    udaan.utils.resize_gif
 

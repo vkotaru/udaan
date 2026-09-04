@@ -17,7 +17,7 @@ coefficient therefore need checks that leave equilibrium —
 import numpy as np
 import pytest
 
-from tests.conftest import TOL_ANALYTIC, TOL_INTEGRATION, TOL_TIGHT
+from tests.conftest import TOL_ANALYTIC, TOL_INTEGRATION, TOL_PHYSICAL, TOL_TIGHT
 from udaan.core.defaults import DEFAULT_FORMATION_RADIUS, GRAVITY
 from udaan.flatness import RingTensionSplit
 from udaan.manif import S2, SO3, TS2, TSO3
@@ -269,6 +269,62 @@ class TestParameters:
 
         # One quadrotor hovers on the axis, so the radius does not constrain it.
         MultiQuadCsPayloadBase(num_quadrotors=1, cable_lengths=0.4, formation_radius=0.5)
+
+    @pytest.mark.slow
+    def test_parameter_setters_reach_the_payload_cascade(self):
+        """Assigning a parameter must be the same as constructing with it.
+
+        The payload cascade caches every mass and builds its tension-split
+        policy at construction, so a setter that wrote only ``self._…`` left
+        the closed loop splitting the *old* load's weight: setting
+        ``payload_mass = 3.0`` on a default model used to leave the payload
+        1.64 m below its setpoint, with nothing else to show for it. The
+        attitude and station-keeping loops cache ``J_i`` and the mass share the
+        same way.
+        """
+        target = np.array([1.0, -0.5, 1.5])
+
+        def run(assign_after_construction):
+            if assign_after_construction:
+                mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+                mdl.payload_mass = 3.0
+                mdl.cable_lengths = 1.4
+            else:
+                mdl = MultiQuadCsPayloadBase(num_quadrotors=3, payload_mass=3.0, cable_lengths=1.4)
+            mdl.payload_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
+            mdl.simulate(tf=12.0, payload_position=np.array([0.0, 0.0, 1.0]))
+            return mdl
+
+        assigned, constructed = run(True), run(False)
+        np.testing.assert_allclose(
+            assigned.state.payload_position, constructed.state.payload_position, atol=1e-12
+        )
+        # ... and it is the *right* trajectory: the payload reaches the target,
+        # where the stale cascade left it 1.6 m short.
+        assert float(np.linalg.norm(assigned.state.payload_position - target)) < TOL_PHYSICAL
+
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        mdl.masses = 1.5
+        assert mdl.position_controllers[0].mass == pytest.approx(
+            1.5 + mdl.payload_mass / mdl.num_quadrotors
+        )
+        mdl.inertias = np.diag([0.1, 0.2, 0.3])
+        np.testing.assert_allclose(
+            mdl.attitude_controllers[0].inertia, np.diag([0.1, 0.2, 0.3]), atol=TOL_TIGHT
+        )
+
+    def test_an_explicit_tension_policy_is_not_rebuilt_by_a_setter(self):
+        """The caller's policy is the caller's to keep current."""
+        mdl = MultiQuadCsPayloadBase(num_quadrotors=3)
+        policy = RingTensionSplit(
+            num_quadrotors=3,
+            payload_mass=0.2,
+            masses=np.full(3, 0.9),
+            cable_lengths=np.full(3, 1.0),
+        )
+        mdl.payload_controller.tension_policy = policy
+        mdl.payload_mass = 3.0
+        assert mdl.payload_controller.tension_policy is policy
 
     def test_reset_stays_finite_at_a_valid_radius(self):
         mdl = MultiQuadCsPayloadBase(num_quadrotors=3, formation_radius=0.35)

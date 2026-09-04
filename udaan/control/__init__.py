@@ -57,6 +57,7 @@ class PDController(Controller):
 
 
 from . import multi_quad_cspayload as multi_quad_cspayload  # noqa: E402
+from . import multi_quad_rigidbody as multi_quad_rigidbody  # noqa: E402
 from . import quadrotor as quadrotor  # noqa: E402
 from . import quadrotor_cspayload as quadrotor_cspayload  # noqa: E402
 
@@ -65,6 +66,7 @@ __all__ = [
     "Controller",
     "PDController",
     "multi_quad_cspayload",
+    "multi_quad_rigidbody",
     "quadrotor",
     "quadrotor_cspayload",
 ]

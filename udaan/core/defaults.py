@@ -53,6 +53,43 @@ DEFAULT_FORMATION_RADIUS = 0.5  # m
 DEFAULT_SPAWN_HEIGHT = 2.0  # m
 
 # =============================================================================
+# Default rigid-body payload parameters (M4)
+# =============================================================================
+#
+# The M4 payload is a *rigid body*, not a point mass, so it needs a mass, an
+# inertia tensor and a set of body-frame attachment points — the last of these
+# is what makes the system able to exert a moment on the load at all.  The
+# defaults describe a thin square slab, which is also what the shipped
+# ``multi_quad_rigidbody.xml`` encodes.
+
+#: Mass of the default rigid-body payload, in kg.
+DEFAULT_RIGID_PAYLOAD_MASS = 1.0  # kg
+
+#: Half-extents ``(a, b, c)`` of the default slab payload, in metres.
+DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS = np.array([0.5, 0.5, 0.05])  # m
+
+#: Inertia of the default slab payload about its centre of mass, in kg*m^2.
+#: Uniform box: ``I = (m/3) diag(b²+c², a²+c², a²+b²)`` with *half*-extents,
+#: which is exactly the formula MuJoCo's ``inertiafromgeom`` applies to a
+#: ``type="box"`` geom — so the analytical model and the MJCF agree by
+#: construction rather than by coincidence.
+DEFAULT_RIGID_PAYLOAD_INERTIA = (DEFAULT_RIGID_PAYLOAD_MASS / 3.0) * np.diag(
+    [
+        DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[1] ** 2 + DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[2] ** 2,
+        DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[0] ** 2 + DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[2] ** 2,
+        DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[0] ** 2 + DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[1] ** 2,
+    ]
+)
+
+#: Horizontal radius of the ring of cable attachment points on the payload,
+#: measured in the payload body frame, in metres.
+DEFAULT_ATTACHMENT_RADIUS = 0.5  # m
+
+#: Height of the attachment ring above the payload centre of mass, in metres.
+#: Matches the top face of the default slab.
+DEFAULT_ATTACHMENT_HEIGHT = 0.05  # m
+
+# =============================================================================
 # Default control gains
 # =============================================================================
 
@@ -89,3 +126,17 @@ DEFAULT_MULTI_PAYLOAD_POS_KP = np.array([4.0, 4.0, 6.0])
 DEFAULT_MULTI_PAYLOAD_POS_KD = np.array([3.0, 3.0, 4.0])
 DEFAULT_MULTI_PAYLOAD_CABLE_KP = np.array([30.0, 30.0, 30.0])
 DEFAULT_MULTI_PAYLOAD_CABLE_KD = np.array([10.0, 10.0, 10.0])
+
+# Rigid-body payload attitude loop (M4).
+#
+# The extra loop M4 has and M3 does not: a geometric SO(3) PD on the payload
+# attitude whose output is a *moment*, in N·m per unit of the dimensionless
+# ``e_R``/``e_Ω`` error pair — the same units as the per-quadrotor
+# ``DEFAULT_ATT_*`` above, not the acceleration units of the payload position
+# loop.  They cannot be normalised the way ``DEFAULT_MULTI_PAYLOAD_POS_*`` are:
+# a moment command has to be divided across the cables by the grasp map, whose
+# scale is set by the attachment geometry, so it is the physical torque that
+# has to be commanded.  Sized against the default slab payload
+# (``J_L ≈ diag(0.084, 0.084, 0.167)``) for ω_n ≈ 3 rad/s, ζ ≈ 0.9.
+DEFAULT_RIGID_PAYLOAD_ATT_KP = np.array([0.8, 0.8, 1.5])
+DEFAULT_RIGID_PAYLOAD_ATT_KD = np.array([0.45, 0.45, 0.9])

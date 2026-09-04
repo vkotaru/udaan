@@ -319,7 +319,7 @@ class RingTensionSplit(AffineTensionSplit):
 
     whose sum is ``-m_L g e₃`` because the ring's horizontal terms cancel
     (``Σ cos θ_i = Σ sin θ_i = 0`` for ``nQ ≥ 2``).  This reproduces
-    :func:`udaan.models.multi_quad_cspayload.formation_cable_attitudes`
+    :func:`udaan.utils.grasp.formation_cable_attitudes`
     exactly, so the flat reference at hover *is* the model's default reset
     configuration.  Tension magnitudes come out ``T̄_i = c · l_i``: longer
     cables are more vertical and therefore carry proportionally more.
@@ -342,7 +342,7 @@ class RingTensionSplit(AffineTensionSplit):
     **``nQ = 1`` has no ring.** A lone quadrotor hovers directly above the
     payload (``q̄ = -e₃``), so ``radius`` is *silently ignored* — including the
     ``0 < radius < min_i l_i`` validation, which does not apply.  This matches
-    :func:`udaan.models.multi_quad_cspayload.formation_cable_attitudes`, which
+    :func:`udaan.utils.grasp.formation_cable_attitudes`, which
     special-cases ``nQ = 1`` the same way, and it is why
     :attr:`radius` reads back as ``0.0`` there rather than as the value passed.
 

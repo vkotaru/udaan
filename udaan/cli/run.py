@@ -206,15 +206,21 @@ def multi_quad_rigid(
     """Simulate multiple quadrotors with cable-suspended rigid-body payload."""
     import numpy as np
 
-    import udaan as U
+    from udaan.models.multi_quad_rigidbody import MultiQuadRigidbodyMujoco
 
     from . import parse_vec
 
-    x0 = parse_vec(position, default=np.array([0.0, 0.0, 0.5]))
-    mdl = U.models.mujoco.MultiQuadRigidbody(render=render)
+    # Absolute, exactly as `multi-quad` reads it. The retired model took the
+    # same flag under the same help text as a relative offset.
+    x0 = parse_vec(position, default=np.array([0.0, 0.0, 1.34]))
+    try:
+        mdl = MultiQuadRigidbodyMujoco(render=render)
+    except ValueError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
     _setup_recording(mdl, record)
-    typer.echo(f"Running multi-quad rigid ({mdl.nQ} quads) for {time}s ...")
-    mdl.simulate(tf=time, xL=x0)
+    typer.echo(f"Running multi-quad rigid ({mdl.num_quadrotors} quads) for {time}s ...")
+    mdl.simulate(tf=time, payload_position=x0)
     _hold_viewer(mdl)
 
 

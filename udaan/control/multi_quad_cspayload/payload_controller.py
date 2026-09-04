@@ -230,15 +230,11 @@ class MultiQuadCsPayloadController(PDController):
             kp=DEFAULT_MULTI_PAYLOAD_CABLE_KP.copy(), kd=DEFAULT_MULTI_PAYLOAD_CABLE_KD.copy()
         )
 
+        # Whether the policy below is ours to rebuild when the model's
+        # parameters change. A caller-supplied one is the caller's to maintain.
+        self._policy_is_default = tension_policy is None
         if tension_policy is None:
-            tension_policy = RingTensionSplit(
-                num_quadrotors=nQ,
-                payload_mass=self._payload_mass,
-                masses=self._masses,
-                cable_lengths=self._cable_lengths,
-                radius=self._formation_radius,
-                gravity=self._g,
-            )
+            tension_policy = self._default_tension_policy()
         if tension_policy.num_quadrotors != nQ:
             raise ValueError(
                 f"tension_policy is built for {tension_policy.num_quadrotors} "
@@ -269,6 +265,57 @@ class MultiQuadCsPayloadController(PDController):
         if arr.shape[0] != self._num_quadrotors:
             raise ValueError(f"{name} must have {self._num_quadrotors} entries, got {arr.shape[0]}")
         return arr
+
+    def _default_tension_policy(self) -> TensionSplitPolicy:
+        """The ring split built from this controller's current parameters."""
+        return RingTensionSplit(
+            num_quadrotors=self._num_quadrotors,
+            payload_mass=self._payload_mass,
+            masses=self._masses,
+            cable_lengths=self._cable_lengths,
+            radius=self._formation_radius,
+            gravity=self._g,
+        )
+
+    def sync_from_model(self, model) -> None:
+        """Re-read every physical parameter off ``model``, keeping the tuning.
+
+        The gains and the setpoint are left alone; the masses, cable lengths
+        and formation radius are re-read, and the default tension-split policy
+        is rebuilt from them. The model calls this from its own parameter
+        setters: every one of those quantities is cached here at construction,
+        so ``mdl.payload_mass = 3.0`` after the fact would otherwise leave this
+        cascade splitting the *old* load's weight — worth 1.6 m of steady-state
+        payload error, with no other symptom.
+
+        An explicitly supplied :attr:`tension_policy` is **not** rebuilt: it
+        was constructed by the caller, with parameters that are the caller's to
+        keep current.
+
+        Raises:
+            ValueError: if ``model`` has a different ``num_quadrotors``.
+        """
+        if int(model.num_quadrotors) != self._num_quadrotors:
+            raise ValueError(
+                f"cannot sync a {self._num_quadrotors}-quadrotor controller from a "
+                f"{model.num_quadrotors}-quadrotor model; rebuild it with from_model()"
+            )
+        masses = self._broadcast(model.masses, "masses")
+        if np.any(masses <= 0.0):
+            raise ValueError(f"masses must be positive; got {masses.tolist()}")
+        cable_lengths = self._broadcast(model.cable_lengths, "cable_lengths")
+        if np.any(cable_lengths <= 0.0):
+            raise ValueError(f"cable_lengths must be positive; got {cable_lengths.tolist()}")
+        payload_mass = float(model.payload_mass)
+        if payload_mass <= 0.0:
+            raise ValueError(f"payload_mass must be positive; got {payload_mass}")
+
+        self._masses = masses
+        self._cable_lengths = cable_lengths
+        self._payload_mass = payload_mass
+        self._formation_radius = float(model.formation_radius)
+        if self._policy_is_default:
+            self._tension_policy = self._default_tension_policy()
 
     @classmethod
     def from_model(cls, model, tension_policy: TensionSplitPolicy | None = None, **kwargs):
@@ -303,6 +350,8 @@ class MultiQuadCsPayloadController(PDController):
                 f"but this controller has {self._num_quadrotors}"
             )
         self._tension_policy = policy
+        # An assigned policy is the caller's; :meth:`sync_from_model` leaves it.
+        self._policy_is_default = False
 
     @property
     def position_gains(self) -> Gains:

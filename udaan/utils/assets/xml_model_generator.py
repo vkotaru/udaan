@@ -67,7 +67,7 @@ def multi_quad_pointmass(
 
     A single quadrotor (``num_quadrotors == 1``) hovers directly above the
     payload and the formation radius is unused, matching
-    :func:`udaan.models.multi_quad_cspayload.formation_cable_attitudes`.
+    :func:`udaan.utils.grasp.formation_cable_attitudes`.
 
     Args:
         num_quadrotors: number of quadrotors, >= 1.
