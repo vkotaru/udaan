@@ -67,6 +67,40 @@ on the model afterwards re-synchronises them, so
 `mdl.attachment_points = ...` and passing `attachment_points=` to the
 constructor give the same closed loop.
 
+## Several quadrotors on one flexible hose
+
+| Controller | Class | Role | Notes |
+|---|---|---|---|
+| Hose LQR | {py:class}`~udaan.control.multi_quad_hose.MultiQuadHoseController` | full-state regulation of $(x_0, \{q_i\}, \{R_k\})$ from $n_Q$ wrenches, feedforwarded by the flat map | default for M6 under `input="wrench"`; see {doc}`../theory/controllers/multi-quad-hose` |
+
+M5's departure, generalised: a vehicle is bolted to a *vertex*, so the links
+on either side of it still move only through the chain and there is still no
+cascade to invert. It emits an $(n_Q, 4)$ stack of wrenches, one per vehicle.
+
+Two things are specific to M6. Its `setpoint` is the **root vertex**, not a
+payload: M6's flat output is the root position, one vector tension per vehicle
+other than the one at the last vertex, and a yaw each, so the vehicles'
+positions are *outputs* of the flat map rather than commands. And the
+controller exists only when a vehicle sits at the last vertex — no other
+pattern is flat in those coordinates —
+{py:attr}`~udaan.models.multi_quad_hose.MultiQuadHoseBase.hose_controller` is
+`None` otherwise, and the per-vehicle station-keeping PDs on the
+`ACCELERATION` pipeline (the model's default) are what remains.
+
+With no trajectory bound, the loop regulates against a static **catenary
+trim** at the setpoint, built by the same flat map and held taut by a
+horizontal tension chosen from `sag_ratio` — or, where every inter-vehicle
+segment is a single link and the sag criterion therefore says nothing, by a
+pre-tension of the hose's own weight. Binding a trajectory exposing
+`get_jet(t, order)` to `mdl.hose_controller.setpoint` switches the flatness
+feedforward on, at the same $2n + 4$ depth M5 needs.
+
+Note that `setpoint` defaults to {py:class}`~udaan.control.PDController`'s
+fixed point at $(0, 0, 1)$, not to "hold position": under `input="wrench"`,
+`simulate(tf=..., root_position=[0, 0, 3])` with nothing bound flies the root
+*down*, where the `ACCELERATION` pipeline would station-keep where `reset()`
+left it.
+
 ## Swapping a controller
 
 All controllers follow a `compute(t, state) -> input` contract, so swapping

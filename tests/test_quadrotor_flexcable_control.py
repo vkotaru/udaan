@@ -415,6 +415,58 @@ class TestParameterValidation:
         with pytest.raises(ValueError, match="no stabilising solution to the algebraic Riccati"):
             _ = mdl.payload_controller.gain
 
+    def test_a_badly_scaled_chain_is_refused_rather_than_silently_regulated(self):
+        """The other half of the same failure, and the one that used to slip through.
+
+        The test above is the case :func:`scipy.linalg.solve_continuous_are`
+        *reports*. It does not report every case it cannot usefully solve: on
+        these parameters — all legal, all accepted by the constructor — it
+        returns without complaint a ``P`` of norm ``1e10`` whose residual is
+        hundreds of times ``\\|Q\\|``, and the caller used to get a gain of
+        matching size with no signal at all.
+        """
+        from scipy.linalg import solve_continuous_are
+
+        ctrl = QuadrotorFlexCableController(
+            num_links=3,
+            link_masses=[5.6535141258, 0.0005257727, 5.5366521072],
+            link_lengths=[0.0861974377, 0.1861998586, 3.041639794],
+            payload_mass=0.0433307839,
+            mass=0.4454316403,
+        )
+        # Not a caught exception being re-raised: the solver returns happily.
+        A, B = ctrl.linearize()
+        basis = ctrl.tangent_projection()
+        Q_r, R = ctrl.cost_matrices()
+        assert np.linalg.norm(solve_continuous_are(basis.T @ A @ basis, basis.T @ B, Q_r, R)) > 1e8
+
+        with pytest.raises(ValueError, match="does not solve the posed problem"):
+            _ = ctrl.gain
+
+    @pytest.mark.parametrize("n", [1, 2, 3, 5, 8])
+    def test_the_residual_check_has_room_to_spare_on_the_shipped_chain(self, n):
+        """The threshold has to clear the shipped chain at every usable ``n``.
+
+        M5's residual *grows* with the link count — the pencil gets stiffer —
+        so this is the direction in which the check could plausibly bite a
+        legitimate configuration, and it does not: ``n = 8`` is already past
+        the zero-order-hold envelope and still four orders under the warning.
+        """
+        from scipy.linalg import solve_continuous_are
+
+        from udaan.control import ARE_RESIDUAL_TOLERANCE, ARE_RESIDUAL_WARNING
+
+        ctrl = QuadrotorFlexCableController(num_links=n)
+        A, B = ctrl.linearize()
+        basis = ctrl.tangent_projection()
+        A_r, B_r = basis.T @ A @ basis, basis.T @ B
+        Q_r, R = ctrl.cost_matrices()
+        P = solve_continuous_are(A_r, B_r, Q_r, R)
+        gain_r = -np.linalg.solve(R, B_r.T @ P)
+        residual = A_r.T @ P + P @ A_r + P @ B_r @ gain_r + Q_r
+        relative = float(np.linalg.norm(residual)) / float(np.linalg.norm(Q_r))
+        assert relative < ARE_RESIDUAL_WARNING < ARE_RESIDUAL_TOLERANCE
+
     def test_get_jet_refuses_a_negative_order(self):
         with pytest.raises(ValueError, match="order must be >= 0"):
             gentle_lissajous().get_jet(0.0, -1)

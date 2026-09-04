@@ -259,7 +259,13 @@ held and the root falls 0.56 m (``n_Q = 2``) to 2.9 m (``n_Q = 5``) in the same
 second.  :meth:`hover_trim` warns when the split exceeds the limit, and the
 test that reports 0.0 raises ``_max_thrust`` first, deliberately: the claim
 under test is about the equations of motion.  A trim you intend to *fly* wants
-a split the airframes can deliver.
+a split the airframes can deliver, and
+:meth:`~udaan.control.multi_quad_hose.MultiQuadHoseController.equilibrium_reference`
+is the one the M6 LQR regulates against: a discrete **catenary**, with a
+horizontal pull that keeps every link taut and spreads the weight over the
+vehicles instead of stacking them.  It is not a second trim routine — it comes
+out of the flat map at an all-zero-derivative flat output — which is why it
+lives on the controller rather than here.
 
 The reference solves the same conditions numerically in
 ``matlab/utils/optimize_for_des_state.m``, minimising total thrust subject to
@@ -380,6 +386,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ...control.multi_quad_hose import MultiQuadHoseController
 from ...control.quadrotor import GeometricAttitudeController, PositionPDController
 from ...core.defaults import (
     DEFAULT_ARM_LENGTH,
@@ -394,6 +401,7 @@ from ...core.defaults import (
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
+from ...flatness.multi_quad_hose import NotFlatError
 from ...manif import S2, SO3, TS2, TSO3, hat
 from ...utils.hose import hose_spawn_directions, validate_attachments
 from ...utils.logging import get_logger
@@ -623,6 +631,10 @@ class MultiQuadHoseBase:
         # Per-vehicle station-keeping targets, refreshed by reset()
         self._station_targets = [np.zeros(3) for _ in range(nQ)]
 
+        #: Steps on which the flatness feedforward was refused; see
+        #: :attr:`feedforward_drops`.
+        self._feedforward_drops = 0
+
         # Default controllers
         self._init_default_controllers()
 
@@ -631,17 +643,23 @@ class MultiQuadHoseBase:
     # ─── Controllers ───────────────────────────────────────────────
 
     def _init_default_controllers(self):
-        """Build the default cascade.
+        """Build the default loops — two of them, one per input pipeline.
 
-        M6 ships no hose-specific outer loop.  What :meth:`simulate` drives is
-        the **station-keeping baseline**: one position PD per vehicle holding
-        the vertex :meth:`reset` left it at, feeding a geometric attitude loop.
-        It is the direct analogue of M3's
+        The **station-keeping baseline** drives the ``ACCELERATION`` pipeline
+        (this model's default): one position PD per vehicle holding the vertex
+        :meth:`reset` left it at, feeding a geometric attitude loop.  It is the
+        direct analogue of M3's
         :meth:`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase.compute_formation_input`
         and of M5's
         :meth:`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableBase.compute_station_keeping_input`,
         and each PD carries its own airframe plus an equal share of the hose as
         feedforward, so the team as a whole feeds forward the system weight.
+
+        The **hose LQR** (:attr:`hose_controller`) drives the ``WRENCH``
+        pipeline and is the loop that regulates the hose itself.  It needs a
+        vehicle at the last vertex — that is what makes the system flat in the
+        coordinates its reference is built in — so on a pattern without one it
+        is simply absent, and ``input="wrench"`` then has nothing to drive.
         """
         nQ = self._num_quadrotors
         self._att_controllers = [
@@ -652,6 +670,14 @@ class MultiQuadHoseBase:
         ]
         for i in range(nQ):
             self._pos_controllers[i].setpoint = self._station_setpoint(i)
+        try:
+            self._hose_controller = MultiQuadHoseController.from_model(self)
+        except NotFlatError as err:
+            # A legal hose for the *plant*, not for the flat map the LQR's
+            # reference comes out of. Refusing at construction would make the
+            # analytical model narrower than the dynamics it implements.
+            self._hose_controller = None
+            _logger.debug("no hose LQR for attachments %s: %s", self._attachments, err)
         self._controllers_ready = True
 
     def _share_of_system_mass(self, index: int) -> float:
@@ -685,6 +711,9 @@ class MultiQuadHoseBase:
                 sync(self)
             elif hasattr(pos_controller, "mass"):
                 pos_controller.mass = self._share_of_system_mass(i)
+        sync = getattr(self._hose_controller, "sync_from_model", None)
+        if sync is not None:
+            sync(self)
 
     def _station_setpoint(self, i: int):
         """Station-keeping setpoint callable for vehicle ``i``."""
@@ -709,6 +738,26 @@ class MultiQuadHoseBase:
     def attitude_controllers(self, controllers: list):
         self._check_length(controllers, "attitude_controllers", self._num_quadrotors)
         self._att_controllers = list(controllers)
+
+    @property
+    def hose_controller(self):
+        """The M6 LQR — what :meth:`simulate` drives under ``InputType.WRENCH``.
+
+        ``None`` when no vehicle sits at the last vertex: the reference the LQR
+        regulates against comes out of
+        :class:`udaan.flatness.MultiQuadHose`, which such a pattern is not flat
+        for.  The plant is fine; it is the *reference* that does not exist.
+
+        Bind a trajectory to its ``setpoint`` — the **root vertex** reference,
+        ``t -> (pos, vel, acc)`` — to fly one::
+
+            mdl.hose_controller.setpoint = traj.get
+        """
+        return self._hose_controller
+
+    @hose_controller.setter
+    def hose_controller(self, controller):
+        self._hose_controller = controller
 
     # ─── Parameters ────────────────────────────────────────────────
 
@@ -1519,18 +1568,197 @@ class MultiQuadHoseBase:
             ]
         )
 
+    def compute_hose_input(self, reference=None) -> np.ndarray:
+        """The ``(nQ, 4)`` wrench stack from the M6 LQR.
+
+        Args:
+            reference: optional ``(RefState, Inputs)`` pair from
+                :class:`udaan.flatness.MultiQuadHose`.  When ``None`` the
+                controller regulates against the static trim at its setpoint,
+                which is the feedback-only law.
+
+        Suitable for :meth:`step` under the ``WRENCH`` input type.
+
+        Raises:
+            RuntimeError: if there is no hose controller — see
+                :attr:`hose_controller`.
+        """
+        if self._hose_controller is None:
+            raise RuntimeError(
+                f"this hose has no vehicle at its last vertex (attachments "
+                f"{self._attachments} on {self._num_links} links), so it is not "
+                "differentially flat in the coordinates the LQR's reference is built "
+                f"in and no hose controller was created. Add vertex {self._num_links} "
+                "to the attachment set, or drive the ACCELERATION pipeline's "
+                "station-keeping loop instead."
+            )
+        if reference is None:
+            return np.asarray(self._hose_controller.compute(self.t, self.state))
+        return np.asarray(self._hose_controller.compute(self.t, self.state, reference))
+
+    # ─── Flatness feedforward ──────────────────────────────────────
+
+    def _flatness_feedforward_fn(self):
+        """``(jet_fn, exact)`` for the bound root trajectory, or ``(None, False)``.
+
+        The hose controller's ``setpoint`` is sniffed for a bound method, and
+        its owner for a way to differentiate the trajectory deeply enough.  As
+        in M5, "deeply enough" is not a constant: the flat map needs the root
+        position through its ``2n + 4``-th derivative
+        (:func:`udaan.flatness.chain.chain_jet_order`), so ``get_full``'s five
+        rows — position through snap — stop being sufficient at ``n = 1``.
+
+        Two protocols, in order of preference:
+
+        * ``get_jet(t, order) -> (order + 1, 3)``, which supplies every
+          derivative in closed form.  This is the only one that feeds the map
+          what it actually asks for, and it is what
+          :class:`~udaan.utils.trajectory.CrazyTrajectory` implements.
+        * ``get_full(t) -> (pos, vel, acc, jerk, snap)``, zero-padded past snap.
+          :meth:`simulate` warns once when it has to fall back on this.
+        """
+        setpoint_fn = getattr(self._hose_controller, "setpoint", None)
+        owner = getattr(setpoint_fn, "__self__", None)
+        if owner is None:
+            return None, False
+        get_jet = getattr(owner, "get_jet", None)
+        if get_jet is not None:
+            return get_jet, True
+        get_full = getattr(owner, "get_full", None)
+        if get_full is None:
+            return None, False
+
+        def zero_padded(t, order):
+            rows = [np.asarray(row, dtype=float) for row in get_full(t)]
+            rows.extend(np.zeros(3) for _ in range(order + 1 - len(rows)))
+            return np.array(rows[: order + 1])
+
+        return zero_padded, False
+
+    @property
+    def feedforward_drops(self) -> int:
+        """How many steps have dropped the flatness feedforward.
+
+        Reset by :meth:`simulate`.  A non-zero count means the reference left
+        the flat map's certificate on those steps — a derived link tension fell
+        through :attr:`~udaan.flatness.MultiQuadHose.min_tension`, a link went
+        slack, or a vehicle was in free fall — and the step ran against the
+        static trim instead.  The first drop is logged as a warning, the rest at
+        debug level.
+        """
+        return self._feedforward_drops
+
+    def _flat_reference(self, flat_map, controller, jet_fn, t):
+        """``(RefState, Inputs)`` recovered from the flat output at ``t``, or ``None``.
+
+        ``None`` is a legitimate outcome, not an error: the map refuses any
+        sample whose hose is not taut, and the right response is to fall back on
+        the trim reference for that step rather than to abort.  It is counted in
+        :attr:`feedforward_drops`.
+
+        A malformed jet — wrong shape, wrong dimension — is a programming error
+        and is left to propagate.
+        """
+        flats = controller.build_flats(np.asarray(jet_fn(t, flat_map.jet_order), dtype=float))
+        try:
+            return flat_map.recover(flats)
+        except ValueError as err:
+            self._feedforward_drops += 1
+            if self._feedforward_drops == 1:
+                _logger.warning(
+                    "flatness feedforward dropped at t=%.4f (%s); this step ran "
+                    "against the static-trim reference. Further drops are logged at "
+                    "debug level; see the feedforward_drops counter for the total.",
+                    t,
+                    err,
+                )
+            else:
+                _logger.debug("flatness feedforward unavailable at t=%.4f: %s", t, err)
+            return None
+
     def simulate(self, tf, **kwargs):
         """Run closed-loop simulation to time ``tf``.
 
-        Drives the station-keeping cascade of :meth:`compute_default_input`.
-        There is no flatness feedforward path here: M6 ships no flat map, and
-        M5's is for a chain with one airframe at its head.
+        Which loop runs is decided by the input type, because the three
+        pipelines take incompatible input shapes:
+
+        * ``ACCELERATION`` (the default) drives the station-keeping cascade of
+          :meth:`compute_default_input` — one position PD per vehicle emitting
+          a thrust *vector*, which is what that pipeline's geometric attitude
+          loop consumes.
+        * ``WRENCH`` drives the M6 LQR (:attr:`hose_controller`), which emits
+          the body moments itself, so no attitude loop is in the path.
+
+        The two pipelines differ in what "no setpoint" means, and it is worth
+        knowing before reading a run.  The ``ACCELERATION`` cascade station-keeps
+        wherever :meth:`reset` left each vehicle.  The LQR inherits
+        :class:`~udaan.control.PDController`'s default setpoint, which is the
+        **fixed point** ``(0, 0, 1)`` — so ``simulate(tf=...,
+        root_position=[0, 0, 3])`` under ``WRENCH`` with nothing bound flies the
+        root *down* to ``z = 1`` rather than holding it.  Bind
+        ``mdl.hose_controller.setpoint`` to say otherwise.
+
+        Under ``WRENCH``, binding a trajectory to
+        ``mdl.hose_controller.setpoint`` also picks up the **flatness
+        feedforward**: :class:`udaan.flatness.MultiQuadHose` recovers the whole
+        reference state *and* the reference wrenches, and both are handed to the
+        controller — the reference the error is measured against, and the wrench
+        the correction is added to.
+
+        The flat map is taken from the controller's **own**
+        :attr:`~udaan.control.multi_quad_hose.MultiQuadHoseController.flat_map`,
+        never rebuilt from this model.  The gain was solved at the controller's
+        own masses and lengths; a reference recovered from different ones is the
+        reference for a different machine, and the mismatch shows up as a
+        steady-state offset with no other symptom.  A controller that does not
+        publish a flat map therefore gets no feedforward at all.
         """
         self.reset(**kwargs)
+        self._feedforward_drops = 0
+
+        lqr = self._input_type == InputType.WRENCH
+        flat_map = None
+        jet_fn = None
+        if lqr:
+            if self._hose_controller is None:
+                # Same condition compute_hose_input refuses on; say it once here
+                # rather than once per step.
+                self.compute_hose_input()
+            jet_fn, exact = self._flatness_feedforward_fn()
+            if jet_fn is not None:
+                flat_map = getattr(self._hose_controller, "flat_map", None)
+                if flat_map is None:
+                    _logger.warning(
+                        "%s exposes no flat_map, so the reference this loop is "
+                        "regulating against is unknown; running feedback-only rather "
+                        "than feeding forward a reference built from the model's own "
+                        "parameters, which need not be the controller's.",
+                        type(self._hose_controller).__name__,
+                    )
+                elif not exact:
+                    _logger.warning(
+                        "the bound trajectory supplies derivatives only through snap, "
+                        "but a %d-link hose needs the root position through its %d-th "
+                        "derivative (2n + 4). Orders 5-%d are being taken as zero: the "
+                        "recovered positions and link directions are unaffected, the "
+                        "recovered rates and moment feedforward are not. A trajectory "
+                        "exposing get_jet(t, order) supplies them exactly.",
+                        self._num_links,
+                        flat_map.jet_order,
+                        flat_map.jet_order,
+                    )
 
         start_t = time.time_ns()
         while self.t < tf:
-            u = self.compute_default_input()
+            if lqr:
+                reference = (
+                    None
+                    if flat_map is None
+                    else self._flat_reference(flat_map, self._hose_controller, jet_fn, self.t)
+                )
+                u = self.compute_hose_input(reference=reference)
+            else:
+                u = self.compute_default_input()
             if self.verbose >= 2:
                 self._log_state(u)
             self.step(u)

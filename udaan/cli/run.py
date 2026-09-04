@@ -365,6 +365,18 @@ def hose(
     spawn_height: float | None = typer.Option(
         None, "--height", "-z", help="Height of vertex 0 at spawn, in metres."
     ),
+    controller: str = typer.Option(
+        "lqr",
+        "--controller",
+        "-c",
+        help=(
+            "Control loop: 'lqr' (M6, the default; needs a vehicle at the last vertex) "
+            "or 'station' (per-vehicle PD, any attachment pattern)."
+        ),
+    ),
+    trajectory: str = typer.Option(
+        "hover", "--trajectory", "--traj", help="Root-vertex trajectory: 'hover' or 'lissajous'."
+    ),
     record: str | None = _record_option,
     position: str | None = typer.Option(
         None, "--position", "-p", help="Initial position of vertex 0 as 'x,y,z'."
@@ -372,13 +384,40 @@ def hose(
 ):
     """Simulate several quadrotors carrying one flexible hose (M6).
 
+    ``--controller lqr`` (the default) drives the M6 hose LQR, which regulates
+    the whole hose against the static trim at the root setpoint; it needs a
+    vehicle at the last vertex, since that is what makes the hose flat in the
+    coordinates its reference is built in. ``--controller station`` falls back
+    to the per-vehicle station-keeping PDs, which have no such requirement.
+
+    Because the LQR is the default, a pattern with no vehicle at the last
+    vertex — ``-n 4 -a 0,2``, say — now **exits 1** with a message naming
+    ``--controller station``, where before it silently station-kept. That is
+    deliberate: this command's headline is M6's controller, and a run that
+    quietly swaps in a different control law is the more expensive surprise.
+
+    The 'lissajous' trajectory exposes ``get_jet``, so it also switches on the
+    flatness feedforward at the full ``2n + 4`` derivative depth the hose
+    needs; 'hover' is a step response and needs none.
+
     The MJCF is generated from these knobs and cached. Raising ``--num-links``
-    past about 5 leaves the analytical backend's stability envelope and it will
-    say so; the MuJoCo backend has no such limit.
+    past 4 leaves the analytical backend's stability envelope for some
+    attachment patterns and it will say so; the MuJoCo backend has no such
+    limit.
     """
     import numpy as np
 
     from . import parse_vec
+
+    if controller not in ("lqr", "station"):
+        typer.echo(f"Unknown controller '{controller}'. Expected 'lqr' or 'station'.", err=True)
+        raise typer.Exit(1)
+    # Unvalidated, a misspelt --traj silently fell through to the hover branch
+    # and printed a plausible-looking tracking error for a run that was never
+    # the one asked for.
+    if trajectory not in ("hover", "lissajous"):
+        typer.echo(f"Unknown trajectory '{trajectory}'. Expected 'hover' or 'lissajous'.", err=True)
+        raise typer.Exit(1)
 
     opts = {
         "hose_length": hose_length,
@@ -394,6 +433,11 @@ def hose(
         except ValueError:
             typer.echo(f"Invalid attachments: '{attachments}'. Expected e.g. '0,2,4'.", err=True)
             raise typer.Exit(1) from None
+    if controller == "lqr":
+        # The LQR emits a per-vehicle wrench; the station-keeping PDs emit
+        # thrust vectors. The two pipelines take incompatible shapes, so the
+        # choice has to be made at construction.
+        opts["input"] = "wrench"
 
     if model == "mujoco":
         from udaan.models.multi_quad_hose import MultiQuadHoseMujoco as Model
@@ -417,12 +461,45 @@ def hose(
     if model != "mujoco" and position is None:
         default_root = np.array([0.0, 0.0, 2.0])
     x0 = parse_vec(position, default=default_root)
+
+    if controller == "lqr":
+        if mdl.hose_controller is None:
+            typer.echo(
+                f"Error: attachments {mdl.attachments} put no vehicle at the last vertex "
+                f"({mdl.num_links}), so the hose is not differentially flat in the "
+                "coordinates the LQR's reference is built in. Add that vertex, or run "
+                "--controller station.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if trajectory == "lissajous":
+            from udaan.utils.trajectory import CrazyTrajectory
+
+            # Gentle: the constant gain is solved at the static trim and the
+            # linearisation moves ~2 % over a reference this size. See the
+            # drift table in udaan.control.multi_quad_hose.hose_controller.
+            traj = CrazyTrajectory(center=x0, ax=0.3, ay=0.24, az=0.15, f1=0.2, f2=0.16, f3=0.12)
+            mdl.hose_controller.setpoint = traj.get
+            x0 = traj.get(0.0)[0]
+        else:
+            # A step, not a fixed point at the spawn: commanding the root to
+            # where reset() puts it would score 0.0000 m however good or bad
+            # the gain is.
+            target = x0 + np.array([0.3, 0.2, 0.2])
+            mdl.hose_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
+
     _setup_recording(mdl, record)
     typer.echo(
         f"Running hose ({model}, {mdl.num_links} links, "
-        f"{mdl.num_quadrotors} quads at {mdl.attachments}) for {time}s ..."
+        f"{mdl.num_quadrotors} quads at {mdl.attachments}, {controller}) for {time}s ..."
     )
     mdl.simulate(tf=time, root_position=x0)
+    if controller == "lqr":
+        typer.echo(
+            f"  root error "
+            f"{np.linalg.norm(np.asarray(mdl.state.root_position) - mdl.hose_controller.setpoint(mdl.t)[0]):.4f} m"
+            f"  (feedforward drops: {mdl.feedforward_drops})"
+        )
     _hold_viewer(mdl)
 
 

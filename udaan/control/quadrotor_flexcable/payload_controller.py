@@ -239,7 +239,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...control import PDController
+from ...control import PDController, solve_lqr_gain
 from ...core.defaults import (
     DEFAULT_CABLE_LENGTH,
     DEFAULT_CABLE_MASS,
@@ -866,31 +866,28 @@ class QuadrotorFlexCableController(PDController):
 
         Raises:
             ValueError: if ``(A, B)`` is not stabilisable on the reduced
-                subspace, which the Riccati solver reports.
+                subspace, or if the Riccati solver returns a solution that does
+                not survive :func:`~udaan.control.solve_lqr_gain`'s residual
+                and stability checks.  The solver does not refuse every pair it
+                cannot solve; a chain of six orders of magnitude in mass ratio
+                is the kind of thing that gets a silently useless ``P`` back.
         """
-        from scipy.linalg import solve_continuous_are
-
         basis = self.tangent_projection(link_directions)
         A_r = basis.T @ A @ basis
         B_r = basis.T @ B
         Q_r, R = self.cost_matrices()
-        try:
-            P = solve_continuous_are(A_r, B_r, Q_r, R)
-        except (np.linalg.LinAlgError, ValueError) as err:
-            # Both failure modes land here: an unstabilisable pair, and a pair
-            # whose generalised Schur reordering the solver refuses as too
-            # ill-conditioned — which is what a chain of six orders of
-            # magnitude in mass ratio produces.
-            raise ValueError(
-                f"no stabilising solution to the algebraic Riccati equation for this "
-                f"{self._num_links}-link chain (masses {self._link_masses.tolist()}, "
-                f"lengths {self._link_lengths.tolist()}): {err}"
-            ) from err
-        gain_r = -np.linalg.solve(R, B_r.T @ P)
+        gain_r, poles = solve_lqr_gain(
+            A_r,
+            B_r,
+            Q_r,
+            R,
+            describe=(
+                f"this {self._num_links}-link chain (masses {self._link_masses.tolist()}, "
+                f"lengths {self._link_lengths.tolist()})"
+            ),
+        )
         self._gain = gain_r @ basis.T
-        closed = A_r + B_r @ gain_r
-        poles = np.linalg.eigvals(closed)
-        self._closed_loop_poles = poles[np.argsort(-poles.real)]
+        self._closed_loop_poles = poles
         self._controllability_margin = self._pbh_margin(A_r, B_r)
 
     @staticmethod

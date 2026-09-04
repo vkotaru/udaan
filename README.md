@@ -84,6 +84,11 @@ udaan run quad-flexcable -n 2 -t 10 -m base            # pure dynamics (no viz)
 udaan run multi-quad -n 3 -t 10                        # N-quad pointmass payload
 udaan run multi-quad-rigid -n 4 -t 10                  # N-quad rigid-body payload
 
+# Several quadrotors carrying one flexible hose
+udaan run hose -n 4 -t 10                              # hose LQR, root step setpoint
+udaan run hose -n 4 -a 0,2,4 --traj lissajous          # 3 quads + flatness feedforward
+udaan run hose -n 4 -t 10 -c station -m base           # per-vehicle station keeping
+
 # Fleet: compare controllers side-by-side
 udaan run fleet --demo l1-comparison                   # L1 adaptive vs PD
 udaan run fleet --demo gain-sweep                      # PD gain comparison

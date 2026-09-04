@@ -317,3 +317,38 @@ DEFAULT_FLEXCABLE_LQR_Q_LINK = 1.0
 DEFAULT_FLEXCABLE_LQR_Q_LINK_RATE = 0.75
 DEFAULT_FLEXCABLE_LQR_R_THRUST = 0.2
 DEFAULT_FLEXCABLE_LQR_R_MOMENT = 20.0
+
+
+# ── M6: multi-quadrotor flexible hose, LQR cost weights ────────────────
+#
+# The published weights (``matlab/examples/example1.m`` L68-72) are
+# ``Q = blkdiag(0.5 I_6, 0.75 I_{6n}, I_{3nQ}, 0.75 I_{3nQ})`` and
+# ``R = 0.2 I_{4nQ}``, and the six ``Q`` blocks below are those, read as the
+# *intent* rather than as the literal diagonal.  They are not the same thing:
+# the reference's own error vector is ``[e_x; xi; e_v; delta-omega; eta;
+# delta-Omega]`` (``error.m`` L47) while that ``blkdiag`` groups ``[x, v]``
+# first and the hose second, so on the reference's own ordering the ``0.5``
+# block lands on ``e_x`` *and the first link's* ``xi``, and ``e_v`` picks up
+# ``0.75``.  Six diagonal entries in the wrong block; harmless in effect,
+# clearly not what was meant, and not reproduced here.
+DEFAULT_HOSE_LQR_Q_ROOT_POSITION = 0.5
+DEFAULT_HOSE_LQR_Q_ROOT_VELOCITY = 0.5
+DEFAULT_HOSE_LQR_Q_LINK = 0.75
+DEFAULT_HOSE_LQR_Q_LINK_RATE = 0.75
+DEFAULT_HOSE_LQR_Q_ATTITUDE = 1.0
+DEFAULT_HOSE_LQR_Q_ANGULAR_RATE = 0.75
+DEFAULT_HOSE_LQR_R_THRUST = 0.2
+
+# M5's input-weighting problem, re-measured on M6 and just as real.  The
+# published ``R = 0.2 I`` weights a thrust and a moment equally, though a
+# newton of thrust and a newton-metre of moment do very different things: the
+# thrust column of ``B`` scales as ``1/M00`` and the moment column as
+# ``||J^-1||``.  The largest moment column is ``||J^-1|| = 435`` whatever the
+# hose, while the thrust columns run 0.435 to 2.83 over the attachment patterns
+# tabulated in that module, so the ratio is 150 to 1000 rather than one
+# number.  The resulting
+# attitude loop is far faster than udaan's 200 Hz zero-order hold can carry.
+# See :mod:`udaan.control.multi_quad_hose.hose_controller` for the measured
+# closed-loop poles at 0.2 and at 20, and for what the moment weight costs the
+# hose modes in return.
+DEFAULT_HOSE_LQR_R_MOMENT = 20.0
