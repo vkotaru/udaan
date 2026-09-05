@@ -394,7 +394,13 @@ from ...core.defaults import (
     DEFAULT_HOSE_LENGTH,
     DEFAULT_HOSE_MASS,
     DEFAULT_HOSE_SAG_RATIO,
+    DEFAULT_MAX_THRUST,
+    DEFAULT_MAX_TORQUE,
+    DEFAULT_MIN_THRUST,
+    DEFAULT_MIN_TORQUE,
     DEFAULT_NUM_HOSE_LINKS,
+    DEFAULT_PROP_MAX_FORCE,
+    DEFAULT_PROP_MIN_FORCE,
     DEFAULT_QUAD_INERTIA,
     DEFAULT_QUAD_MASS,
     DEFAULT_TORQUE_CONSTANT,
@@ -406,6 +412,7 @@ from ...flatness.multi_quad_hose import NotFlatError
 from ...manif import S2, SO3, TS2, TSO3, hat, zoh_step
 from ...utils.hose import hose_spawn_directions, validate_attachments
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 
 _logger = get_logger(__name__)
 
@@ -502,6 +509,21 @@ class MultiQuadHoseState:
         )
 
 
+#: The initial-condition overrides :meth:`MultiQuadHoseBase.reset` acts on.
+#: Anything else is rejected rather than silently discarded — see
+#: :mod:`udaan.models._kwargs`.
+_SUPPORTED_RESET_KWARGS = frozenset(
+    {
+        "root_position",
+        "root_velocity",
+        "link_attitudes",
+        "link_angular_velocities",
+        "orientations",
+        "angular_velocities",
+    }
+)
+
+
 class MultiQuadHoseBase:
     """``nQ`` quadrotors carrying one ``n``-link flexible hose — pure dynamics.
 
@@ -585,12 +607,12 @@ class MultiQuadHoseBase:
         self._e3 = np.array([0.0, 0.0, 1.0])
 
         # Actuator limits (per vehicle)
-        self._min_thrust = 0.0
-        self._max_thrust = 20.0
-        self._min_torque = np.array([-5.0, -5.0, -2.0])
-        self._max_torque = np.array([5.0, 5.0, 2.0])
-        self._prop_min_force = 0.0
-        self._prop_max_force = 10.0
+        self._min_thrust = DEFAULT_MIN_THRUST
+        self._max_thrust = DEFAULT_MAX_THRUST
+        self._min_torque = DEFAULT_MIN_TORQUE.copy()
+        self._max_torque = DEFAULT_MAX_TORQUE.copy()
+        self._prop_min_force = DEFAULT_PROP_MIN_FORCE
+        self._prop_max_force = DEFAULT_PROP_MAX_FORCE
 
         # Integration: 5 ms outer loop, 4 inner substeps at 1.25 ms
         self.dt = kwargs.get("dt", 1.0 / 200.0)
@@ -671,6 +693,7 @@ class MultiQuadHoseBase:
         ]
         for i in range(nQ):
             self._pos_controllers[i].setpoint = self._station_setpoint(i)
+        self._hose_controller: MultiQuadHoseController | None
         try:
             self._hose_controller = MultiQuadHoseController.from_model(self)
         except NotFlatError as err:
@@ -1519,8 +1542,13 @@ class MultiQuadHoseBase:
         land on the *same* state from the same kwargs.  Repair rather than
         rejection because the spin component is genuine gauge freedom the
         dynamics already factor out.  A zero-length direction *is* rejected:
-        there is nothing to normalise.
+        there is nothing to normalise.  So is an *unrecognised keyword*: a stale
+        name must not silently run a different initial condition.
+
+        Raises:
+            ValueError: for any keyword outside the list above.
         """
+        check_reset_kwargs(self, kwargs, _SUPPORTED_RESET_KWARGS)
         self.t = 0.0
         self.state.reset()
         self.state.link_attitudes = self.spawn_link_attitudes()

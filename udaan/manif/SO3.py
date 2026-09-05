@@ -9,7 +9,8 @@ class TSO3:
     """Element of the Lie algebra so(3) — tangent vector to SO(3).
 
     Wraps a 3-vector representing angular velocity or rotation error.
-    Supports:
+    Supports::
+
         w1 - w2  -> TSO3   (tangent vector difference)
         w1 + w2  -> TSO3   (tangent vector sum)
         w * s    -> TSO3   (scalar multiplication)
@@ -41,7 +42,7 @@ class TSO3:
     @property
     def arr(self) -> np.ndarray:
         """Plain numpy array (copy)."""
-        return self._data.copy()
+        return np.copy(self._data)
 
     @property
     def vector(self) -> np.ndarray:
@@ -146,7 +147,7 @@ class SO3:
     @property
     def arr(self) -> np.ndarray:
         """Plain numpy array (copy)."""
-        return self._data.copy()
+        return np.copy(self._data)
 
     # ─── group operations ──────────────────────────────────────────
 
@@ -181,7 +182,7 @@ class SO3:
 
         Returns 0 when self == other, approaches 2 for 180-degree error.
         """
-        return 0.5 * np.trace(np.eye(3) - np.asarray(other).T @ self._data)
+        return float(0.5 * np.trace(np.eye(3) - np.asarray(other).T @ self._data))
 
     # ─── constructors ──────────────────────────────────────────────
 

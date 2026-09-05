@@ -9,7 +9,8 @@ class TS2:
     """Tangent vector to the 2-sphere S2.
 
     Wraps a 3-vector representing angular velocity or configuration error
-    on the sphere. Supports:
+    on the sphere. Supports::
+
         v1 - v2  -> TS2   (tangent vector difference)
         v1 + v2  -> TS2   (tangent vector sum)
         v * s    -> TS2   (scalar multiplication)
@@ -40,7 +41,7 @@ class TS2:
     @property
     def arr(self) -> np.ndarray:
         """Plain numpy array (copy)."""
-        return self._data.copy()
+        return np.copy(self._data)
 
     @property
     def vector(self) -> np.ndarray:
@@ -132,7 +133,7 @@ class S2:
     @property
     def arr(self) -> np.ndarray:
         """Plain numpy array (copy)."""
-        return self._data.copy()
+        return np.copy(self._data)
 
     # ─── geometry ──────────────────────────────────────────────────
 
@@ -150,7 +151,7 @@ class S2:
 
     def config_error(self, other) -> float:
         """Scalar configuration error: 1 - q^T q_other."""
-        return 1 - np.dot(self._data, np.asarray(other))
+        return float(1 - np.dot(self._data, np.asarray(other)))
 
     def error_vec(self, other, version=2) -> np.ndarray:
         """Configuration error vector on the tangent space.
@@ -162,7 +163,7 @@ class S2:
                 1: q_other x q (cross product)
         """
         if version == 2:
-            return hat(self._data) @ hat(self._data) @ np.asarray(other)
+            return np.asarray(hat(self._data) @ hat(self._data) @ np.asarray(other))
         else:
             return np.cross(np.asarray(other), self._data)
 

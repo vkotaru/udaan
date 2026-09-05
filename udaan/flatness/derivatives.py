@@ -120,9 +120,11 @@ def normalize_derivatives(
     #   v^(k) = Σ_j C(k,j) n^(j) u^(k-j)  ⇒  n u^(k) = v^(k) − (inner terms)
     u = [v[0] / n_val]
     for k in range(1, K + 1):
-        s = np.array(v[k], dtype=float)
+        # A distinct name from the scalar ``s`` above: that one accumulates
+        # floats (norm derivatives), this one 3-vectors (direction derivatives).
+        su = np.array(v[k], dtype=float)
         for j in range(1, k + 1):
-            s -= comb(k, j) * n[j] * u[k - j]
-        u.append(s / n_val)
+            su -= comb(k, j) * n[j] * u[k - j]
+        u.append(su / n_val)
 
     return n, u

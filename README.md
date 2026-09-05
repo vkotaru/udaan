@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>A Python MuJoCo-based models and controllers for quadcopter cable-suspended payload systems.</strong>
+  <strong>MuJoCo-backed models, geometric controllers and differential-flatness maps for quadrotors carrying cable-suspended payloads.</strong>
 </p>
 
 <p align="center">
@@ -31,7 +31,21 @@
 > Developed as part of the thesis: _Dynamics and Control for Collaborative Aerial Manipulation_ ([Kotaru, 2022](https://github.com/vkotaru)).
 > Original research code: [vkotaru/floating_models](https://github.com/vkotaru/floating_models). This package is the cleaned-up public release, refactored with [Claude](https://claude.ai).
 
-&#x1F681; Quadrotor dynamics &nbsp;&bull;&nbsp; &#x1F39B; Geometric control on SE(3)/SO(3) &nbsp;&bull;&nbsp; &#x26D3; Cable-suspended payloads &nbsp;&bull;&nbsp; &#x1F91D; Multi-quad cooperative transport &nbsp;&bull;&nbsp; &#x1F579; MuJoCo simulation &nbsp;&bull;&nbsp; &#x1F5A5; CLI interface
+&#x1F681; Quadrotor dynamics &nbsp;&bull;&nbsp; &#x1F39B; Geometric control on SE(3)/SO(3) &nbsp;&bull;&nbsp; &#x26D3; Cable-suspended payloads &nbsp;&bull;&nbsp; &#x1F91D; Multi-quad cooperative transport &nbsp;&bull;&nbsp; &#x1F4D0; Differential flatness &nbsp;&bull;&nbsp; &#x1F579; MuJoCo simulation &nbsp;&bull;&nbsp; &#x1F5A5; CLI interface
+
+## Systems
+
+Six systems, each with analytical dynamics, a MuJoCo backend, a controller and a
+differential-flatness flat-to-state map.
+
+| System | Package | CLI | Description | Flat output |
+|---|---|---|---|---|
+| Quadrotor | `models.quadrotor` | `quadrotor` | Single rigid-body quadrotor | `(x_Q, psi)` |
+| Quadrotor + payload | `models.quadrotor_cspayload` | `quad-payload` | One quadrotor, cable-suspended point-mass payload | `(x_L, psi)` |
+| Multi-quad + payload | `models.multi_quad_cspayload` | `multi-quad` | `nQ` quadrotors sharing a point-mass payload | `(x_L, {psi_i}, cable forces)` |
+| Multi-quad + rigid body | `models.multi_quad_rigidbody` | `multi-quad-rigid` | `nQ` quadrotors sharing a rigid-body payload | `(x_L, R_L, {psi_i}, lambda)` |
+| Quadrotor + flexible cable | `models.quadrotor_flexcable` | `quad-flexcable` | One quadrotor, `n`-link flexible cable | `(x_L, psi)` |
+| Multi-quad hose | `models.multi_quad_hose` | `hose` | `nQ` quadrotors in series along one `n`-link hose | `(x_0, {tau_a}, {psi_k})` |
 
 ## Installation
 
@@ -61,7 +75,6 @@ pip install -e ".[all]"
 # Quadrotor with geometric SE(3) control
 udaan run quadrotor                                    # MuJoCo (default)
 udaan run quadrotor -m base                            # pure dynamics (no viz)
-udaan run quadrotor -m vfx                             # VPython visualization
 
 # Trajectory tracking
 udaan run quadrotor --traj hover -p 1,1,0              # hover (default)
@@ -73,7 +86,6 @@ udaan run quadrotor --traj circle -p 0,0,1             # circular
 udaan run quad-payload -t 10 -c tendon                 # spatial tendon cable
 udaan run quad-payload -t 10 -c links                  # rigid link chain
 udaan run quad-payload -t 10 -c cable                  # composite cable (experimental)
-udaan run quad-payload -t 10 -m vfx                   # vpython backend
 
 # Flexible (n-link) cable-suspended payload
 udaan run quad-flexcable -n 3 -t 10                    # payload LQR, hover setpoint
@@ -90,7 +102,7 @@ udaan run hose -n 4 -a 0,2,4 --traj lissajous          # 3 quads + flatness feed
 udaan run hose -n 4 -t 10 -c station -m base           # per-vehicle station keeping
 
 # Fleet: compare controllers side-by-side
-udaan run fleet --demo l1-comparison                   # L1 adaptive vs PD
+udaan run fleet --demo l1-comparison                   # L1 adaptive vs PD (L1 is experimental)
 udaan run fleet --demo gain-sweep                      # PD gain comparison
 udaan run fleet -n 4 --trail                           # 4 quads with trails
 
@@ -119,9 +131,60 @@ mdl = QuadrotorMujoco(render=True)
 mdl.simulate(tf=10, position=[1., 1., 0.])
 ```
 
+Every system follows the same shape — `base.py` holds the pure analytical
+dynamics and `mujoco.py` subclasses it to delegate to the physics backend:
+
+```python
+from udaan.models.multi_quad_cspayload import MultiQuadCsPayloadBase
+
+mdl = MultiQuadCsPayloadBase(num_quadrotors=4)
+mdl.cable_lengths = [1.0, 1.2, 1.0, 1.2]
+mdl.simulate(tf=5.0, payload_position=[0., 0., 1.])
+```
+
+### Differential flatness
+
+Each system has a flat-to-state map that recovers the full reference state and
+the feedforward inputs from the flat output and its time derivatives. Flat
+outputs are carried as `Jet` bundles — an `(order+1, dim)` array whose row *k* is
+the *k*-th derivative, with no factorial scaling. Note `udaan.flatness` is not
+re-exported from the top-level package; import it explicitly.
+
+```python
+import numpy as np
+from udaan.flatness import Jet, Quadrotor
+
+flat_map = Quadrotor(mass=0.9, inertia=np.diag([0.0023, 0.0023, 0.004]))
+
+# x through snap (order 4), psi through psi-ddot (order 2)
+x = Jet(np.zeros((5, 3)))
+psi = Jet(np.zeros((3, 1)))
+
+ref, inputs = flat_map.recover(Quadrotor.Flats(x=x, psi=psi))
+print(ref.position, ref.orientation, inputs.thrust, inputs.moment)
+```
+
 ## Documentation
 
-Full API reference, controller roadmap, and tutorials coming soon at [udaan.readthedocs.io](https://udaan.readthedocs.io).
+[udaan.readthedocs.io](https://udaan.readthedocs.io) — guides, the full API
+reference, and theory pages deriving the dynamics, controllers and
+differential-flatness maps for each of the six systems.
+
+## Examples
+
+Runnable, headless examples for every system live in
+[`examples/`](https://github.com/vkotaru/udaan/tree/main/examples).
+To run the whole set and check that each one passes:
+
+```bash
+scripts/run_examples.sh
+```
+
+## Citation
+
+If you use this package in academic work, please cite it. Metadata is in
+[`CITATION.cff`](https://github.com/vkotaru/udaan/blob/main/CITATION.cff);
+GitHub's *Cite this repository* button will render it as BibTeX or APA.
 
 ## License
 

@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+from typing import Any
 
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
@@ -11,6 +12,7 @@ from ...core.defaults import DEFAULT_MJCF_TIMESTEP, DEFAULT_SIM_DT
 from ...manif import SO3, TSO3
 from ...utils.assets.cache import ensure_generated, generated_mjcf_dir
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 from ..backend import MujocoModel
 from ..quadrotor import QuadrotorBase
 from . import _base as base
@@ -29,6 +31,13 @@ _FLEET_COLORS = [
     ([0.85, 0.20, 0.60], "pink"),
     ([0.60, 0.60, 0.20], "olive"),
 ]
+
+
+#: What :meth:`QuadrotorFleet.reset` acts on, plus the one knob
+#: :meth:`QuadrotorFleet.simulate` reads out of the same ``**kwargs``.
+_SUPPORTED_RESET_KWARGS = frozenset(
+    {"position", "velocity", "orientation", "angular_velocity", "log_interval"}
+)
 
 
 class QuadrotorFleet(base.BaseModel):
@@ -160,7 +169,7 @@ class QuadrotorFleet(base.BaseModel):
 
         for i in range(nQ):
             color, _ = _FLEET_COLORS[i % len(_FLEET_COLORS)]
-            quad_kwargs = {"rgb": color}
+            quad_kwargs: dict[str, Any] = {"rgb": color}
 
             # Add disturbance if specified for this quad
             if i in disturbances:
@@ -186,6 +195,16 @@ class QuadrotorFleet(base.BaseModel):
         return ensure_generated(filename, lambda path: writer.save_to(path, verbose=False))
 
     def reset(self, **kwargs):
+        """Reset every quadrotor, spacing them along x by the fleet offsets.
+
+        Recognised kwargs: ``position`` (the fleet's base position, before the
+        per-quadrotor x-offset), ``velocity``, ``orientation``,
+        ``angular_velocity``, and ``log_interval`` (read by :meth:`simulate`).
+
+        Raises:
+            ValueError: for any other keyword.
+        """
+        check_reset_kwargs(self, kwargs, _SUPPORTED_RESET_KWARGS)
         self.t = 0.0
         self._mjMdl.reset()
 

@@ -242,11 +242,13 @@ class GeometricAttitudeController(Controller):
         Rd: SO3 = self._cmd_accel_to_cmd_att(
             thrust_force, reference=None if desired_att is None else desired_att[0]
         )
+        Omegad: TSO3
+        dOmegad: Vec3
         if desired_att is not None:
             _, Omegad, dOmegad = desired_att
         else:
-            Omegad: TSO3 = TSO3()
-            dOmegad: Vec3 = np.zeros(3)
+            Omegad = TSO3()
+            dOmegad = np.zeros(3)
 
         eR: TSO3 = R - Rd
         eOm: TSO3 = Omega - Omegad.transport(Rd, R)

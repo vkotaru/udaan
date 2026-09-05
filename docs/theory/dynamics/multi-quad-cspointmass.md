@@ -1,10 +1,5 @@
 # Multi-quadrotor with cable-suspended point-mass payload
 
-:::{warning}
-**Under construction.** This page is a draft; content and notation
-may change and cross-references may be incomplete.
-:::
-
 A team of $n_Q$ quadrotors cooperatively transports a single point-mass
 payload, each attached through its own taut, massless, inextensible
 cable {footcite}`sreenath2013cooperative`. The configuration manifold is
@@ -171,6 +166,52 @@ system adds is the allocation freedom
 {math:numref}`eq-mqd-split`: the per-cable kinematics, the per-quadrotor
 rigid-body dynamics and the tension→direction algebra are all unchanged,
 one copy per cable.
+
+## Control
+
+{py:class}`~udaan.control.multi_quad_cspayload.MultiQuadCsPayloadController`
+closes the loop as a four-stage cascade that mirrors the structure of
+{math:numref}`eq-mqd-balance`–{math:numref}`eq-mqd-split`: a PD on the
+payload state fixes $a_L^d$ and hence the desired *net* cable force
+$F_{\mathrm{net}}^d = -m_L(a_L^d + g e_3)$; a tension-split policy
+resolves the $3(n_Q-1)$ internal degrees of freedom and supplies the
+derivatives of the split; an $S^2$ loop per cable drives $q_i$ towards
+$\mathbf{T}_i^d/\|\mathbf{T}_i^d\|$; and the resulting per-quadrotor
+thrust vectors enter the model's `ACCELERATION` pipeline, where the
+attitude loop of {doc}`../controllers/quadrotor-se3` turns each into a wrench. The
+payload PD acts in *acceleration* units rather than force units, which
+is what keeps the payload response invariant in $n_Q$. The derivation,
+the thrust law, and the lateral-share term that distinguishes this law
+from its $n_Q = 1$ sibling are in
+{doc}`../controllers/multi-quad-payload`.
+
+## Simulation
+
+{py:class}`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase`
+integrates {math:numref}`eq-mqd-eom` directly, with the same
+zero-order-hold Euler scheme as every other model in the package: a
+$\Delta t = 5\,\text{ms}$ outer step subdivided into four
+$h = 1.25\,\text{ms}$ substeps, the commanded wrench held across all
+four. Each substep solves the $3 \times 3$ mass-matrix system for
+$\ddot x_L$, advances each cable through the tangency-preserving
+`manif.zoh_step`, advances each attitude by the exponential map, and
+finally *derives* the quadrotor positions and velocities from
+{math:numref}`eq-mqd-geom` — they are never integrated independently, so
+the taut-cable constraint holds exactly by construction rather than to
+integrator accuracy.
+
+{py:class}`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadMujoco`
+replaces that integrator with MuJoCo, modelling each cable as a spatial
+tendon with an upper length limit. The limit is one-sided, so a slack
+cable simply carries no force there, whereas
+{math:numref}`eq-mqd-eom` has no slack mode at all — the analytical
+model will happily push a cable into compression. The MJCF is generated
+and cached per $(n_Q, \ell, r, \dots)$ configuration, which is why the
+backend requires a *uniform* cable length at construction; per-index
+lengths may be assigned afterwards. The backend re-reads masses,
+inertias and cable lengths from the loaded MJCF, and recovers each
+$(q_i, \omega_i)$ from the measured endpoint states through
+{py:func}`~udaan.models.multi_quad_cspayload.cable_state_from_geometry`.
 
 ## Differential flatness
 

@@ -5,6 +5,7 @@ from scipy.spatial.transform import Rotation as sp_rot
 
 from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 from ..backend import MujocoModel
 from ..quadrotor import QuadrotorBase
 from . import _base as base
@@ -12,7 +13,16 @@ from . import _base as base
 _logger = get_logger(__name__)
 
 
+#: What :meth:`QuadrotorComparison.reset` acts on.  Both the plant and the
+#: reference start from the same state, so there is one set of keywords.
+_SUPPORTED_RESET_KWARGS = frozenset({"position", "velocity", "orientation", "angular_velocity"})
+
+
 class QuadrotorComparison(base.BaseModel):
+    # Always a live handle once ``__init__`` returns — it is loaded below and
+    # never cleared, so every method may dereference it unconditionally.
+    _mjMdl: MujocoModel
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -21,7 +31,6 @@ class QuadrotorComparison(base.BaseModel):
         self.reference = QuadrotorBase()
 
         # mujoco model param handling
-        self._mjMdl = None
         self._mj_quad_index = None
         self._mj_payload_index = None
         self._mj_cable_index = None
@@ -96,11 +105,19 @@ class QuadrotorComparison(base.BaseModel):
         return
 
     def reset(self, **kwargs):
+        """Reset plant and reference to a common state.
+
+        Recognised kwargs: ``position``, ``velocity``, ``orientation``,
+        ``angular_velocity``.
+
+        Raises:
+            ValueError: for any other keyword.
+        """
+        check_reset_kwargs(self, kwargs, _SUPPORTED_RESET_KWARGS)
         self.t = 0.0
         self.plant.state.reset()
         self.reference.state.reset()
-        k = ["position", "velocity", "orientation", "angular_velocity"]
-        for key in k:
+        for key in _SUPPORTED_RESET_KWARGS:
             if key in kwargs:
                 setattr(self.plant.state, key, kwargs[key])
                 setattr(self.reference.state, key, kwargs[key])

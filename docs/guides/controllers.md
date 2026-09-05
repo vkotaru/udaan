@@ -12,7 +12,7 @@ expose `position_controller`, `attitude_controller`, and (for payload models)
 | Geometric SE(3) attitude | {py:class}`~udaan.control.quadrotor.GeometricAttitudeController` | inner attitude loop | default; see {doc}`../theory/controllers/quadrotor-se3` |
 | Geometric L1-adaptive attitude | {py:class}`~udaan.control.quadrotor.GeometricL1AttitudeController` | inner attitude loop with disturbance estimator | robust to mass/inertia error |
 | PD position | {py:class}`~udaan.control.quadrotor.PositionPDController` | outer position loop | default; tracks $x^d(t)$ |
-| L1-adaptive position | {py:class}`~udaan.control.quadrotor.PositionL1Controller` | outer position loop with disturbance estimator | mass/wind compensation |
+| L1-adaptive position | {py:class}`~udaan.control.quadrotor.PositionL1Controller` | outer position loop with disturbance estimator | **experimental — does not adapt; see {doc}`../theory/controllers/geometric-l1`** |
 | Direct propeller-force | {py:class}`~udaan.control.quadrotor.DirectPropellerForceController` | motor-level passthrough | SysID / open-loop experiments |
 
 ## Quadrotor with cable-suspended payload

@@ -92,7 +92,7 @@ class _GlfwViewer:
         self._data = data
         self._glfw = glfw
         self._record_path = record
-        self._frames = [] if record else None
+        self._frames: list[np.ndarray] | None = [] if record else None
         self._record_every = 4  # capture every Nth rendered frame
         self._render_count = 0
 

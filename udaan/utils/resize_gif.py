@@ -1,6 +1,7 @@
 """Resize GIF files — reduce resolution and frame count for README/docs.
 
-Usage:
+Usage::
+
     python -m udaan.utils.resize_gif .media/quadrotor.gif --width 480 --max-frames 50
     python -m udaan.utils.resize_gif .media/*.gif --width 480 --fps 15
 """
@@ -30,7 +31,7 @@ def resize_gif(path, width=480, max_frames=50, fps=15, output=None):
     step = max(1, (len(frames) + max_frames - 1) // max_frames)
     resized = []
     for i in range(0, len(frames), step):
-        img = Image.fromarray(frames[i]).resize((width, height), Image.LANCZOS)
+        img = Image.fromarray(frames[i]).resize((width, height), Image.Resampling.LANCZOS)
         resized.append(np.array(img))
 
     out_path = output or path

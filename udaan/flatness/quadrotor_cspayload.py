@@ -196,7 +196,9 @@ class QuadrotorCsPayload(Flat2State):
         J = self.inertia
 
         # ── Payload-position derivatives, x_L through pop ──────────────
-        x_L = [flats.x_L[k] for k in range(7)]  # rows 0..6
+        # ``x_L`` is a dim-3 jet, so every level is a 3-vector; the asarray is
+        # a no-op at runtime and pins that fact for the checker.
+        x_L = [np.asarray(flats.x_L[k], dtype=float) for k in range(7)]  # rows 0..6
 
         # ── Newton–Euler on the payload alone: m_L ẍ_L = -T q - m_L g e_3.
         # The cable force is  T_vec := T q = -m_L (ẍ_L + g e_3); from it
@@ -254,9 +256,9 @@ class QuadrotorCsPayload(Flat2State):
             B,
             dB,
             d2B,
-            flats.psi.value,
-            flats.psi.velocity,
-            flats.psi.acceleration,
+            float(flats.psi.value),
+            float(flats.psi.velocity),
+            float(flats.psi.acceleration),
             J,
         )
 

@@ -2,7 +2,10 @@
 
 import typer
 
-_ctx = {"help_option_names": ["-h", "--help"]}
+# Annotated explicitly: `run`/`generate` import this name back out of a module
+# that is still mid-import, and without a declared type mypy reports it as
+# "Cannot determine type of _ctx" at every use site.
+_ctx: dict[str, list[str]] = {"help_option_names": ["-h", "--help"]}
 
 app = typer.Typer(
     name="udaan",

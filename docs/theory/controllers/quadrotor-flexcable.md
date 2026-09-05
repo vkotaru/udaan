@@ -1,11 +1,6 @@
 (control-quadrotor-flexcable)=
 # Payload tracking through a flexible $n$-link cable
 
-:::{warning}
-**Under construction.** This page is a draft; content and notation
-may change and cross-references may be incomplete.
-:::
-
 {py:class}`udaan.control.quadrotor_flexcable.QuadrotorFlexCableController`
 tracks a payload trajectory with one quadrotor whose cable is discretised
 into $n$ rigid links. It closes the loop on the dynamics of

@@ -1,10 +1,5 @@
 # Multiple quadrotors carrying a flexible hose
 
-:::{warning}
-**Under construction.** This page is a draft; content and notation
-may change and cross-references may be incomplete.
-:::
-
 Several quadrotors are bolted at chosen points along **one** flexible
 hose, discretised into $n$ rigid links joined by ideal spherical joints.
 This is {doc}`quadrotor-flexcable` with the single airframe at the head

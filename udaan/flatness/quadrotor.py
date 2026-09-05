@@ -44,7 +44,7 @@ def _zeros3() -> Vec3:
 def _skew(m: np.ndarray) -> np.ndarray:
     """Skew-symmetric part of a 3×3 matrix — ensures vee() is well-defined
     even under floating-point noise."""
-    return 0.5 * (m - m.T)
+    return np.asarray(0.5 * (m - m.T))
 
 
 def _attitude_from_thrust_vector(
@@ -231,14 +231,17 @@ class Quadrotor(Flat2State):
 
         # Pull named derivatives off the jets — position through snap,
         # yaw through yaw-acceleration.
-        pos = flats.x.value
-        vel = flats.x.velocity
-        acc = flats.x.acceleration
-        jerk = flats.x.jerk
-        snap = flats.x.snap
-        psi = flats.psi.value
-        dpsi = flats.psi.velocity
-        d2psi = flats.psi.acceleration
+        # ``x`` is a dim-3 jet, so every level is a 3-vector; ``psi`` is a
+        # scalar jet, so every level is a float. The conversions below are
+        # no-ops at runtime and simply pin those two facts for the checker.
+        pos = np.asarray(flats.x.value, dtype=float)
+        vel = np.asarray(flats.x.velocity, dtype=float)
+        acc = np.asarray(flats.x.acceleration, dtype=float)
+        jerk = np.asarray(flats.x.jerk, dtype=float)
+        snap = np.asarray(flats.x.snap, dtype=float)
+        psi = float(flats.psi.value)
+        dpsi = float(flats.psi.velocity)
+        d2psi = float(flats.psi.acceleration)
 
         # Thrust vector  B = f R e_3 = m (ẍ + g e_3)  and its time derivatives.
         B = m * (acc + g * _E3)

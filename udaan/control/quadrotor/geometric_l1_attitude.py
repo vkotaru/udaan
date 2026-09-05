@@ -162,7 +162,7 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
         self._sigma_hat_dot = self._projection(self._sigma_hat, y)
         self._sigma_hat += self._sigma_hat_dot * dt
         # Hard clip as safety
-        sigma_norm: float = np.linalg.norm(self._sigma_hat)
+        sigma_norm: float = float(np.linalg.norm(self._sigma_hat))
         if sigma_norm > self._sigma_max:
             self._sigma_hat *= self._sigma_max / sigma_norm
 

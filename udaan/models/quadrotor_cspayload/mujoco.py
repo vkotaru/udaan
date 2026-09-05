@@ -18,9 +18,10 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
 
     Overrides step/reset to use MuJoCo instead of Euler ZOH.
     Supports three cable modeling approaches:
-        - TENDON: spatial tendon constraint (fast, less realistic)
-        - LINKS: rigid cylinder links with ball joints (slower, most stable)
-        - CABLE: MuJoCo 2.3+ composite cable (experimental)
+
+    - TENDON: spatial tendon constraint (fast, less realistic)
+    - LINKS: rigid cylinder links with ball joints (slower, most stable)
+    - CABLE: MuJoCo 2.3+ composite cable (experimental)
 
     .. note::
 
@@ -46,11 +47,14 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
         TENDON = 1
         CABLE = 2
 
+    # Always a live handle once ``__init__`` returns: exactly one of the three
+    # ``_init_*_model`` branches below runs, and none of them can leave it unset.
+    _mjMdl: MujocoModel
+
     def __init__(self, **kwargs):
         self.render = kwargs.get("render", False)
         super().__init__(**kwargs)
 
-        self._mjMdl = None
         self._mj_quad_index = None
         self._mj_payload_index = None
         self._mj_cable_index = None
@@ -163,29 +167,31 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
 
     # ─── Property setters (sync to MuJoCo) ─────────────────────────
 
-    @QuadrotorCsPayloadBase.mass.setter
+    # mypy cannot model a subclass re-opening a base class property to add a
+    # setter (python/mypy#5936); the pattern itself is correct at runtime.
+    @QuadrotorCsPayloadBase.mass.setter  # type: ignore[attr-defined]
     def mass(self, value):
-        QuadrotorCsPayloadBase.mass.fset(self, value)
+        QuadrotorCsPayloadBase.mass.fset(self, value)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_quad_index is not None:
             self._mjMdl.model.body_mass[self._mj_quad_index] = value
 
-    @QuadrotorCsPayloadBase.inertia.setter
+    @QuadrotorCsPayloadBase.inertia.setter  # type: ignore[attr-defined]  # see mass, above
     def inertia(self, value):
-        QuadrotorCsPayloadBase.inertia.fset(self, value)
+        QuadrotorCsPayloadBase.inertia.fset(self, value)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_quad_index is not None:
             if value.ndim == 2:
                 value = np.diag(value)
             self._mjMdl.model.body_inertia[self._mj_quad_index] = value
 
-    @QuadrotorCsPayloadBase.payload_mass.setter
+    @QuadrotorCsPayloadBase.payload_mass.setter  # type: ignore[attr-defined]  # see mass, above
     def payload_mass(self, value):
-        QuadrotorCsPayloadBase.payload_mass.fset(self, value)
+        QuadrotorCsPayloadBase.payload_mass.fset(self, value)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_payload_index is not None:
             self._mjMdl.model.body_mass[self._mj_payload_index] = value
 
-    @QuadrotorCsPayloadBase.cable_length.setter
+    @QuadrotorCsPayloadBase.cable_length.setter  # type: ignore[attr-defined]  # see mass, above
     def cable_length(self, value):
-        QuadrotorCsPayloadBase.cable_length.fset(self, value)
+        QuadrotorCsPayloadBase.cable_length.fset(self, value)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_cable_index is not None:
             from ..backend import mujoco
 

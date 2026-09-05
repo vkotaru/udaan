@@ -22,9 +22,13 @@ class SmoothTraj(Trajectory):
         self._x0 = x0
         self._xf = xf
         self._tf = tf
-        self._pos_params = []
-        self._vel_params = []
-        self._acc_params = []
+        # Placeholders of the right kind, immediately superseded by the
+        # compute_traj_params() call below; every concrete subclass replaces all
+        # three with a (n_basis, 3) coefficient array. (SmoothSineTraj overrides
+        # get() and never reads them.)
+        self._pos_params: np.ndarray = np.empty((0, 3))
+        self._vel_params: np.ndarray = np.empty((0, 3))
+        self._acc_params: np.ndarray = np.empty((0, 3))
 
         self._t = lambda s: np.array([1.0, s, s**2, s**3, s**4, s**5])
 

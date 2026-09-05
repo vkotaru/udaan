@@ -1,5 +1,7 @@
 """MuJoCo XML generation commands."""
 
+from typing import Any
+
 import typer
 
 from . import _ctx
@@ -32,7 +34,7 @@ def multi_quad(
     """
     import udaan as U
 
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "cable_length": cable_length,
         "payload_mass": payload_mass,
         "quad_mass": quad_mass,
@@ -90,7 +92,7 @@ def multi_quad_rigid(
 
     from . import parse_vec
 
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "cable_length": cable_length,
         "payload_mass": payload_mass,
         "quad_mass": quad_mass,
@@ -144,7 +146,7 @@ def hose(
     """
     import udaan as U
 
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "hose_length": hose_length,
         "hose_mass": hose_mass,
         "quad_mass": quad_mass,

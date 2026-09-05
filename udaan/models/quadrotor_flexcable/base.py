@@ -362,8 +362,14 @@ from ...core.defaults import (
     DEFAULT_CABLE_LENGTH,
     DEFAULT_CABLE_MASS,
     DEFAULT_FORCE_CONSTANT,
+    DEFAULT_MAX_THRUST,
+    DEFAULT_MAX_TORQUE,
+    DEFAULT_MIN_THRUST,
+    DEFAULT_MIN_TORQUE,
     DEFAULT_NUM_CABLE_LINKS,
     DEFAULT_PAYLOAD_MASS,
+    DEFAULT_PROP_MAX_FORCE,
+    DEFAULT_PROP_MIN_FORCE,
     DEFAULT_QUAD_INERTIA,
     DEFAULT_QUAD_MASS,
     DEFAULT_TORQUE_CONSTANT,
@@ -375,6 +381,7 @@ from ...flatness.jet import Jet
 from ...flatness.quadrotor_flexcable import QuadrotorFlexCableFlats
 from ...manif import S2, SO3, TS2, TSO3, hat, zoh_step
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 
 _logger = get_logger(__name__)
 
@@ -457,6 +464,23 @@ class QuadrotorFlexCableState:
             np.asarray(self.link_angular_velocities[i]),
             np.asarray(self.link_attitudes[i]),
         )
+
+
+#: The initial-condition overrides :meth:`QuadrotorFlexCableBase.reset` acts on.
+#: Anything else is rejected rather than silently discarded — see
+#: :mod:`udaan.models._kwargs`.
+_SUPPORTED_RESET_KWARGS = frozenset(
+    {
+        "position",
+        "velocity",
+        "payload_position",
+        "payload_velocity",
+        "orientation",
+        "angular_velocity",
+        "link_attitudes",
+        "link_angular_velocities",
+    }
+)
 
 
 class QuadrotorFlexCableBase:
@@ -542,12 +566,12 @@ class QuadrotorFlexCableBase:
         self._e3 = np.array([0.0, 0.0, 1.0])
 
         # Actuator limits
-        self._min_thrust = 0.0
-        self._max_thrust = 20.0
-        self._min_torque = np.array([-5.0, -5.0, -2.0])
-        self._max_torque = np.array([5.0, 5.0, 2.0])
-        self._prop_min_force = 0.0
-        self._prop_max_force = 10.0
+        self._min_thrust = DEFAULT_MIN_THRUST
+        self._max_thrust = DEFAULT_MAX_THRUST
+        self._min_torque = DEFAULT_MIN_TORQUE.copy()
+        self._max_torque = DEFAULT_MAX_TORQUE.copy()
+        self._prop_min_force = DEFAULT_PROP_MIN_FORCE
+        self._prop_max_force = DEFAULT_PROP_MAX_FORCE
 
         # Integration: 5ms outer loop, 4 inner substeps at 1.25ms
         self.dt = kwargs.get("dt", 1.0 / 200.0)
@@ -1153,8 +1177,13 @@ class QuadrotorFlexCableBase:
         gauge freedom the dynamics already factor out (see "Why the diagonal
         block is ``M_ii I``" above), and a caller who hand-builds a direction
         from an unnormalised vector is asking for the direction, not for an
-        error.
+        error.  An *unrecognised keyword*, by contrast, is rejected: a stale
+        name must not silently run a different initial condition.
+
+        Raises:
+            ValueError: for any keyword outside the list above.
         """
+        check_reset_kwargs(self, kwargs, _SUPPORTED_RESET_KWARGS)
         self.t = 0.0
         self.state.reset()
 

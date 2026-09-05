@@ -1,10 +1,5 @@
 # Payload-tracking geometric control
 
-:::{warning}
-**Under construction.** This page is a draft; content and notation
-may change and cross-references may be incomplete.
-:::
-
 The controller used by
 {py:class}`udaan.control.quadrotor_cspayload.QuadCSPayloadController`
 is a cascaded geometric design built on the taut-cable model of

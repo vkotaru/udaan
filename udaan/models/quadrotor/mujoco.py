@@ -20,11 +20,14 @@ class QuadrotorMujoco(QuadrotorBase):
     Reads mass/inertia from the MJCF XML model.
     """
 
+    # Always a live handle once ``__init__`` returns — it is loaded below and
+    # never cleared, so every method may dereference it unconditionally.
+    _mjMdl: MujocoModel
+
     def __init__(self, **kwargs):
         self.render = kwargs.get("render", False)
         super().__init__(**kwargs)
 
-        self._mjMdl = None
         self._mj_quad_index = 1
 
         self._attitude_zoh = kwargs.get("attitude_zoh", False)
@@ -50,19 +53,21 @@ class QuadrotorMujoco(QuadrotorBase):
         self._init_default_controllers()
 
         if self.verbose:
-            _logger.success("MuJoCo quadrotor loaded")
+            _logger.info("MuJoCo quadrotor loaded")
 
-    @QuadrotorBase.mass.setter
+    # mypy cannot model a subclass re-opening a base class property to add a
+    # setter (python/mypy#5936); the pattern itself is correct at runtime.
+    @QuadrotorBase.mass.setter  # type: ignore[attr-defined]
     def mass(self, m):
-        QuadrotorBase.mass.fset(self, m)
+        QuadrotorBase.mass.fset(self, m)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_quad_index is not None:
             self._mjMdl.model.body_mass[self._mj_quad_index] = m
         else:
             _logger.warning("MuJoCo model not loaded, cannot set mass")
 
-    @QuadrotorBase.inertia.setter
+    @QuadrotorBase.inertia.setter  # type: ignore[attr-defined]  # see mass, above
     def inertia(self, I):
-        QuadrotorBase.inertia.fset(self, I)
+        QuadrotorBase.inertia.fset(self, I)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_quad_index is not None:
             if I.ndim == 2:
                 I = np.diag(I)

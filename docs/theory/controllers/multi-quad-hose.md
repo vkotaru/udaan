@@ -1,11 +1,6 @@
 (control-multi-quad-hose)=
 # Steering a flexible hose with several quadrotors
 
-:::{warning}
-**Under construction.** This page is a draft; content and notation
-may change and cross-references may be incomplete.
-:::
-
 {py:class}`udaan.control.multi_quad_hose.MultiQuadHoseController` regulates
 $n_Q$ quadrotors bolted at chosen vertices of **one** flexible hose,
 discretised into $n$ rigid links. It closes the loop on the dynamics of

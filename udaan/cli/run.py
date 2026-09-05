@@ -1,5 +1,7 @@
 """Simulation run commands."""
 
+from typing import Any
+
 import typer
 
 from . import _ctx
@@ -8,6 +10,65 @@ run_app = typer.Typer(help="Run a simulation.", context_settings=_ctx)
 
 # Common option for recording
 _record_option = typer.Option(None, "--record", "-r", help="Save recording to file (.gif or .mp4).")
+
+#: The backends ``--model`` offers.  ``vfx`` is deliberately absent even though
+#: :class:`~udaan.models.quadrotor.QuadrotorVfx` and
+#: :class:`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadVfx` exist and are
+#: importable: driven from the CLI, both block inside VPython and never return —
+#: measured at 60 s with no output and killed, ``--no-render`` included, because
+#: the VPython backend opens its browser-served scene at construction rather than
+#: at render time.  Advertising a hanging option is worse than not offering it,
+#: so the CLI refuses ``-m vfx`` by name until that is fixed.
+_CLI_MODELS = ("base", "mujoco")
+
+
+def _check_model(model: str, allowed: tuple[str, ...]) -> None:
+    """Reject an unrecognised ``--model`` instead of silently picking a backend.
+
+    Every routing block below is a chain of ``if``/``elif`` with a final
+    ``else``, so without this guard a typo — or the documented-but-unrouted
+    value a two-way chain leaves out — lands on whichever backend happens to
+    sit in the ``else``, and the run reports a backend the caller never asked
+    for.
+    """
+    if model not in allowed:
+        typer.secho(
+            f"Unknown model '{model}'. Expected one of: {', '.join(allowed)}.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
+# Python package each optional extra installs, for the pre-flight check below.
+_EXTRA_MODULES = {"l1": "control"}
+
+
+def _check_demo_extras(name: str, entry: dict[str, Any]) -> None:
+    """Refuse a demo whose optional extra is not installed, before building anything.
+
+    ``l1-comparison`` builds a ``PositionL1Controller``, which imports the
+    ``control`` package from inside its constructor — and ``control`` ships
+    only with the optional ``l1`` extra.  A stock install therefore used to
+    meet the demo with a raw ``ModuleNotFoundError`` traceback, thrown *after*
+    the fleet (and its viewer window) had already been built.
+    """
+    import importlib.util
+
+    extra = entry.get("requires")
+    if extra is None:
+        return
+    module = _EXTRA_MODULES[extra]
+    if importlib.util.find_spec(module) is not None:
+        return
+    typer.secho(
+        f"Error: demo '{name}' needs the optional '{extra}' extra, which provides "
+        f"the '{module}' package, and it is not installed.\n"
+        f"Install it with:  pip install 'udaan[{extra}]'",
+        fg=typer.colors.RED,
+        err=True,
+    )
+    raise typer.Exit(1)
 
 
 def _hold_viewer(mdl):
@@ -30,9 +91,7 @@ def _setup_recording(mdl, record_path):
 def quadrotor(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
-    model: str = typer.Option(
-        "mujoco", "--model", "-m", help="Quadrotor model: base, vfx, or mujoco."
-    ),
+    model: str = typer.Option("mujoco", "--model", "-m", help="Quadrotor model: base or mujoco."),
     trajectory: str = typer.Option(
         "hover",
         "--trajectory",
@@ -58,51 +117,61 @@ def quadrotor(
 
     from . import parse_vec
 
+    _check_model(model, _CLI_MODELS)
+    if trajectory not in ("hover", "flip", "spiral", "circle", "lissajous"):
+        typer.secho(
+            f"Unknown trajectory '{trajectory}'. "
+            "Expected one of: hover, flip, spiral, circle, lissajous.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
     x0 = parse_vec(position, default=np.array([1.0, 1.0, 0.0]))
 
+    mdl: QuadrotorBase
     if model == "mujoco":
         from udaan.models.quadrotor import QuadrotorMujoco
 
         mdl = QuadrotorMujoco(render=render, verbose=verbose)
-    elif model == "vfx":
-        from udaan.models.quadrotor import QuadrotorVfx
-
-        mdl = QuadrotorVfx(render=render, verbose=verbose)
     else:
         mdl = QuadrotorBase(verbose=verbose)
 
-    # Set trajectory
+    # Set trajectory.  Each branch binds its own name: the four classes share
+    # only `Trajectory`, and `duration` lives on two of them, so a single
+    # `traj` would be typed as the base and lose it.
     if trajectory == "flip":
         from udaan.utils.trajectory import FlipTrajectory
 
-        traj = FlipTrajectory(start=x0)
-        mdl._pos_controller.setpoint = traj.get
-        time = traj.duration
+        flip = FlipTrajectory(start=x0)
+        mdl._pos_controller.setpoint = flip.get
+        time = flip.duration
     elif trajectory == "spiral":
         from udaan.utils.trajectory import SpiralTrajectory
 
-        traj = SpiralTrajectory(start=x0)
-        mdl._pos_controller.setpoint = traj.get
-        time = traj.duration
+        spiral = SpiralTrajectory(start=x0)
+        mdl._pos_controller.setpoint = spiral.get
+        time = spiral.duration
     elif trajectory == "circle":
         from udaan.utils.trajectory import CircularTraj
 
-        traj = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time)
-        mdl._pos_controller.setpoint = traj.get
+        circle = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time)
+        mdl._pos_controller.setpoint = circle.get
     elif trajectory == "lissajous":
         from udaan.utils.trajectory import CrazyTrajectory
 
         # Lift the trajectory center so the z-oscillation (±1.5 m) stays above ground.
         center = x0 + np.array([0.0, 0.0, 2.0])
-        traj = CrazyTrajectory(tf=time, center=center)
-        mdl._pos_controller.setpoint = traj.get
-        x0 = traj.get(0.0)[0]
+        lissajous = CrazyTrajectory(tf=time, center=center)
+        mdl._pos_controller.setpoint = lissajous.get
+        x0 = lissajous.get(0.0)[0]
     else:
         # Hover: default setpoint is [0,0,1], start from x0
         pass
 
-    if hasattr(mdl, "_mjMdl") and mdl._mjMdl._viewer is not None:
-        mdl._mjMdl._viewer.show_trails = trail
+    mj = getattr(mdl, "_mjMdl", None)
+    if mj is not None and mj._viewer is not None:
+        mj._viewer.show_trails = trail
     _setup_recording(mdl, record)
     typer.echo(f"Running quadrotor ({model}, {trajectory}) for {time:.1f}s ...")
     mdl.simulate(tf=time, position=x0)
@@ -114,7 +183,7 @@ def quad_payload(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
     model: str = typer.Option(
-        "mujoco", "--model", "-m", help="Quad-payload model: mujoco or base."
+        "mujoco", "--model", "-m", help="Quad-payload model: base or mujoco."
     ),
     cable_model: str = typer.Option(
         "tendon", "--cable-model", "-c", help="Cable model: tendon, links, or cable."
@@ -127,8 +196,11 @@ def quad_payload(
     """Simulate a quadrotor with cable-suspended payload."""
     import numpy as np
 
+    from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadBase
+
     from . import parse_vec
 
+    _check_model(model, _CLI_MODELS)
     x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
     if cable_model == "cable":
         typer.secho(
@@ -138,16 +210,18 @@ def quad_payload(
             bold=True,
             err=True,
         )
+    mdl: QuadrotorCsPayloadBase
     if model == "mujoco":
         from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadMujoco
 
         mdl = QuadrotorCsPayloadMujoco(render=render, cable_model=cable_model)
     else:
-        from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadVfx
-
-        mdl = QuadrotorCsPayloadVfx(render=render)
+        mdl = QuadrotorCsPayloadBase()
     _setup_recording(mdl, record)
-    typer.echo(f"Running quad-payload ({model}, {cable_model}) for {time}s ...")
+    # `--cable-model` is a MuJoCo cable discretisation; the analytical and VPython
+    # backends have a single taut cable, so naming one there would misreport the run.
+    detail = f"{model}, {cable_model}" if model == "mujoco" else model
+    typer.echo(f"Running quad-payload ({detail}) for {time}s ...")
     mdl.simulate(tf=time, payload_position=x0)
     _hold_viewer(mdl)
 
@@ -186,12 +260,23 @@ def quad_flexcable(
 
     import numpy as np
 
+    from udaan.models.quadrotor_flexcable import QuadrotorFlexCableBase
+
     from . import parse_vec
 
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-    opts = {
+    _check_model(model, ("base", "mujoco"))
+    if trajectory not in ("hover", "lissajous"):
+        typer.secho(
+            f"Unknown trajectory '{trajectory}'. Expected 'hover' or 'lissajous'.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    opts: dict[str, Any] = {
         "num_links": links,
         "cable_length": cable_length,
         "cable_mass": cable_mass,
@@ -199,13 +284,12 @@ def quad_flexcable(
     }
     opts = {k: v for k, v in opts.items() if v is not None}
 
+    mdl: QuadrotorFlexCableBase
     if model == "mujoco":
         from udaan.models.quadrotor_flexcable import QuadrotorFlexCableMujoco
 
         mdl = QuadrotorFlexCableMujoco(render=render, verbose=verbose, **opts)
     else:
-        from udaan.models.quadrotor_flexcable import QuadrotorFlexCableBase
-
         mdl = QuadrotorFlexCableBase(verbose=verbose, **opts)
 
     x0 = parse_vec(position, default=np.array([0.0, 0.0, 1.0]))
@@ -407,8 +491,11 @@ def hose(
     """
     import numpy as np
 
+    from udaan.models.multi_quad_hose import MultiQuadHoseBase
+
     from . import parse_vec
 
+    _check_model(model, ("base", "mujoco"))
     if controller not in ("lqr", "station"):
         typer.echo(f"Unknown controller '{controller}'. Expected 'lqr' or 'station'.", err=True)
         raise typer.Exit(1)
@@ -419,7 +506,7 @@ def hose(
         typer.echo(f"Unknown trajectory '{trajectory}'. Expected 'hover' or 'lissajous'.", err=True)
         raise typer.Exit(1)
 
-    opts = {
+    opts: dict[str, Any] = {
         "hose_length": hose_length,
         "hose_mass": hose_mass,
         "masses": quad_mass,
@@ -439,10 +526,13 @@ def hose(
         # choice has to be made at construction.
         opts["input"] = "wrench"
 
+    Model: type[MultiQuadHoseBase]
     if model == "mujoco":
-        from udaan.models.multi_quad_hose import MultiQuadHoseMujoco as Model
+        from udaan.models.multi_quad_hose import MultiQuadHoseMujoco
+
+        Model = MultiQuadHoseMujoco
     else:
-        from udaan.models.multi_quad_hose import MultiQuadHoseBase as Model
+        Model = MultiQuadHoseBase
 
         opts.pop("spawn_height", None)
         render = False
@@ -534,6 +624,7 @@ def cspayload_fleet(
             )
             raise typer.Exit(1)
         entry = CSPAYLOAD_DEMOS[demo]
+        _check_demo_extras(demo, entry)
         params = entry["config"]()
         nQ = params["num_agents"]
 
@@ -602,6 +693,7 @@ def fleet(
             raise typer.Exit(1)
 
         entry = DEMOS[demo]
+        _check_demo_extras(demo, entry)
         params = entry["config"]()
         nQ = params["num_quadrotors"]
 

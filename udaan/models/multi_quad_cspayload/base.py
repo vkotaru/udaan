@@ -53,8 +53,14 @@ from ...core.defaults import (
     DEFAULT_CABLE_LENGTH,
     DEFAULT_FORCE_CONSTANT,
     DEFAULT_FORMATION_RADIUS,
+    DEFAULT_MAX_THRUST,
+    DEFAULT_MAX_TORQUE,
+    DEFAULT_MIN_THRUST,
+    DEFAULT_MIN_TORQUE,
     DEFAULT_NUM_QUADROTORS,
     DEFAULT_PAYLOAD_MASS,
+    DEFAULT_PROP_MAX_FORCE,
+    DEFAULT_PROP_MIN_FORCE,
     DEFAULT_QUAD_INERTIA,
     DEFAULT_QUAD_MASS,
     DEFAULT_TORQUE_CONSTANT,
@@ -72,6 +78,7 @@ from ...flatness import (
 from ...manif import S2, SO3, TS2, TSO3, hat, zoh_step
 from ...utils.grasp import formation_cable_attitudes
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 
 _logger = get_logger(__name__)
 
@@ -166,6 +173,21 @@ class MultiQuadCsPayloadState:
         )
 
 
+#: The initial-condition overrides :meth:`MultiQuadCsPayloadBase.reset` acts on.
+#: Anything else is rejected rather than silently discarded — see
+#: :mod:`udaan.models._kwargs`.
+_SUPPORTED_RESET_KWARGS = frozenset(
+    {
+        "payload_position",
+        "payload_velocity",
+        "orientations",
+        "angular_velocities",
+        "cable_attitudes",
+        "cable_angular_velocities",
+    }
+)
+
+
 class MultiQuadCsPayloadBase:
     """Base multi-quadrotor cable-suspended payload model — pure dynamics.
 
@@ -223,12 +245,12 @@ class MultiQuadCsPayloadBase:
         self._e3 = np.array([0.0, 0.0, 1.0])
 
         # Actuator limits (per quadrotor)
-        self._min_thrust = 0.0
-        self._max_thrust = 20.0
-        self._min_torque = np.array([-5.0, -5.0, -2.0])
-        self._max_torque = np.array([5.0, 5.0, 2.0])
-        self._prop_min_force = 0.0
-        self._prop_max_force = 10.0
+        self._min_thrust = DEFAULT_MIN_THRUST
+        self._max_thrust = DEFAULT_MAX_THRUST
+        self._min_torque = DEFAULT_MIN_TORQUE.copy()
+        self._max_torque = DEFAULT_MAX_TORQUE.copy()
+        self._prop_min_force = DEFAULT_PROP_MIN_FORCE
+        self._prop_max_force = DEFAULT_PROP_MAX_FORCE
 
         # Integration: 5ms outer loop, 4 inner substeps at 1.25ms
         self.dt = kwargs.get("dt", 1.0 / 200.0)
@@ -679,7 +701,13 @@ class MultiQuadCsPayloadBase:
         ``cable_angular_velocities``.  Per-quadrotor entries must be sequences
         of length ``num_quadrotors``.  When ``cable_attitudes`` is omitted the
         cables are placed in the default ring formation.
+
+        Raises:
+            ValueError: for any other keyword.  An unrecognised keyword is an
+                error rather than a no-op so that a stale name cannot silently
+                run a different initial condition.
         """
+        check_reset_kwargs(self, kwargs, _SUPPORTED_RESET_KWARGS)
         self.t = 0.0
         self.state.reset()
         self.state.cable_attitudes = formation_cable_attitudes(

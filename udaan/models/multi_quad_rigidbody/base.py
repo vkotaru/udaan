@@ -269,7 +269,12 @@ from ...core.defaults import (
     DEFAULT_CABLE_LENGTH,
     DEFAULT_FORCE_CONSTANT,
     DEFAULT_FORMATION_RADIUS,
+    DEFAULT_MIN_THRUST,
+    DEFAULT_MULTI_QUAD_MAX_THRUST,
+    DEFAULT_MULTI_QUAD_MAX_TORQUE,
     DEFAULT_NUM_QUADROTORS,
+    DEFAULT_PROP_MAX_FORCE,
+    DEFAULT_PROP_MIN_FORCE,
     DEFAULT_QUAD_INERTIA,
     DEFAULT_QUAD_MASS,
     DEFAULT_RIGID_PAYLOAD_INERTIA,
@@ -289,6 +294,7 @@ from ...utils.grasp import (
     ring_attachment_points,
 )
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 from ..multi_quad_cspayload.base import cable_state_from_geometry
 
 _logger = get_logger(__name__)
@@ -372,6 +378,23 @@ class MultiQuadRigidbodyState:
         )
 
 
+#: The initial-condition overrides :meth:`MultiQuadRigidbodyBase.reset` acts on.
+#: Anything else is rejected rather than silently discarded — see
+#: :mod:`udaan.models._kwargs`.
+_SUPPORTED_RESET_KWARGS = frozenset(
+    {
+        "payload_position",
+        "payload_velocity",
+        "payload_orientation",
+        "payload_angular_velocity",
+        "orientations",
+        "angular_velocities",
+        "cable_attitudes",
+        "cable_angular_velocities",
+    }
+)
+
+
 class MultiQuadRigidbodyBase:
     """Base multi-quadrotor rigid-body-payload model (M4) — pure dynamics.
 
@@ -442,12 +465,12 @@ class MultiQuadRigidbodyBase:
         self._e3 = np.array([0.0, 0.0, 1.0])
 
         # Actuator limits (per quadrotor)
-        self._min_thrust = 0.0
-        self._max_thrust = 30.0
-        self._min_torque = np.array([-3.0, -3.0, -3.0])
-        self._max_torque = np.array([3.0, 3.0, 3.0])
-        self._prop_min_force = 0.0
-        self._prop_max_force = 10.0
+        self._min_thrust = DEFAULT_MIN_THRUST
+        self._max_thrust = DEFAULT_MULTI_QUAD_MAX_THRUST
+        self._min_torque = -DEFAULT_MULTI_QUAD_MAX_TORQUE
+        self._max_torque = DEFAULT_MULTI_QUAD_MAX_TORQUE.copy()
+        self._prop_min_force = DEFAULT_PROP_MIN_FORCE
+        self._prop_max_force = DEFAULT_PROP_MAX_FORCE
 
         # Integration: 5ms outer loop, 4 inner substeps at 1.25ms
         self.dt = kwargs.get("dt", 1.0 / 200.0)
@@ -1148,7 +1171,13 @@ class MultiQuadRigidbodyBase:
         of length ``num_quadrotors``.  When ``cable_attitudes`` is omitted the
         cables are placed in the default ring formation, one quadrotor radially
         outboard of each attachment point.
+
+        Raises:
+            ValueError: for any other keyword.  An unrecognised keyword is an
+                error rather than a no-op so that a stale name cannot silently
+                run a different initial condition.
         """
+        check_reset_kwargs(self, kwargs, _SUPPORTED_RESET_KWARGS)
         self.t = 0.0
         self._compressive_cable_steps = 0
         self.state.reset()

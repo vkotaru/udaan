@@ -1,11 +1,6 @@
 (control-multi-quad-payload)=
 # Cooperative payload transport with $n_Q$ quadrotors
 
-:::{warning}
-**Under construction.** This page is a draft; content and notation
-may change and cross-references may be incomplete.
-:::
-
 {py:class}`udaan.control.multi_quad_cspayload.MultiQuadCsPayloadController`
 tracks a payload trajectory with $n_Q$ quadrotors, each attached to the
 payload by its own taut cable. It is the generic-$n_Q$ sibling of the

@@ -1,10 +1,5 @@
 # Multi-quadrotor with cable-suspended rigid-body payload
 
-:::{warning}
-**Under construction.** This page is a draft; content and notation
-may change and cross-references may be incomplete.
-:::
-
 A team of $n_Q$ quadrotors cooperatively transports a single **rigid-body**
 payload, each attached to a distinct point of the load through its own
 taut, massless, inextensible cable. This is

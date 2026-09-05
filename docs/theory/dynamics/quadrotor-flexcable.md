@@ -1,10 +1,5 @@
 # Quadrotor with a flexible (n-link) cable-suspended payload
 
-:::{warning}
-**Under construction.** This page is a draft; content and notation
-may change and cross-references may be incomplete.
-:::
-
 A single quadrotor carries a payload through a cable that is no longer
 assumed taut and straight: it is discretised into $n$ rigid links joined
 by ideal spherical joints, each link carrying a point mass at its distal

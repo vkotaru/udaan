@@ -26,6 +26,44 @@ DEFAULT_ARM_LENGTH = 0.2  # m
 DEFAULT_FORCE_CONSTANT = 4.104890333e-6  # N/(rad/s)^2
 DEFAULT_TORQUE_CONSTANT = 1.026e-07  # Nm/(rad/s)^2
 
+# Actuator limits
+#
+# Every model's ``_repackage_input()`` clips the wrench it has assembled to
+# these before handing it to the integrator, so they are what makes a
+# controller's demand physically bounded. They lived as literals in six
+# separate ``base.py`` constructors, identical in five of them; they belong
+# here, where a change is one edit and the documentation can point at a name.
+#
+# Sized around the 0.9 kg default airframe: hover needs 8.8 N, so
+# :data:`DEFAULT_MAX_THRUST` leaves a thrust-to-weight of about 2.3, and the
+# four-rotor sum of :data:`DEFAULT_PROP_MAX_FORCE` (40 N) sits comfortably above
+# it so that the allocation matrix, not the per-rotor clip, is the binding
+# constraint in normal flight. Yaw torque is the smaller limit because a
+# quadrotor produces it from rotor drag rather than differential thrust.
+
+#: Lower bound on collective thrust, in N. Zero, not negative: rotors that spin
+#: one way cannot pull down.
+DEFAULT_MIN_THRUST = 0.0
+#: Upper bound on collective thrust, in N.
+DEFAULT_MAX_THRUST = 20.0
+#: Lower bound on body torque ``[M_x, M_y, M_z]``, in N·m.
+DEFAULT_MIN_TORQUE = np.array([-5.0, -5.0, -2.0])
+#: Upper bound on body torque ``[M_x, M_y, M_z]``, in N·m.
+DEFAULT_MAX_TORQUE = np.array([5.0, 5.0, 2.0])
+#: Lower bound on a single rotor's force, in N.
+DEFAULT_PROP_MIN_FORCE = 0.0
+#: Upper bound on a single rotor's force, in N.
+DEFAULT_PROP_MAX_FORCE = 10.0
+
+#: Collective-thrust ceiling for the multi-quadrotor rigid-body model (M4), in N.
+#:
+#: Higher than :data:`DEFAULT_MAX_THRUST` because each vehicle there carries a
+#: share of a rigid-body payload on top of its own weight, and the formation
+#: also has to supply the payload's attitude control through cable tensions.
+DEFAULT_MULTI_QUAD_MAX_THRUST = 30.0
+#: Body-torque bound for M4, in N·m — isotropic, unlike the single-vehicle case.
+DEFAULT_MULTI_QUAD_MAX_TORQUE = np.array([3.0, 3.0, 3.0])
+
 # =============================================================================
 # Default payload parameters
 # =============================================================================

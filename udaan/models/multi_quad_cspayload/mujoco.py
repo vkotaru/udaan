@@ -14,6 +14,7 @@ from ...manif import SO3, TSO3
 from ...utils.assets.cache import ensure_generated
 from ...utils.assets.mujoco_asset_creator import MJCF_GENERATOR_VERSION
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 from ..backend import MujocoModel
 from .base import MultiQuadCsPayloadBase, cable_state_from_geometry
 
@@ -31,6 +32,12 @@ def _count_quad_bodies(model) -> int:
     while mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, _QUAD_BODY.format(n)) >= 0:
         n += 1
     return n
+
+
+#: The reset overrides this backend can apply.  The analytical base documents
+#: six; a rigid translation of the whole formation is the only one that stays
+#: consistent with the generated MJCF's tendon constraints.
+_SUPPORTED_RESET_KWARGS = frozenset({"payload_position"})
 
 
 class MultiQuadCsPayloadMujoco(MultiQuadCsPayloadBase):
@@ -262,7 +269,29 @@ class MultiQuadCsPayloadMujoco(MultiQuadCsPayloadBase):
         (the tendon constraints are only consistent with it), so this does not
         call ``super().reset()``. ``payload_position`` translates the whole
         formation — quadrotors and payload alike — so the payload lands there.
+
+        A rigid translation is the only override this backend can honour, so it
+        is the only one accepted. Setting the rest for real means re-solving the
+        formation against the tendon constraints, which is the MJCF generator's
+        job. Until then an unsupported keyword is an error, not a no-op: the
+        retired ``MultiQuadrotorCSPointmass`` this model replaces named the same
+        argument ``xL``, and swallowing it would run a 1.x caller's simulation
+        from a completely different initial condition without a word.
+
+        Raises:
+            ValueError: for any keyword other than ``payload_position``.
         """
+        check_reset_kwargs(
+            self,
+            kwargs,
+            _SUPPORTED_RESET_KWARGS,
+            detail=(
+                "the initial formation is fixed by the generated MJCF and its tendon "
+                "constraints, and only a rigid translation of the whole formation can "
+                "be applied to it. Use MultiQuadCsPayloadBase for arbitrary initial "
+                "conditions, or set the MuJoCo state directly through _mjMdl.data."
+            ),
+        )
         self.t = 0.0
         self._mjMdl.reset()
         self.state.reset()

@@ -65,7 +65,7 @@ class BaseModel:
     def step(self, action):
         raise NotImplementedError
 
-    def simulate(self, **kwargs):
+    def simulate(self, tf, **kwargs):
         raise NotImplementedError
 
     def get_action_size(self):

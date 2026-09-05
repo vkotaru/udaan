@@ -18,6 +18,7 @@ from ...core.defaults import DEFAULT_MJCF_TIMESTEP, DEFAULT_SIM_DT
 from ...manif import S2, SO3, TS2, TSO3
 from ...utils.assets.cache import ensure_generated, generated_mjcf_dir
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 from ..backend import MujocoModel
 from ..quadrotor_cspayload import QuadrotorCsPayloadBase
 from . import _base as base
@@ -45,6 +46,11 @@ _FLEET_COLORS = [
     ([0.85, 0.20, 0.60], "pink"),
     ([0.60, 0.60, 0.20], "olive"),
 ]
+
+
+#: What :meth:`QuadrotorCsPayloadFleet.reset` acts on.  Each agent is placed
+#: from its payload position alone; per-agent attitudes come from the MJCF.
+_SUPPORTED_RESET_KWARGS = frozenset({"payload_positions"})
 
 
 class QuadrotorCsPayloadFleet(base.BaseModel):
@@ -218,6 +224,14 @@ class QuadrotorCsPayloadFleet(base.BaseModel):
     # ─── Reset / state sync ───────────────────────────────────────────
 
     def reset(self, **kwargs):
+        """Place each agent's payload, hanging its quadrotor directly above it.
+
+        Recognised kwargs: ``payload_positions``, one 3-vector per agent.
+
+        Raises:
+            ValueError: for any other keyword.
+        """
+        check_reset_kwargs(self, kwargs, _SUPPORTED_RESET_KWARGS)
         self.t = 0.0
         self._mjMdl.reset()
 
