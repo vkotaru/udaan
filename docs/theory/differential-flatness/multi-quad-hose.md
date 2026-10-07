@@ -614,26 +614,28 @@ vehicle, packaged in a
 import numpy as np
 from udaan.flatness import Jet, MultiQuadHose, MultiQuadHoseFlats
 
-f2s = MultiQuadHose(num_links=4, attachments=(0, 2, 4))   # or .from_model(model)
-f2s.jet_order            # -> 12  == 2n + 4
-f2s.tension_jet_orders   # -> (10, 6)  == 2(n - a) + 2 for a in (0, 2)
+f2s = MultiQuadHose(num_links=4, attachments=(0, 2, 4))  # or .from_model(model)
+f2s.jet_order  # -> 12  == 2n + 4
+f2s.tension_jet_orders  # -> (10, 6)  == 2(n - a) + 2 for a in (0, 2)
 
 # Root vertex position and its first 2n+4 time derivatives at t
-x_0_jet = Jet(np.stack([
-    x_0,            # row  0 — root position
-    x_0_d1,         # row  1 — velocity
-    x_0_d2,         # row  2 — acceleration  (gives u_0 at vertex 0)
-    # ...                                      two more rows per rung down the hose
-    x_0_d12,        # row 2n+4 — the deepest row
-]))
+x_0_jet = Jet(
+    np.stack(
+        [
+            x_0,  # row  0 — root position
+            x_0_d1,  # row  1 — velocity
+            x_0_d2,  # row  2 — acceleration  (gives u_0 at vertex 0)
+            # ...                                      two more rows per rung down the hose
+            x_0_d12,  # row 2n+4 — the deepest row
+        ]
+    )
+)
 
 # One vector-tension jet per vehicle except the one at the last vertex.
-tension_jets = [Jet(rows_0), Jet(rows_2)]     # orders 10 and 6
+tension_jets = [Jet(rows_0), Jet(rows_2)]  # orders 10 and 6
 psi_jets = [Jet(np.array([psi, psi_dot, psi_ddot])) for _ in range(3)]
 
-ref, inputs = f2s.recover(
-    MultiQuadHoseFlats(x_0=x_0_jet, tensions=tension_jets, psi=psi_jets)
-)
+ref, inputs = f2s.recover(MultiQuadHoseFlats(x_0=x_0_jet, tensions=tension_jets, psi=psi_jets))
 
 # ref.root_position, ref.root_velocity, ref.root_acceleration
 # ref.link_attitudes[i], ref.link_angular_velocities[i],

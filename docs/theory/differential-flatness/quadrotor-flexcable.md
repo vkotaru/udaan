@@ -466,24 +466,26 @@ import numpy as np
 from udaan.flatness import Jet, QuadrotorFlexCable, QuadrotorFlexCableFlats
 
 n = 3
-f2s = QuadrotorFlexCable(num_links=n)   # or .from_model(model)
-f2s.jet_order                            # -> 10  == 2n + 4
+f2s = QuadrotorFlexCable(num_links=n)  # or .from_model(model)
+f2s.jet_order  # -> 10  == 2n + 4
 
 # Payload position and its first 2n+4 time derivatives at t
-x_L_jet = Jet(np.stack([
-    x_L,          # row  0 — payload position
-    x_L_d1,       # row  1 — velocity
-    x_L_d2,       # row  2 — acceleration   (gives F_{n-1}, T_{n-1}, q_{n-1})
-    x_L_d3,       # row  3                  (gives q̇_{n-1}, ω_{n-1})
-    x_L_d4,       # row  4                  (gives q̈_{n-1}, ω̇_{n-1}, and F_{n-2})
-    # ...                                     two more rows per link up the chain
-    x_L_d10,      # row 2n+4 — the deepest row; reaches q_0⁽⁴⁾, hence Ω̇ and M
-]))
+x_L_jet = Jet(
+    np.stack(
+        [
+            x_L,  # row  0 — payload position
+            x_L_d1,  # row  1 — velocity
+            x_L_d2,  # row  2 — acceleration   (gives F_{n-1}, T_{n-1}, q_{n-1})
+            x_L_d3,  # row  3                  (gives q̇_{n-1}, ω_{n-1})
+            x_L_d4,  # row  4                  (gives q̈_{n-1}, ω̇_{n-1}, and F_{n-2})
+            # ...                                     two more rows per link up the chain
+            x_L_d10,  # row 2n+4 — the deepest row; reaches q_0⁽⁴⁾, hence Ω̇ and M
+        ]
+    )
+)
 psi_jet = Jet(np.array([psi, psi_dot, psi_ddot]))
 
-ref, inputs = f2s.recover(
-    QuadrotorFlexCableFlats(x_L=x_L_jet, psi=psi_jet)
-)
+ref, inputs = f2s.recover(QuadrotorFlexCableFlats(x_L=x_L_jet, psi=psi_jet))
 
 # ref.payload_position, ref.payload_velocity, ref.payload_acceleration
 # ref.position, ref.velocity, ref.acceleration          -> the quadrotor

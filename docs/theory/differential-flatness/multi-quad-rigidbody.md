@@ -627,32 +627,43 @@ from udaan.flatness import (
 nQ = 4
 
 # Payload position and its first six time derivatives at t
-x_L_jet = Jet(np.stack([
-    x_L,            # row 0 — payload position
-    x_L_dot,        # row 1 — payload velocity
-    x_L_ddot,       # row 2 — acceleration (gives W_f, tau_i, T_i, q_i)
-    x_L_dddot,      # row 3 — jerk    (gives q̇_i, ω_i, ẋ_Q_i)
-    x_L_snap,       # row 4 — snap    (gives q̈_i, ẍ_Q_i, f_i, b3_i)
-    x_L_crackle,    # row 5 — crackle (gives q_i⁽³⁾, Ω_i)
-    x_L_pop,        # row 6 — pop     (gives q_i⁽⁴⁾, Ω̇_i, M_i)
-]))
+x_L_jet = Jet(
+    np.stack(
+        [
+            x_L,  # row 0 — payload position
+            x_L_dot,  # row 1 — payload velocity
+            x_L_ddot,  # row 2 — acceleration (gives W_f, tau_i, T_i, q_i)
+            x_L_dddot,  # row 3 — jerk    (gives q̇_i, ω_i, ẋ_Q_i)
+            x_L_snap,  # row 4 — snap    (gives q̈_i, ẍ_Q_i, f_i, b3_i)
+            x_L_crackle,  # row 5 — crackle (gives q_i⁽³⁾, Ω_i)
+            x_L_pop,  # row 6 — pop     (gives q_i⁽⁴⁾, Ω̇_i, M_i)
+        ]
+    )
+)
 
 # Payload attitude: the matrix, plus the body rate through its 5th derivative
-Omega_L_jet = Jet(np.stack([
-    Omega_L, Omega_L_d1, Omega_L_d2, Omega_L_d3, Omega_L_d4, Omega_L_d5,
-]))
+Omega_L_jet = Jet(
+    np.stack(
+        [
+            Omega_L,
+            Omega_L_d1,
+            Omega_L_d2,
+            Omega_L_d3,
+            Omega_L_d4,
+            Omega_L_d5,
+        ]
+    )
+)
 
 psi_jets = [Jet(np.array([psi[i], psi_dot[i], psi_ddot[i]])) for i in range(nQ)]
 
-flats = MultiQuadRigidbodyFlats(
-    x_L=x_L_jet, R_L=R_L, Omega_L=Omega_L_jet, psi=psi_jets
-)
+flats = MultiQuadRigidbodyFlats(x_L=x_L_jet, R_L=R_L, Omega_L=Omega_L_jet, psi=psi_jets)
 f2s = MultiQuadRigidbody(
     num_quadrotors=nQ,
     masses=[0.7, 0.9, 1.1, 1.3],
     cable_lengths=[0.9, 1.1, 1.3, 1.5],
     payload_mass=1.0,
-)                       # default policy: RingTensionDistribution
+)  # default policy: RingTensionDistribution
 ref, inputs = f2s.recover(flats)
 
 # ref.payload_position, ref.payload_velocity,

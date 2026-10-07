@@ -113,7 +113,8 @@ from udaan.control.quadrotor import PositionL1Controller, GeometricL1AttitudeCon
 mdl = QuadrotorMujoco(render=True)
 mdl.position_controller = PositionL1Controller(mass=mdl.mass, setpoint=my_traj)
 mdl.attitude_controller = GeometricL1AttitudeController(
-    mass=mdl.mass, inertia=mdl.inertia,
+    mass=mdl.mass,
+    inertia=mdl.inertia,
 )
 mdl.simulate(tf=10.0, position=[1.0, 1.0, 0.0])
 ```

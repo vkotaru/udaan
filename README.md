@@ -124,11 +124,11 @@ from udaan.models.quadrotor import QuadrotorBase, QuadrotorMujoco
 
 # Pure dynamics (no rendering)
 mdl = QuadrotorBase()
-mdl.simulate(tf=10, position=[1., 1., 0.])
+mdl.simulate(tf=10, position=[1.0, 1.0, 0.0])
 
 # MuJoCo with visualization
 mdl = QuadrotorMujoco(render=True)
-mdl.simulate(tf=10, position=[1., 1., 0.])
+mdl.simulate(tf=10, position=[1.0, 1.0, 0.0])
 ```
 
 Every system follows the same shape — `base.py` holds the pure analytical
@@ -139,7 +139,7 @@ from udaan.models.multi_quad_cspayload import MultiQuadCsPayloadBase
 
 mdl = MultiQuadCsPayloadBase(num_quadrotors=4)
 mdl.cable_lengths = [1.0, 1.2, 1.0, 1.2]
-mdl.simulate(tf=5.0, payload_position=[0., 0., 1.])
+mdl.simulate(tf=5.0, payload_position=[0.0, 0.0, 1.0])
 ```
 
 ### Differential flatness

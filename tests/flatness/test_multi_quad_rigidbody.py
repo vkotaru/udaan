@@ -835,7 +835,10 @@ class TestNearDegenerateGrasps:
         assert alloc.condition_number > 1e6
         assert "near-degenerate" in caplog.text
 
-    @pytest.mark.parametrize("epsilon", [1e-6, 1e-9])
+    # ``ε = 1e-9`` is deliberately absent: at ``cond Φ ≈ 1e9`` the range-check
+    # residual is rounding noise straddling ``_RANGE_TOL`` (8.8e-9 locally,
+    # 5.4e-8 on CI's BLAS), so whether it raises is platform-dependent.
+    @pytest.mark.parametrize("epsilon", [1e-6])
     def test_the_flagged_grasp_really_does_return_an_absurd_reference(self, epsilon):
         """Why the flag earns its keep: 0.1 N·m of extra moment buys ≥ 10 kN of
         cable force, the range check passes, and ``check_taut`` calls it taut."""

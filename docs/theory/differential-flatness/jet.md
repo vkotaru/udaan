@@ -129,16 +129,20 @@ derivative of the signal.
 from udaan.flatness import Jet
 import numpy as np
 
-x = Jet(np.stack([
-    position,       # row 0 → y
-    velocity,       # row 1 → ẏ
-    acceleration,   # row 2 → ÿ
-    jerk,           # row 3 → y⁽³⁾
-    snap,           # row 4 → y⁽⁴⁾
-]))
-x.order    # 4
-x.dim      # 3
-x[2]       # ndarray(3,) — acceleration
+x = Jet(
+    np.stack(
+        [
+            position,  # row 0 → y
+            velocity,  # row 1 → ẏ
+            acceleration,  # row 2 → ÿ
+            jerk,  # row 3 → y⁽³⁾
+            snap,  # row 4 → y⁽⁴⁾
+        ]
+    )
+)
+x.order  # 4
+x.dim  # 3
+x[2]  # ndarray(3,) — acceleration
 ```
 
 **Scalar signals** (e.g. a yaw angle) may be constructed from a 1-D
@@ -147,16 +151,16 @@ array of length `order + 1`; the jet promotes it to 2-D with
 
 ```python
 psi = Jet(np.array([psi_0, psi_dot_0, psi_ddot_0]))
-psi.order   # 2
-psi.dim     # 1
-psi[1]      # float — yaw rate (scalar unwrapped by __getitem__)
+psi.order  # 2
+psi.dim  # 1
+psi[1]  # float — yaw rate (scalar unwrapped by __getitem__)
 ```
 
 Factory helpers:
 
 ```python
-Jet.zeros(order=4, dim=3)          # zero-initialised
-Jet.from_list([pos, vel, acc])     # stack derivatives from a Python list
+Jet.zeros(order=4, dim=3)  # zero-initialised
+Jet.from_list([pos, vel, acc])  # stack derivatives from a Python list
 ```
 
 ### Accessors
@@ -181,15 +185,15 @@ this at $q = 2N + 2$.
 Reflecting {prf:ref}`def-jet-diff` and {prf:ref}`def-jet-trunc`:
 
 ```python
-jet.differentiate()     # shift down by one → J^{q-1}(ẏ)
-jet.truncate(k)         # drop derivatives above order k
+jet.differentiate()  # shift down by one → J^{q-1}(ẏ)
+jet.truncate(k)  # drop derivatives above order k
 ```
 
 ### Numpy interop
 
 ```python
-np.asarray(jet)         # returns the underlying (order+1, dim) array
-jet.data                # direct access (same array, no copy)
+np.asarray(jet)  # returns the underlying (order+1, dim) array
+jet.data  # direct access (same array, no copy)
 ```
 
 ## See also

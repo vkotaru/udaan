@@ -16,6 +16,7 @@ legacy location. The fleets now live in :mod:`udaan.models.fleet`;
 """
 
 import time
+from typing import Any
 
 import mujoco
 import numpy as np
@@ -99,7 +100,9 @@ class _GlfwViewer:
         if not glfw.init():
             raise RuntimeError("Failed to initialize GLFW")
 
-        self._window = glfw.create_window(width, height, title, None, None)
+        # Optional: close() resets it to None, which newer glfw stubs reject
+        # against create_window's non-optional return type.
+        self._window: Any = glfw.create_window(width, height, title, None, None)
         if not self._window:
             glfw.terminate()
             raise RuntimeError("Failed to create GLFW window")

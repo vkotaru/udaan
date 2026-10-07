@@ -550,22 +550,26 @@ from udaan.flatness import (
 )
 
 # Payload position and its first six time derivatives at t
-x_L_jet = Jet(np.stack([
-    x_L,            # row 0 — payload position
-    x_L_dot,        # row 1 — payload velocity
-    x_L_ddot,       # row 2 — payload acceleration (gives q)
-    x_L_dddot,      # row 3 — jerk     (gives q̇, ω, ẋ_Q)
-    x_L_snap,       # row 4 — snap     (gives q̈, ẍ_Q, f, b3)
-    x_L_crackle,    # row 5 — crackle  (gives q⁽³⁾, x_Q⁽³⁾, Ω)
-    x_L_pop,        # row 6 — pop      (gives q⁽⁴⁾, x_Q⁽⁴⁾, dΩ, M)
-]))
-x_L_jet.order   # 6
-x_L_jet.dim     # 3
+x_L_jet = Jet(
+    np.stack(
+        [
+            x_L,  # row 0 — payload position
+            x_L_dot,  # row 1 — payload velocity
+            x_L_ddot,  # row 2 — payload acceleration (gives q)
+            x_L_dddot,  # row 3 — jerk     (gives q̇, ω, ẋ_Q)
+            x_L_snap,  # row 4 — snap     (gives q̈, ẍ_Q, f, b3)
+            x_L_crackle,  # row 5 — crackle  (gives q⁽³⁾, x_Q⁽³⁾, Ω)
+            x_L_pop,  # row 6 — pop      (gives q⁽⁴⁾, x_Q⁽⁴⁾, dΩ, M)
+        ]
+    )
+)
+x_L_jet.order  # 6
+x_L_jet.dim  # 3
 
 # Yaw and its first two derivatives
 psi_jet = Jet(np.array([psi, psi_dot, psi_ddot]))
-psi_jet.order   # 2
-psi_jet.dim     # 1
+psi_jet.order  # 2
+psi_jet.dim  # 1
 
 flats = QuadrotorCsPayloadFlats(x_L=x_L_jet, psi=psi_jet)
 ref, inputs = QuadrotorCsPayload(
