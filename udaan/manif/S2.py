@@ -9,7 +9,8 @@ class TS2:
     """Tangent vector to the 2-sphere S2.
 
     Wraps a 3-vector representing angular velocity or configuration error
-    on the sphere. Supports:
+    on the sphere. Supports::
+
         v1 - v2  -> TS2   (tangent vector difference)
         v1 + v2  -> TS2   (tangent vector sum)
         v * s    -> TS2   (scalar multiplication)
@@ -40,7 +41,7 @@ class TS2:
     @property
     def arr(self) -> np.ndarray:
         """Plain numpy array (copy)."""
-        return self._data.copy()
+        return np.copy(self._data)
 
     @property
     def vector(self) -> np.ndarray:
@@ -132,7 +133,7 @@ class S2:
     @property
     def arr(self) -> np.ndarray:
         """Plain numpy array (copy)."""
-        return self._data.copy()
+        return np.copy(self._data)
 
     # ─── geometry ──────────────────────────────────────────────────
 
@@ -150,7 +151,7 @@ class S2:
 
     def config_error(self, other) -> float:
         """Scalar configuration error: 1 - q^T q_other."""
-        return 1 - np.dot(self._data, np.asarray(other))
+        return float(1 - np.dot(self._data, np.asarray(other)))
 
     def error_vec(self, other, version=2) -> np.ndarray:
         """Configuration error vector on the tangent space.
@@ -162,7 +163,7 @@ class S2:
                 1: q_other x q (cross product)
         """
         if version == 2:
-            return hat(self._data) @ hat(self._data) @ np.asarray(other)
+            return np.asarray(hat(self._data) @ hat(self._data) @ np.asarray(other))
         else:
             return np.cross(np.asarray(other), self._data)
 
@@ -194,3 +195,75 @@ class S2:
     def from_spherical(phi=0.0, th=0.0):
         """Point on S2 from spherical coordinates (azimuth phi, polar th)."""
         return S2(np.array([np.cos(phi) * np.sin(th), np.sin(phi) * np.sin(th), np.cos(th)]))
+
+
+def zoh_step(q: S2, omega: TS2, omega_dot, h: float) -> tuple[S2, TS2]:
+    r"""One zero-order-hold Euler substep of the ``S2`` kinematics, on the manifold.
+
+    Every cable/link-carrying model in :mod:`udaan.models` integrates a
+    direction ``q_i`` and its rate ``ω_i`` with the same two lines::
+
+        q  <- q.step(ω h)                       # exact rotation, stays on S2
+        ω  <- ω + h ω̇(q_old)                    # leaves T_q S2
+
+    The first line is a true rotation, so ``‖q‖`` never drifts. The second is
+    the problem: ``ω̇`` is built at ``q_old`` and is therefore tangent to
+    ``q_old``, not to the ``q`` the first line just produced. Each substep
+    leaves an ``O(h)`` residual along the *new* ``q``, and those residuals
+    accumulate — halving the substep halves the accumulated ``|q·ω|`` rather
+    than quartering it, which is what pinned the drift at first order.
+
+    ``S2``'s angular velocity is only defined up to a component along ``q``:
+    ``q̇ = ω × q`` annihilates it, and every model's ``ω̇`` is a cross product
+    with ``q`` or a solve whose gauge row forces ``ω̇ · q = 0``. The residual is
+    therefore a *gauge* quantity of the continuous dynamics, dynamically inert
+    there but free to grow without bound. Projecting it out with
+    :meth:`TS2.transport` — ``(I - q qᵀ) ω`` at the updated ``q`` — costs one
+    outer product per link and pins ``|q·ω|`` at machine precision for good.
+
+    Two things do *not* change **within one substep**, which is why this is
+    safe to apply uniformly:
+
+    * ``q̇ = ω × q`` is unaffected, so ``q_next``, the velocities derived from
+      it and the centripetal ``‖q̇‖²`` coefficients are bit-identical for that
+      substep.
+    * The integrator stays first-order accurate. Removing a component that no
+      right-hand side reads at that substep cannot change the local truncation
+      error.
+
+    Over a *run*, however, the trajectory does move, and it is worth being
+    exact about why — "the gauge is dynamically inert" is true of the
+    continuous dynamics and not of this discrete step. ``ω_next`` is what the
+    next substep hands to :meth:`S2.step`, and
+    ``q_next = expm(hat(ω h)) q`` is **not** gauge-invariant: a component of
+    ``ω`` along ``q`` tilts the rotation axis and lengthens the angle, so the
+    same ``q̇`` produces a different ``q_next`` at second order. Every
+    cable-carrying model therefore integrates a slightly different trajectory
+    once the drift is removed. Measured over a 3 s closed-loop tracking run,
+    the payload position moves by 2.81e-04 m (M2), 9.97e-05 m (M3),
+    5.83e-04 m (M4) and 4.58e-05 m (M5); M6's runs from its default spawn keep
+    ``q·ω`` at exactly zero, so nothing there moves at all (< 1e-13 m).
+
+    M5 and M6 have a second path on top of that one, and it is the reason the
+    change is a *fix* rather than a wash: their LQR error states
+    (``quadrotor_flexcable/payload_controller.py`` and
+    ``multi_quad_hose/hose_controller.py``) build the link-rate block as
+    ``ω + q × (q × ω_d)``, i.e. ``ω - (I - q qᵀ) ω_d`` — the *reference* rate
+    is projected and the measured one is not. The drifting gauge component was
+    therefore entering the feedback directly, as an error the controller could
+    neither reduce nor make sense of. Pinning it at machine precision removes
+    that term outright.
+
+    Args:
+        q: current direction on ``S2``.
+        omega: current rate in ``T_q S2``.
+        omega_dot: angular acceleration evaluated at the *current* ``q``.
+        h: substep size.
+
+    Returns:
+        ``(q_next, omega_next)`` with ``omega_next`` exactly tangent to
+        ``q_next``.
+    """
+    q_next = q.step(np.asarray(omega) * h)
+    omega_next = TS2(np.asarray(omega) + np.asarray(omega_dot) * h).transport(q_next)
+    return q_next, omega_next

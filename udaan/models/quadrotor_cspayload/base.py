@@ -20,17 +20,39 @@ from ...core.defaults import (
     DEFAULT_ARM_LENGTH,
     DEFAULT_CABLE_LENGTH,
     DEFAULT_FORCE_CONSTANT,
+    DEFAULT_MAX_THRUST,
+    DEFAULT_MAX_TORQUE,
+    DEFAULT_MIN_THRUST,
+    DEFAULT_MIN_TORQUE,
     DEFAULT_PAYLOAD_MASS,
+    DEFAULT_PROP_MAX_FORCE,
+    DEFAULT_PROP_MIN_FORCE,
     DEFAULT_QUAD_INERTIA,
     DEFAULT_QUAD_MASS,
     DEFAULT_TORQUE_CONSTANT,
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
-from ...manif import S2, SO3, TS2, TSO3
+from ...core.validation import MIN_PHYSICAL_MASS, check_positive
+from ...manif import S2, SO3, TS2, TSO3, zoh_step
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 
 _logger = get_logger(__name__)
+
+#: The initial-condition overrides :meth:`QuadrotorCsPayloadBase.reset` acts on.
+#: Anything else is rejected rather than silently discarded — see
+#: :mod:`udaan.models._kwargs`.
+_SUPPORTED_RESET_KWARGS = (
+    "position",
+    "velocity",
+    "orientation",
+    "angular_velocity",
+    "payload_position",
+    "payload_velocity",
+    "cable_attitude",
+    "cable_angular_velocity",
+)
 
 
 @dataclass
@@ -57,7 +79,7 @@ class QuadrotorCsPayloadState:
         return np.cross(np.asarray(self.cable_angular_velocity), np.asarray(self.cable_attitude))
 
     def reset(self):
-        self.__init__()
+        QuadrotorCsPayloadState.__init__(self)
 
 
 class QuadrotorCsPayloadBase:
@@ -90,12 +112,12 @@ class QuadrotorCsPayloadBase:
         self._e3 = np.array([0.0, 0.0, 1.0])
 
         # Actuator limits
-        self._min_thrust = 0.0
-        self._max_thrust = 20.0
-        self._min_torque = np.array([-5.0, -5.0, -2.0])
-        self._max_torque = np.array([5.0, 5.0, 2.0])
-        self._prop_min_force = 0.0
-        self._prop_max_force = 10.0
+        self._min_thrust = DEFAULT_MIN_THRUST
+        self._max_thrust = DEFAULT_MAX_THRUST
+        self._min_torque = DEFAULT_MIN_TORQUE.copy()
+        self._max_torque = DEFAULT_MAX_TORQUE.copy()
+        self._prop_min_force = DEFAULT_PROP_MIN_FORCE
+        self._prop_max_force = DEFAULT_PROP_MAX_FORCE
 
         # Integration: 5ms outer loop, 4 inner substeps at 1.25ms
         self.dt = kwargs.get("dt", 1.0 / 200.0)
@@ -158,11 +180,18 @@ class QuadrotorCsPayloadBase:
 
     @property
     def mass(self):
+        """Quadrotor mass ``m_Q``. Must be strictly positive.
+
+        It divides the cable rate ``ω̇ = -q̂ f R e₃ / (m_Q l)`` and, with
+        ``m_L``, forms the ``m_Q + m_L`` denominator of the payload
+        acceleration.
+        """
         return self._mass
 
     @mass.setter
     def mass(self, value):
-        self._mass = value
+        check_positive(value, "mass", warn_below=MIN_PHYSICAL_MASS)
+        self._mass = float(value)
 
     @property
     def inertia(self):
@@ -170,8 +199,15 @@ class QuadrotorCsPayloadBase:
 
     @inertia.setter
     def inertia(self, value):
+        value = np.asarray(value, dtype=float)
         if value.ndim == 1:
             value = np.diag(value)
+        if value.shape != (3, 3):
+            raise ValueError(f"inertia must be (3,) or (3, 3); got {value.shape}")
+        if not np.allclose(value, value.T):
+            raise ValueError(f"inertia must be symmetric; got {value.tolist()}")
+        if not np.all(np.linalg.eigvalsh(value) > 0.0):
+            raise ValueError(f"inertia must be positive definite; got {value.tolist()}")
         self._inertia = value
         self._inertia_inv = np.linalg.inv(value)
 
@@ -181,19 +217,35 @@ class QuadrotorCsPayloadBase:
 
     @property
     def payload_mass(self) -> float:
+        """Payload mass ``m_L``. Must be strictly positive.
+
+        At ``m_L ≤ 0`` the ``m_Q + m_L`` denominator of the payload
+        acceleration collapses — exactly zero at ``m_L = -m_Q``, and sign
+        flipped below it — so the integrator either divides by zero or
+        integrates dynamics that describe nothing. The multi-quadrotor form of
+        the same condition is the positive definiteness of
+        ``m_L I + Σ m_i q_i q_iᵀ``.
+        """
         return self._payload_mass
 
     @payload_mass.setter
     def payload_mass(self, value: float):
-        self._payload_mass = value
+        check_positive(value, "payload_mass", warn_below=MIN_PHYSICAL_MASS)
+        self._payload_mass = float(value)
 
     @property
     def cable_length(self) -> float:
+        """Cable length ``l``. Must be strictly positive.
+
+        A zero length divides by zero in ``ω̇`` and leaves the quadrotor and
+        payload at the same point, where the cable direction is undefined.
+        """
         return self._cable_length
 
     @cable_length.setter
     def cable_length(self, value: float):
-        self._cable_length = value
+        check_positive(value, "cable_length")
+        self._cable_length = float(value)
 
     # ─── Dynamics ──────────────────────────────────────────────────
 
@@ -214,11 +266,10 @@ class QuadrotorCsPayloadBase:
         self.state.payload_velocity += payload_accel * h
 
         # cable attitude dynamics
-        self.state.cable_attitude = self.state.cable_attitude.step(
-            np.asarray(self.state.cable_angular_velocity) * h
-        )
         domega = -np.cross(q, fRe3) / (mQ * l)
-        self.state.cable_angular_velocity += TS2(domega * h)
+        self.state.cable_attitude, self.state.cable_angular_velocity = zoh_step(
+            self.state.cable_attitude, self.state.cable_angular_velocity, domega, h
+        )
 
         # quadrotor attitude dynamics
         self.state.orientation = self.state.orientation.step(self.state.angular_velocity * h)
@@ -302,18 +353,22 @@ class QuadrotorCsPayloadBase:
             self.t += self.h
 
     def reset(self, **kwargs):
+        """Reset time and state, then apply any initial-condition overrides.
+
+        Recognised kwargs: ``position``, ``velocity``, ``orientation``,
+        ``angular_velocity``, ``payload_position``, ``payload_velocity``,
+        ``cable_attitude``, ``cable_angular_velocity``. The quadrotor and the
+        payload are tied by the cable, so giving one position derives the other.
+
+        Raises:
+            ValueError: for any other keyword. An unrecognised keyword is an
+                error rather than a no-op so that a stale name cannot silently
+                run a different initial condition.
+        """
+        check_reset_kwargs(self, kwargs, _SUPPORTED_RESET_KWARGS)
         self.t = 0.0
         self.state.reset()
-        for key in [
-            "position",
-            "velocity",
-            "orientation",
-            "angular_velocity",
-            "payload_position",
-            "payload_velocity",
-            "cable_attitude",
-            "cable_angular_velocity",
-        ]:
+        for key in _SUPPORTED_RESET_KWARGS:
             if key in kwargs:
                 v = kwargs[key]
                 # Copy ndarray inputs: _zoh() does in-place += on payload_position

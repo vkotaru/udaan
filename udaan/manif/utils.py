@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 
-def hat(vector):
+def hat(vector) -> np.ndarray:
     return np.array(
         [
             [0.0, -vector[2], vector[1]],
@@ -13,7 +13,7 @@ def hat(vector):
     )
 
 
-def vee(matrix):
+def vee(matrix) -> np.ndarray:
     return np.array([matrix[2, 1], matrix[0, 2], matrix[1, 0]])
 
 

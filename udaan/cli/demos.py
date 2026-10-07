@@ -1,9 +1,14 @@
 """Fleet demo presets.
 
 Each demo has:
-- config(): returns {"num_quadrotors": N, "disturbances": {...}}
-- configure(fleet): sets up controllers on the fleet
+
+- ``config()``: returns ``{"num_quadrotors": N, "disturbances": {...}}``
+- ``configure(fleet)``: sets up controllers on the fleet
+- ``requires`` (optional): name of the optional extra the demo needs installed,
+  checked by the CLI before anything is built (see ``_check_demo_extras``)
 """
+
+from typing import Any
 
 import numpy as np
 
@@ -65,11 +70,13 @@ def _gain_sweep_configure(fleet):
         fleet._labels[i] = f"PD ({label})"
 
 
-DEMOS = {
+DEMOS: dict[str, dict[str, Any]] = {
     "l1-comparison": {
         "config": _l1_comparison_config,
         "configure": _l1_comparison_configure,
         "description": "PD (clean) vs PD (disturbed) vs L1 (disturbed)",
+        # PositionL1Controller solves an LQR with the `control` package.
+        "requires": "l1",
     },
     "gain-sweep": {
         "config": _gain_sweep_config,
@@ -157,7 +164,7 @@ def _cspayload_gain_sweep_configure(fleet, same_start=False):
     return starts
 
 
-CSPAYLOAD_DEMOS = {
+CSPAYLOAD_DEMOS: dict[str, dict[str, Any]] = {
     "same-gains": {
         "config": _cspayload_same_gains_config,
         "configure": _cspayload_same_gains_configure,

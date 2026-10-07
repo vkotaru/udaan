@@ -19,9 +19,11 @@ _g = 9.81
 class FlipTrajectory(Trajectory):
     """Vertical loop trajectory: hold -> climb -> 360° pitch flip -> recover -> hold.
 
-    The flip phase uses a constant-thrust circular acceleration profile:
+    The flip phase uses a constant-thrust circular acceleration profile::
+
         a_x(t') = T * sin(w * t')
         a_z(t') = T * cos(w * t') - g
+
     The thrust vector rotates 360° in the xz-plane. During the inverted
     phase (90°-270°), thrust projection is negative — the quadrotor is
     in free-fall. This is physically correct; the attitude controller

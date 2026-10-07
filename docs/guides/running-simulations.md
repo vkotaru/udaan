@@ -12,10 +12,13 @@ what each supports — use it to pick the right entry point for your task.
 |---|:---:|:---:|:---:|:---:|
 | {py:class}`~udaan.models.quadrotor.QuadrotorBase` | ✓ | ✓ | ✓ | ✓ (via `fleet`) |
 | {py:class}`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadBase` | ✓ | ✓ | ✓ (tendon / links / cable) | ✓ (via `cspayload-fleet`) |
-| {py:class}`~udaan.models.mujoco.MultiQuadrotorCSPointmass` | — | — | ✓ | — |
-| {py:class}`~udaan.models.mujoco.MultiQuadRigidbody` | — | — | ✓ | — |
+| {py:class}`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase` | ✓ | — | ✓ | — |
+| {py:class}`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase` | ✓ | — | ✓ | — |
 
-See {doc}`controllers` for the controllers shipped with each model and how to swap them.
+The `vfx` (VPython) backends are importable as library classes but are **not**
+offered by the CLI's `--model`: driven headlessly they block inside VPython and
+never return, `--no-render` included. See {doc}`controllers` for the controllers
+shipped with each model and how to swap them.
 
 ### Input and force types
 

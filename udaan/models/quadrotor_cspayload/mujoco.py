@@ -7,7 +7,7 @@ import numpy as np
 
 from ...manif import S2, SO3, TS2, TSO3
 from ...utils.logging import get_logger
-from ..mujoco import MujocoModel
+from ..backend import MujocoModel
 from .base import QuadrotorCsPayloadBase
 
 _logger = get_logger(__name__)
@@ -18,9 +18,28 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
 
     Overrides step/reset to use MuJoCo instead of Euler ZOH.
     Supports three cable modeling approaches:
-        - TENDON: spatial tendon constraint (fast, less realistic)
-        - LINKS: rigid cylinder links with ball joints (slower, most stable)
-        - CABLE: MuJoCo 2.3+ composite cable (experimental)
+
+    - TENDON: spatial tendon constraint (fast, less realistic)
+    - LINKS: rigid cylinder links with ball joints (slower, most stable)
+    - CABLE: MuJoCo 2.3+ composite cable (experimental)
+
+    .. note::
+
+       ``cable_model="links"`` is still the default and its behaviour is
+       **unchanged**: the MJCF's 25-link chain is simulated, but
+       :meth:`_query_state_nlink_model` then collapses it back to this class's
+       single point-mass cable — one direction from the airframe to the
+       payload, and a payload velocity obtained by finite-differencing
+       consecutive positions (exactly zero on the first query, first order
+       after that).  That is the right reading *for M2*, whose state has one
+       cable in it and nothing to put the per-link directions into.
+
+       It is no longer the only reading available.
+       :class:`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableMujoco` (M5)
+       is the same physical system with the chain kept as a chain: ``n`` link
+       directions and rates, all measured rather than differenced, and an
+       analytical model that integrates them.  Use M5 when the cable's shape
+       matters; this class remains the right one when it does not.
     """
 
     class MODEL_TYPE(enum.Enum):
@@ -28,11 +47,14 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
         TENDON = 1
         CABLE = 2
 
+    # Always a live handle once ``__init__`` returns: exactly one of the three
+    # ``_init_*_model`` branches below runs, and none of them can leave it unset.
+    _mjMdl: MujocoModel
+
     def __init__(self, **kwargs):
         self.render = kwargs.get("render", False)
         super().__init__(**kwargs)
 
-        self._mjMdl = None
         self._mj_quad_index = None
         self._mj_payload_index = None
         self._mj_cable_index = None
@@ -52,6 +74,18 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
                 )
             elif cable_model == "links":
                 self._model_type = self.MODEL_TYPE.LINKS
+                # Explicitly asking for the link chain is the case where the
+                # collapse to one point-mass cable is most likely to be a
+                # surprise, so point at the system that keeps it. Not raised
+                # on the default path: nobody chose that.
+                _logger.info(
+                    "cable_model 'links' simulates an N-link chain but reports it as "
+                    "M2's single point-mass cable (one quad-to-payload direction, and "
+                    "a finite-differenced payload velocity). This is unchanged and "
+                    "supported; if the cable's shape matters, "
+                    "udaan.models.quadrotor_flexcable.QuadrotorFlexCableMujoco (M5) "
+                    "keeps every link's direction and rate as measured state."
+                )
             else:
                 raise ValueError(f"Invalid cable_model type: {cable_model!r}")
 
@@ -133,31 +167,33 @@ class QuadrotorCsPayloadMujoco(QuadrotorCsPayloadBase):
 
     # ─── Property setters (sync to MuJoCo) ─────────────────────────
 
-    @QuadrotorCsPayloadBase.mass.setter
+    # mypy cannot model a subclass re-opening a base class property to add a
+    # setter (python/mypy#5936); the pattern itself is correct at runtime.
+    @QuadrotorCsPayloadBase.mass.setter  # type: ignore[attr-defined]
     def mass(self, value):
-        QuadrotorCsPayloadBase.mass.fset(self, value)
+        QuadrotorCsPayloadBase.mass.fset(self, value)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_quad_index is not None:
             self._mjMdl.model.body_mass[self._mj_quad_index] = value
 
-    @QuadrotorCsPayloadBase.inertia.setter
+    @QuadrotorCsPayloadBase.inertia.setter  # type: ignore[attr-defined]  # see mass, above
     def inertia(self, value):
-        QuadrotorCsPayloadBase.inertia.fset(self, value)
+        QuadrotorCsPayloadBase.inertia.fset(self, value)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_quad_index is not None:
             if value.ndim == 2:
                 value = np.diag(value)
             self._mjMdl.model.body_inertia[self._mj_quad_index] = value
 
-    @QuadrotorCsPayloadBase.payload_mass.setter
+    @QuadrotorCsPayloadBase.payload_mass.setter  # type: ignore[attr-defined]  # see mass, above
     def payload_mass(self, value):
-        QuadrotorCsPayloadBase.payload_mass.fset(self, value)
+        QuadrotorCsPayloadBase.payload_mass.fset(self, value)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_payload_index is not None:
             self._mjMdl.model.body_mass[self._mj_payload_index] = value
 
-    @QuadrotorCsPayloadBase.cable_length.setter
+    @QuadrotorCsPayloadBase.cable_length.setter  # type: ignore[attr-defined]  # see mass, above
     def cable_length(self, value):
-        QuadrotorCsPayloadBase.cable_length.fset(self, value)
+        QuadrotorCsPayloadBase.cable_length.fset(self, value)  # type: ignore[attr-defined]
         if self._mjMdl is not None and self._mj_cable_index is not None:
-            from ..mujoco import mujoco
+            from ..backend import mujoco
 
             self._mjMdl.model.tendon_length0[self._mj_cable_index] = value
             self._mjMdl.model.tendon_limited[self._mj_cable_index] = True

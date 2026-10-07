@@ -112,9 +112,9 @@ R_1\, R_2 \in SO(3), \qquad R\, v \in \mathbb{R}^3,
 $$
 
 ```python
-R3 = R1 @ R2          # group composition
+R3 = R1 @ R2  # group composition
 v_world = R @ v_body  # action on a vector
-Rinv = R.inv()        # equals R.T
+Rinv = R.inv()  # equals R.T
 ```
 
 **Integration step.** Given a body-frame angular velocity $\Omega$ and a
@@ -251,12 +251,12 @@ $$
 In code:
 
 ```python
-Re = R_d.T @ R                              # Step 1 — relative rotation
-skew = 0.5 * (Re - Re.T)                    # Step 2 — skew part in so(3)
+Re = R_d.T @ R  # Step 1 — relative rotation
+skew = 0.5 * (Re - Re.T)  # Step 2 — skew part in so(3)
 e_R = np.array([skew[2, 1], skew[0, 2], skew[1, 0]])  # Step 3 — vee
 
 # Or, using the SO3 type directly:
-e_R = R - R_d                               # TSO3, identical result
+e_R = R - R_d  # TSO3, identical result
 ```
 
 `udaan.manif.SO3.__sub__` executes exactly steps 1–3 (see
@@ -396,7 +396,7 @@ $q = q_d$; the error degenerates at the antipode $q_d = -q$, where both
 candidate axes of rotation in $T_q S^2$ are equivalent.
 
 ```python
-e_q = np.cross(q, np.cross(q, q_d))   # equivalent to hat(q) @ hat(q) @ q_d
+e_q = np.cross(q, np.cross(q, q_d))  # equivalent to hat(q) @ hat(q) @ q_d
 ```
 
 ### Angular-velocity error $e_\omega$
@@ -434,9 +434,9 @@ the two tangent spaces — the counterpart of the transport map
 {math:numref}`eq-transport` on $SO(3)$.
 
 ```python
-dq   = np.cross(omega, q)
-dqd  = np.cross(omega_d, q_d)
-e_om = dq - np.cross(np.cross(q_d, dqd), q)   # matches eq. (eq-eomega-s2)
+dq = np.cross(omega, q)
+dqd = np.cross(omega_d, q_d)
+e_om = dq - np.cross(np.cross(q_d, dqd), q)  # matches eq. (eq-eomega-s2)
 ```
 
 Both $e_q$ and $e_\omega$ appear in the payload cable-attitude PD law

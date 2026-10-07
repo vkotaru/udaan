@@ -16,4 +16,5 @@ __all__ = [
     "TSO3",
     # utilities
     "Rot2Eul",
+    "zoh_step",
 ]

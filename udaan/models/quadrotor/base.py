@@ -14,17 +14,28 @@ from ... import control
 from ...core.defaults import (
     DEFAULT_ARM_LENGTH,
     DEFAULT_FORCE_CONSTANT,
+    DEFAULT_MAX_THRUST,
+    DEFAULT_MAX_TORQUE,
+    DEFAULT_MIN_THRUST,
+    DEFAULT_MIN_TORQUE,
+    DEFAULT_PROP_MAX_FORCE,
+    DEFAULT_PROP_MIN_FORCE,
     DEFAULT_QUAD_INERTIA,
     DEFAULT_QUAD_MASS,
     DEFAULT_TORQUE_CONSTANT,
     GRAVITY,
 )
 from ...core.types import ForceType, InputType, Vec3
-from ...flatness import Jet, Quadrotor, QuadrotorFlats
+from ...flatness import Jet, Quadrotor, QuadrotorFlats, yaw_jet
 from ...manif import SO3, TSO3
 from ...utils.logging import get_logger
+from .._kwargs import check_reset_kwargs
 
 _logger = get_logger(__name__)
+
+#: The initial-condition overrides :meth:`QuadrotorBase.reset` acts on. Anything
+#: else is rejected rather than silently discarded — see :mod:`udaan.models._kwargs`.
+_SUPPORTED_RESET_KWARGS = frozenset({"position", "velocity", "orientation", "angular_velocity"})
 
 
 @dataclass
@@ -37,7 +48,7 @@ class QuadrotorState:
     angular_velocity: TSO3 = field(default_factory=TSO3)
 
     def reset(self):
-        self.__init__()
+        QuadrotorState.__init__(self)
 
 
 class QuadrotorBase:
@@ -67,12 +78,12 @@ class QuadrotorBase:
         self._e3 = np.array([0.0, 0.0, 1.0])
 
         # Actuator limits
-        self._min_thrust = 0.0
-        self._max_thrust = 20.0
-        self._min_torque = np.array([-5.0, -5.0, -2.0])
-        self._max_torque = np.array([5.0, 5.0, 2.0])
-        self._prop_min_force = 0.0
-        self._prop_max_force = 10.0
+        self._min_thrust = DEFAULT_MIN_THRUST
+        self._max_thrust = DEFAULT_MAX_THRUST
+        self._min_torque = DEFAULT_MIN_TORQUE.copy()
+        self._max_torque = DEFAULT_MAX_TORQUE.copy()
+        self._prop_min_force = DEFAULT_PROP_MIN_FORCE
+        self._prop_max_force = DEFAULT_PROP_MAX_FORCE
 
         # Integration: 5ms outer loop, 4 inner substeps at 1.25ms
         self.dt = kwargs.get("dt", 1.0 / 200.0)
@@ -93,6 +104,9 @@ class QuadrotorBase:
 
         # Allocation matrix
         self._compute_allocation_matrix()
+
+        # Feedforward yaw reference; None is ψ ≡ 0.
+        self._yaw_setpoint = None
 
         # Default controllers
         self._init_default_controllers()
@@ -121,6 +135,35 @@ class QuadrotorBase:
     @attitude_controller.setter
     def attitude_controller(self, controller):
         self._att_controller = controller
+
+    @property
+    def yaw_setpoint(self):
+        r"""Yaw reference for the flatness feedforward: ``ψ(t) -> (ψ, ψ̇, ψ̈)``.
+
+        Yaw is the quadrotor's second flat output, and it is the *only* channel
+        the reference attitude adds on top of the position loop — the thrust
+        command already fixes ``b₃``, so ``ψ`` is what
+        :meth:`~udaan.control.quadrotor.GeometricAttitudeController.compute`
+        composes in. Without a yaw setpoint the feedforward runs at ψ ≡ 0 and
+        the composition is close to a no-op, which is exactly what it was
+        before this hook existed.
+
+        ``None`` (the default) means ψ ≡ 0, so binding nothing changes nothing.
+        Set it beside the position trajectory::
+
+            mdl.position_controller.setpoint = traj.get
+            mdl.yaw_setpoint = lambda t: (0.5 * t, 0.5, 0.0)
+
+        It is read only on the feedforward path — that is, only when the bound
+        trajectory exposes ``get_full`` (see :meth:`simulate`).
+        """
+        return self._yaw_setpoint
+
+    @yaw_setpoint.setter
+    def yaw_setpoint(self, setpoint):
+        if setpoint is not None and not callable(setpoint):
+            raise TypeError("yaw_setpoint must be callable psi(t) -> (psi, dpsi, ddpsi), or None")
+        self._yaw_setpoint = setpoint
 
     # ─── Properties ────────────────────────────────────────────────
 
@@ -223,9 +266,20 @@ class QuadrotorBase:
             self.t += self.h
 
     def reset(self, **kwargs):
+        """Reset time and state, then apply any initial-condition overrides.
+
+        Recognised kwargs: ``position``, ``velocity``, ``orientation``,
+        ``angular_velocity``.
+
+        Raises:
+            ValueError: for any other keyword. An unrecognised keyword is an
+                error rather than a no-op so that a stale name cannot silently
+                run a different initial condition.
+        """
+        check_reset_kwargs(self, kwargs, _SUPPORTED_RESET_KWARGS)
         self.t = 0.0
         self.state.reset()
-        for key in ["position", "velocity", "orientation", "angular_velocity"]:
+        for key in _SUPPORTED_RESET_KWARGS:
             if key in kwargs:
                 setattr(self.state, key, kwargs[key])
 
@@ -255,11 +309,13 @@ class QuadrotorBase:
             elif self._input_type == InputType.ACCELERATION:
                 u = self._pos_controller.compute(self.t, (self.state.position, self.state.velocity))
                 # Differential-flatness attitude feedforward from the flat output.
-                if flat_map is not None:
+                # `flat_map` is non-None exactly when `flat_fn` is; both are tested
+                # so the checker can see it too.
+                if flat_map is not None and flat_fn is not None:
                     pos, vel, acc, jerk, snap = flat_fn(self.t)
                     flats = QuadrotorFlats(
                         x=Jet(np.array([pos, vel, acc, jerk, snap])),  # order-4, dim-3
-                        psi=Jet(np.zeros(3)),  # ψ ≡ 0 (order-2 scalar jet)
+                        psi=yaw_jet(self._yaw_setpoint, self.t),
                     )
                     ref, _ = flat_map.recover(flats)
                     desired_att = (ref.orientation, ref.angular_velocity, ref.angular_acceleration)

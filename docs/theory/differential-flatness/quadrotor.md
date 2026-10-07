@@ -383,20 +383,24 @@ import numpy as np
 from udaan.flatness import Jet, Quadrotor, QuadrotorFlats
 
 # Centre-of-mass position and its first four time derivatives at t
-x_jet = Jet(np.stack([
-    x_Q,       # row 0 — position
-    x_Q_dot,   # row 1 — velocity
-    x_Q_ddot,  # row 2 — acceleration (gives f, b3)
-    x_Q_dddot, # row 3 — jerk          (gives Ω)
-    x_Q_snap,  # row 4 — snap          (gives dΩ, M)
-]))
+x_jet = Jet(
+    np.stack(
+        [
+            x_Q,  # row 0 — position
+            x_Q_dot,  # row 1 — velocity
+            x_Q_ddot,  # row 2 — acceleration (gives f, b3)
+            x_Q_dddot,  # row 3 — jerk          (gives Ω)
+            x_Q_snap,  # row 4 — snap          (gives dΩ, M)
+        ]
+    )
+)
 x_jet.order  # 4
-x_jet.dim    # 3
+x_jet.dim  # 3
 
 # Yaw and its first two derivatives
 psi_jet = Jet(np.array([psi, psi_dot, psi_ddot]))
 psi_jet.order  # 2
-psi_jet.dim    # 1
+psi_jet.dim  # 1
 
 flats = QuadrotorFlats(x=x_jet, psi=psi_jet)
 ref, inputs = Quadrotor(mass=m, inertia=J).recover(flats)
