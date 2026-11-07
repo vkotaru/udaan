@@ -4,7 +4,8 @@ Every model's ``reset()`` — and therefore ``simulate()``, which forwards to it
 takes its initial condition as keyword arguments. An unrecognised keyword that
 matched none of the ``if key in kwargs`` branches would be discarded and the run
 would start from the default state: a misspelled or renamed keyword gives a
-clean exit code and a silently different simulation.
+clean exit code and a silently different simulation. For example, the 1.x
+keyword ``xL`` names what the M3 model calls ``payload_position``.
 
 Unrecognised keywords are therefore rejected. :func:`check_reset_kwargs` is the
 one place that decides how, using the "cannot honour" wording the MuJoCo

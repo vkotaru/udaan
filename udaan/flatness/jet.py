@@ -102,12 +102,12 @@ class Jet:
     @property
     def order(self) -> int:
         """Highest derivative index stored; ``data.shape[0] - 1``."""
-        return self.data.shape[0] - 1
+        return int(self.data.shape[0]) - 1
 
     @property
     def dim(self) -> int:
         """Signal dimension; ``data.shape[1]`` (``1`` for scalar signals)."""
-        return self.data.shape[1]
+        return int(self.data.shape[1])
 
     @property
     def is_scalar(self) -> bool:
@@ -129,7 +129,7 @@ class Jet:
 
     def __len__(self) -> int:
         """Number of derivative levels (``order + 1``)."""
-        return self.data.shape[0]
+        return int(self.data.shape[0])
 
     def __iter__(self):
         """Iterate over derivative levels in order (y, ẏ, ÿ, …)."""

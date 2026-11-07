@@ -42,7 +42,7 @@ class QuadCSPayloadController(PDController):
         sd, dsd, d2sd = sp[0], sp[1], sp[2]
         # Higher payload derivatives (jerk, snap) feed the cable-attitude
         # feedforward below; default to zero when the setpoint omits them
-        # (e.g. a stationary set-point), which recovers the prior behaviour.
+        # (e.g. a stationary set-point), which disables that feedforward.
         d3sd = sp[3] if len(sp) > 3 else np.zeros(3)
         d4sd = sp[4] if len(sp) > 4 else np.zeros(3)
 
@@ -70,8 +70,8 @@ class QuadCSPayloadController(PDController):
         # [a_L, ȧ_L, ä_L] = [d2sd, d3sd, d4sd]; dqd, d2qd are its 1st/2nd time
         # derivatives, from the same flat-to-state map as
         # udaan.flatness.quadrotor_cspayload. These supply the cable
-        # feedforward that was previously stubbed to zero; q_des coincides with
-        # qc in the nominal (feedback-free) case, so qd is left as qc.
+        # feedforward; q_des coincides with qc in the nominal (feedback-free)
+        # case, so qd is left as qc.
         try:
             _, q_flat = cable_direction_jet([d2sd, d3sd, d4sd], mL)
             dqd, d2qd = q_flat[1], q_flat[2]

@@ -1,5 +1,7 @@
 """Simulation run commands."""
 
+from typing import Any
+
 import typer
 
 from . import _ctx
@@ -9,23 +11,25 @@ run_app = typer.Typer(help="Run a simulation.", context_settings=_ctx)
 # Common option for recording
 _record_option = typer.Option(None, "--record", "-r", help="Save recording to file (.gif or .mp4).")
 
-
-#: The backends ``udaan run quadrotor --model`` offers.  ``vfx`` is deliberately
-#: absent even though :class:`~udaan.models.quadrotor.QuadrotorVfx` exists and is
-#: importable: driven from the CLI, it blocks inside VPython and does not return,
+#: The backends ``--model`` offers.  ``vfx`` is deliberately absent even though
+#: :class:`~udaan.models.quadrotor.QuadrotorVfx` and
+#: :class:`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadVfx` exist and are
+#: importable: driven from the CLI, both block inside VPython and do not return,
 #: ``--no-render`` included, because the VPython backend opens its
 #: browser-served scene at construction rather than at render time.  Advertising
-#: a hanging option is worse than not offering it, so the command refuses
-#: ``-m vfx`` by name.
+#: a hanging option is worse than not offering it, so the CLI refuses ``-m vfx``
+#: by name.
 _CLI_MODELS = ("base", "mujoco")
 
 
 def _check_model(model: str, allowed: tuple[str, ...]) -> None:
     """Reject an unrecognised ``--model`` instead of silently picking a backend.
 
-    The routing block it guards is a chain of ``if``/``elif`` with a final
-    ``else``, so without this guard a typo lands on whichever backend sits in
-    the ``else``, and the run reports a backend the caller never asked for.
+    Every routing block below is a chain of ``if``/``elif`` with a final
+    ``else``, so without this guard a typo — or the documented-but-unrouted
+    value a two-way chain leaves out — lands on whichever backend happens to
+    sit in the ``else``, and the run reports a backend the caller never asked
+    for.
     """
     if model not in allowed:
         typer.secho(
@@ -208,7 +212,7 @@ def quad_payload(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
     model: str = typer.Option(
-        "mujoco", "--model", "-m", help="Quad-payload model: mujoco or base."
+        "mujoco", "--model", "-m", help="Quad-payload model: base or mujoco."
     ),
     cable_model: str = typer.Option(
         "tendon", "--cable-model", "-c", help="Cable model: tendon, links, or cable."
@@ -221,8 +225,11 @@ def quad_payload(
     """Simulate a quadrotor with cable-suspended payload."""
     import numpy as np
 
+    from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadBase
+
     from . import parse_vec
 
+    _check_model(model, _CLI_MODELS)
     x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
     if cable_model == "cable":
         typer.secho(
@@ -232,17 +239,115 @@ def quad_payload(
             bold=True,
             err=True,
         )
+    mdl: QuadrotorCsPayloadBase
     if model == "mujoco":
         from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadMujoco
 
         mdl = QuadrotorCsPayloadMujoco(render=render, cable_model=cable_model)
     else:
-        from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadVfx
-
-        mdl = QuadrotorCsPayloadVfx(render=render)
+        mdl = QuadrotorCsPayloadBase()
     _setup_recording(mdl, record)
-    typer.echo(f"Running quad-payload ({model}, {cable_model}) for {time}s ...")
+    # `--cable-model` is a MuJoCo cable discretisation; the analytical and VPython
+    # backends have a single taut cable, so naming one there would misreport the run.
+    detail = f"{model}, {cable_model}" if model == "mujoco" else model
+    typer.echo(f"Running quad-payload ({detail}) for {time}s ...")
     mdl.simulate(tf=time, payload_position=x0)
+    _hold_viewer(mdl)
+
+
+@run_app.command("quad-flexcable")
+def quad_flexcable(
+    time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
+    render: bool = typer.Option(True, help="Enable visualization."),
+    links: int | None = typer.Option(
+        None, "--links", "-n", help="Number of rigid links the cable is discretised into."
+    ),
+    model: str = typer.Option("mujoco", "--model", "-m", help="Flex-cable model: mujoco or base."),
+    trajectory: str = typer.Option(
+        "hover", "--trajectory", "--traj", help="Payload trajectory: hover or lissajous."
+    ),
+    cable_length: float | None = typer.Option(
+        None, "--cable-length", "-l", help="Total taut cable length in metres."
+    ),
+    cable_mass: float | None = typer.Option(None, "--cable-mass", help="Cable mass in kg."),
+    payload_mass: float | None = typer.Option(None, "--payload-mass", help="Payload mass in kg."),
+    verbose: int = typer.Option(0, "--verbose", "-v", help="Verbosity level (0-2)."),
+    record: str | None = _record_option,
+    position: str | None = typer.Option(
+        None, "--position", "-p", help="Initial payload position as 'x,y,z'."
+    ),
+):
+    """Simulate a quadrotor carrying a payload on a flexible n-link cable.
+
+    Drives the M5 payload LQR. The 'lissajous' trajectory exposes ``get_jet``,
+    so it also switches on the flatness feedforward at the full ``2n + 4``
+    derivative depth the chain needs; 'hover' is a step response — the payload
+    spawns at ``--position`` and is commanded 0.62 m away from it — and needs
+    no feedforward.
+    """
+    import logging
+
+    import numpy as np
+
+    from udaan.models.quadrotor_flexcable import QuadrotorFlexCableBase
+
+    from . import parse_vec
+
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+
+    _check_model(model, ("base", "mujoco"))
+    if trajectory not in ("hover", "lissajous"):
+        typer.secho(
+            f"Unknown trajectory '{trajectory}'. Expected 'hover' or 'lissajous'.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    opts: dict[str, Any] = {
+        "num_links": links,
+        "cable_length": cable_length,
+        "cable_mass": cable_mass,
+        "payload_mass": payload_mass,
+    }
+    opts = {k: v for k, v in opts.items() if v is not None}
+
+    mdl: QuadrotorFlexCableBase
+    if model == "mujoco":
+        from udaan.models.quadrotor_flexcable import QuadrotorFlexCableMujoco
+
+        mdl = QuadrotorFlexCableMujoco(render=render, verbose=verbose, **opts)
+    else:
+        mdl = QuadrotorFlexCableBase(verbose=verbose, **opts)
+
+    x0 = parse_vec(position, default=np.array([0.0, 0.0, 1.0]))
+    if trajectory == "lissajous":
+        from udaan.utils.trajectory import CrazyTrajectory
+
+        # Gentle enough that no link leaves the hanging branch, which is what
+        # the flat map refuses; the chain then feeds forward on every sample.
+        traj = CrazyTrajectory(center=x0, ax=0.4, ay=0.35, az=0.25, f1=0.18, f2=0.13, f3=0.09)
+        mdl.payload_controller.setpoint = traj.get
+        x0 = traj.get(0.0)[0]
+    else:
+        # A step, not a fixed point at the spawn.  Commanding the payload to
+        # exactly where reset() puts it — hanging straight down, at rest — is
+        # already the closed-loop equilibrium, so the run measures nothing and
+        # reports 0.0000 m however good or bad the gain is.  Offsetting the
+        # target makes the demo a step response the printed error can score.
+        target = x0 + np.array([0.5, 0.3, 0.2])
+        mdl.payload_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
+
+    _setup_recording(mdl, record)
+    typer.echo(
+        f"Running quad-flexcable ({model}, {mdl.num_links} links, {trajectory}) for {time}s ..."
+    )
+    mdl.simulate(tf=time, payload_position=x0)
+    typer.echo(
+        f"  payload error {np.linalg.norm(mdl.state.payload_position - mdl.payload_controller.setpoint(mdl.t)[0]):.4f} m"
+        f"  (feedforward drops: {mdl.feedforward_drops})"
+    )
     _hold_viewer(mdl)
 
 
@@ -251,6 +356,13 @@ def multi_quad(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
     num_quads: int = typer.Option(3, "--num-quads", "-n", help="Number of quadrotors."),
+    cable_length: float | None = typer.Option(
+        None, "--cable-length", "-l", help="Taut cable length in metres."
+    ),
+    payload_mass: float | None = typer.Option(None, "--payload-mass", help="Payload mass in kg."),
+    formation_radius: float | None = typer.Option(
+        None, "--radius", help="Radius of the quadrotor ring in metres."
+    ),
     record: str | None = _record_option,
     position: str | None = typer.Option(
         None, "--position", "-p", help="Initial payload position as 'x,y,z'."
@@ -259,15 +371,25 @@ def multi_quad(
     """Simulate multiple quadrotors with cable-suspended pointmass payload."""
     import numpy as np
 
-    import udaan as U
+    from udaan.models.multi_quad_cspayload import MultiQuadCsPayloadMujoco
 
     from . import parse_vec
 
     x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
-    mdl = U.models.mujoco.MultiQuadrotorCSPointmass(render=render, num_quadrotors=num_quads)
+    opts = {
+        "cable_lengths": cable_length,
+        "payload_mass": payload_mass,
+        "formation_radius": formation_radius,
+    }
+    opts = {k: v for k, v in opts.items() if v is not None}
+    try:
+        mdl = MultiQuadCsPayloadMujoco(render=render, num_quadrotors=num_quads, **opts)
+    except ValueError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
     _setup_recording(mdl, record)
     typer.echo(f"Running multi-quad ({num_quads} quads) for {time}s ...")
-    mdl.simulate(tf=time, xL=x0)
+    mdl.simulate(tf=time, payload_position=x0)
     _hold_viewer(mdl)
 
 
@@ -275,23 +397,227 @@ def multi_quad(
 def multi_quad_rigid(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
+    num_quads: int = typer.Option(4, "--num-quads", "-n", help="Number of quadrotors."),
+    cable_length: float | None = typer.Option(
+        None, "--cable-length", "-l", help="Taut cable length in metres."
+    ),
+    payload_mass: float | None = typer.Option(None, "--payload-mass", help="Payload mass in kg."),
+    attachment_radius: float | None = typer.Option(
+        None, "--attachment-radius", "-a", help="Radius of the attachment ring on the payload."
+    ),
+    formation_radius: float | None = typer.Option(
+        None,
+        "--radius",
+        help="Horizontal offset of each quadrotor from its own attachment point.",
+    ),
+    spawn_height: float | None = typer.Option(
+        None, "--height", "-z", help="Height of the quadrotor ring in metres."
+    ),
     record: str | None = _record_option,
     position: str | None = typer.Option(
         None, "--position", "-p", help="Initial payload position as 'x,y,z'."
     ),
 ):
-    """Simulate multiple quadrotors with cable-suspended rigid-body payload."""
-    import numpy as np
+    """Simulate multiple quadrotors with cable-suspended rigid-body payload.
 
-    import udaan as U
+    The MJCF is generated from these knobs and cached, so the formation starts
+    taut whatever they are set to.
+    """
+
+    from udaan.models.multi_quad_rigidbody import MultiQuadRigidbodyMujoco
 
     from . import parse_vec
 
-    x0 = parse_vec(position, default=np.array([0.0, 0.0, 0.5]))
-    mdl = U.models.mujoco.MultiQuadRigidbody(render=render)
+    opts = {
+        "cable_lengths": cable_length,
+        "payload_mass": payload_mass,
+        "attachment_radius": attachment_radius,
+        "formation_radius": formation_radius,
+        "spawn_height": spawn_height,
+    }
+    opts = {k: v for k, v in opts.items() if v is not None}
+    try:
+        mdl = MultiQuadRigidbodyMujoco(render=render, num_quadrotors=num_quads, **opts)
+    # ValueError covers the geometry the generator refuses to build; RuntimeError
+    # covers the load-time checks (`_read_params_from_mjcf`, `_check_spawn_is_taut`)
+    # that exist precisely for a stale cached or hand-edited asset — which is a
+    # user-facing condition with a stated remedy, not a traceback.
+    except (ValueError, RuntimeError) as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
+    # Absolute, exactly as `multi-quad` reads it. Defaulting to the MJCF's own
+    # spawn keeps the formation taut at t=0.
+    x0 = parse_vec(position, default=mdl.state.payload_position.copy())
     _setup_recording(mdl, record)
-    typer.echo(f"Running multi-quad rigid ({mdl.nQ} quads) for {time}s ...")
-    mdl.simulate(tf=time, xL=x0)
+    typer.echo(f"Running multi-quad rigid ({mdl.num_quadrotors} quads) for {time}s ...")
+    mdl.simulate(tf=time, payload_position=x0)
+    _hold_viewer(mdl)
+
+
+@run_app.command("hose")
+def hose(
+    time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
+    model: str = typer.Option("mujoco", "--model", "-m", help="Backend: 'mujoco' or 'base'."),
+    render: bool = typer.Option(True, help="Enable visualization."),
+    num_links: int = typer.Option(4, "--num-links", "-n", help="Links the hose is split into."),
+    attachments: str | None = typer.Option(
+        None,
+        "--attachments",
+        "-a",
+        help="Vertex indices carrying a quadrotor, e.g. '0,2,4'. Default: both ends.",
+    ),
+    hose_length: float | None = typer.Option(
+        None, "--length", "-l", help="Total hose length in metres."
+    ),
+    hose_mass: float | None = typer.Option(None, "--hose-mass", help="Total hose mass in kg."),
+    quad_mass: float | None = typer.Option(None, "--quad-mass", help="Mass of each airframe, kg."),
+    sag_ratio: float | None = typer.Option(
+        None, "--sag", help="Spawn span of each hose segment, as a fraction of its length."
+    ),
+    spawn_height: float | None = typer.Option(
+        None, "--height", "-z", help="Height of vertex 0 at spawn, in metres."
+    ),
+    controller: str = typer.Option(
+        "lqr",
+        "--controller",
+        "-c",
+        help=(
+            "Control loop: 'lqr' (M6, the default; needs a vehicle at the last vertex) "
+            "or 'station' (per-vehicle PD, any attachment pattern)."
+        ),
+    ),
+    trajectory: str = typer.Option(
+        "hover", "--trajectory", "--traj", help="Root-vertex trajectory: 'hover' or 'lissajous'."
+    ),
+    record: str | None = _record_option,
+    position: str | None = typer.Option(
+        None, "--position", "-p", help="Initial position of vertex 0 as 'x,y,z'."
+    ),
+):
+    """Simulate several quadrotors carrying one flexible hose (M6).
+
+    ``--controller lqr`` (the default) drives the M6 hose LQR, which regulates
+    the whole hose against the static trim at the root setpoint; it needs a
+    vehicle at the last vertex, since that is what makes the hose flat in the
+    coordinates its reference is built in. ``--controller station`` falls back
+    to the per-vehicle station-keeping PDs, which have no such requirement.
+
+    Because the LQR is the default, a pattern with no vehicle at the last
+    vertex — ``-n 4 -a 0,2``, say — **exits 1** with a message naming
+    ``--controller station`` rather than silently station-keeping. This
+    command's headline is M6's controller, and a run that quietly swaps in a
+    different control law is the more expensive surprise.
+
+    The 'lissajous' trajectory exposes ``get_jet``, so it also switches on the
+    flatness feedforward at the full ``2n + 4`` derivative depth the hose
+    needs; 'hover' is a step response and needs none.
+
+    The MJCF is generated from these knobs and cached. Raising ``--num-links``
+    past 4 leaves the analytical backend's stability envelope for some
+    attachment patterns and it will say so; the MuJoCo backend has no such
+    limit.
+    """
+    import numpy as np
+
+    from udaan.models.multi_quad_hose import MultiQuadHoseBase
+
+    from . import parse_vec
+
+    _check_model(model, ("base", "mujoco"))
+    if controller not in ("lqr", "station"):
+        typer.echo(f"Unknown controller '{controller}'. Expected 'lqr' or 'station'.", err=True)
+        raise typer.Exit(1)
+    # Validated up front: otherwise a misspelt --traj falls through to the hover
+    # branch and prints a plausible-looking tracking error for a run that is not
+    # the one asked for.
+    if trajectory not in ("hover", "lissajous"):
+        typer.echo(f"Unknown trajectory '{trajectory}'. Expected 'hover' or 'lissajous'.", err=True)
+        raise typer.Exit(1)
+
+    opts: dict[str, Any] = {
+        "hose_length": hose_length,
+        "hose_mass": hose_mass,
+        "masses": quad_mass,
+        "sag_ratio": sag_ratio,
+        "spawn_height": spawn_height,
+    }
+    opts = {k: v for k, v in opts.items() if v is not None}
+    if attachments is not None:
+        try:
+            opts["attachments"] = tuple(int(v) for v in attachments.split(","))
+        except ValueError:
+            typer.echo(f"Invalid attachments: '{attachments}'. Expected e.g. '0,2,4'.", err=True)
+            raise typer.Exit(1) from None
+    if controller == "lqr":
+        # The LQR emits a per-vehicle wrench; the station-keeping PDs emit
+        # thrust vectors. The two pipelines take incompatible shapes, so the
+        # choice has to be made at construction.
+        opts["input"] = "wrench"
+
+    Model: type[MultiQuadHoseBase]
+    if model == "mujoco":
+        from udaan.models.multi_quad_hose import MultiQuadHoseMujoco
+
+        Model = MultiQuadHoseMujoco
+    else:
+        Model = MultiQuadHoseBase
+
+        opts.pop("spawn_height", None)
+        render = False
+
+    try:
+        mdl = Model(render=render, num_links=num_links, **opts)
+    # ValueError covers the spawn geometry the generator refuses to build and
+    # the parameter guards; RuntimeError covers the load-time checks that exist
+    # for a stale cached or hand-edited asset. Both are user-facing conditions
+    # with a stated remedy, not tracebacks.
+    except (ValueError, RuntimeError) as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
+
+    default_root = np.asarray(mdl.state.root_position).copy()
+    if model != "mujoco" and position is None:
+        default_root = np.array([0.0, 0.0, 2.0])
+    x0 = parse_vec(position, default=default_root)
+
+    if controller == "lqr":
+        if mdl.hose_controller is None:
+            typer.echo(
+                f"Error: attachments {mdl.attachments} put no vehicle at the last vertex "
+                f"({mdl.num_links}), so the hose is not differentially flat in the "
+                "coordinates the LQR's reference is built in. Add that vertex, or run "
+                "--controller station.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if trajectory == "lissajous":
+            from udaan.utils.trajectory import CrazyTrajectory
+
+            # Gentle: the constant gain is solved at the static trim and the
+            # linearisation moves ~2 % over a reference this size. See the
+            # drift table in udaan.control.multi_quad_hose.hose_controller.
+            traj = CrazyTrajectory(center=x0, ax=0.3, ay=0.24, az=0.15, f1=0.2, f2=0.16, f3=0.12)
+            mdl.hose_controller.setpoint = traj.get
+            x0 = traj.get(0.0)[0]
+        else:
+            # A step, not a fixed point at the spawn: commanding the root to
+            # where reset() puts it would score 0.0000 m however good or bad
+            # the gain is.
+            target = x0 + np.array([0.3, 0.2, 0.2])
+            mdl.hose_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
+
+    _setup_recording(mdl, record)
+    typer.echo(
+        f"Running hose ({model}, {mdl.num_links} links, "
+        f"{mdl.num_quadrotors} quads at {mdl.attachments}, {controller}) for {time}s ..."
+    )
+    mdl.simulate(tf=time, root_position=x0)
+    if controller == "lqr":
+        typer.echo(
+            f"  root error "
+            f"{np.linalg.norm(np.asarray(mdl.state.root_position) - mdl.hose_controller.setpoint(mdl.t)[0]):.4f} m"
+            f"  (feedforward drops: {mdl.feedforward_drops})"
+        )
     _hold_viewer(mdl)
 
 
