@@ -10,6 +10,7 @@ Submodules
    udaan.core.defaults
    udaan.core.exceptions
    udaan.core.types
+   udaan.core.validation
 
 Module contents
 ---------------

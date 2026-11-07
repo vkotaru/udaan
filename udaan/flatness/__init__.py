@@ -17,6 +17,7 @@ with a cable-suspended point-mass payload, with flat output
 
 from .base import Flat2State as Flat2State
 from .jet import Jet as Jet
+from .jet import yaw_jet as yaw_jet
 from .quadrotor import (
     Quadrotor as Quadrotor,
 )
@@ -53,4 +54,5 @@ __all__ = [
     "QuadrotorFlats",
     "QuadrotorInputs",
     "QuadrotorRefState",
+    "yaw_jet",
 ]

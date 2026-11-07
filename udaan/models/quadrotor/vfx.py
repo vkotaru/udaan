@@ -17,8 +17,8 @@ class QuadrotorVfx(QuadrotorBase):
         self._vfx = QuadrotorVFX()
         self._wall_start = None
 
-    def step(self, u):
-        super().step(u)
+    def step(self, u, desired_att=None):
+        super().step(u, desired_att=desired_att)
         if self._wall_start is None:
             self._wall_start = _time.monotonic()
         wall_elapsed = _time.monotonic() - self._wall_start

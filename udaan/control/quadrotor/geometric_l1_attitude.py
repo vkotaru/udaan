@@ -12,7 +12,35 @@ import numpy as np
 from ...core.types import Vec3
 from ...manif import SO3, TSO3
 from ...manif.utils import hat
+from ...utils.logging import get_logger
 from .geometric_attitude import GeometricAttitudeController
+
+_logger = get_logger(__name__)
+
+
+def routh_bound(kR: Vec3, kOmega: Vec3, Gamma: Vec3) -> Vec3:
+    r"""Per-axis upper bound on the adaptation coupling ``c`` for stability.
+
+    Linearised about perfect prediction, one body axis of the
+    predictor–adaptation loop is
+
+    .. math::
+
+        J\dot{\tilde\omega} = \hat\sigma - k_R\tilde\theta - k_\Omega\tilde\omega,
+        \qquad
+        \dot{\hat\sigma} = -\Gamma\,(\tilde\omega + c\,J^{-1}\tilde\theta),
+
+    with characteristic polynomial
+    :math:`J s^3 + k_\Omega s^2 + (k_R + \Gamma) s + \Gamma c / J`. Routh's
+    condition :math:`k_\Omega (k_R + \Gamma) > J \cdot \Gamma c / J` has the
+    inertia cancel exactly, so the bound
+
+    .. math:: c < k_\Omega (k_R + \Gamma) / \Gamma
+
+    depends on the gains alone, not on the airframe.
+    """
+    kOmega, kR, Gamma = (np.asarray(x, dtype=float) for x in (kOmega, kR, Gamma))
+    return np.asarray(kOmega * (kR + Gamma) / Gamma, dtype=float)
 
 
 @dataclass
@@ -42,10 +70,18 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
         self._plant: AttitudeState = AttitudeState()
 
         # Adaptation gain Gamma (diagonal, per-axis)
-        self._Gamma: Vec3 = kwargs.get("Gamma", np.array([100.0, 100.0, 100.0]))
+        self._Gamma: Vec3 = np.asarray(kwargs.get("Gamma", [100.0, 100.0, 100.0]), dtype=float)
 
-        # Lyapunov constant c (positive scalar, Eq. 38)
-        self._c: float = kwargs.get("c", 1.0)
+        # Adaptation coupling c (Eq. 38), per body axis. ``None`` means derive it
+        # from the gains at every call — half the Routh bound — so it follows a
+        # gain change. Above the bound the predictor–adaptation loop is
+        # unstable. An explicit ``c`` is kept as given and checked against the
+        # bound.
+        c = kwargs.get("c")
+        self._c_explicit: Vec3 | None = (
+            None if c is None else np.broadcast_to(np.asarray(c, dtype=float), (3,)).copy()
+        )
+        self._c_checked_for: tuple | None = None
 
         # Projection bounds
         self._sigma_max: float = kwargs.get("sigma_max", 30.0)
@@ -59,6 +95,27 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
         self._sigma_hat_dot: Vec3 = np.zeros(3)
         self._sigma_filtered: Vec3 = np.zeros(3)
 
+        self.c  # noqa: B018 — checks an explicit c against the gains now, not on first use
+
+    @property
+    def c(self) -> Vec3:
+        """The per-axis adaptation coupling in use (see :func:`routh_bound`)."""
+        bound = routh_bound(self._gains.kp, self._gains.kd, self._Gamma)
+        if self._c_explicit is None:
+            return 0.5 * bound
+        key = (tuple(self._gains.kp), tuple(self._gains.kd), tuple(self._Gamma))
+        if key != self._c_checked_for:
+            self._c_checked_for = key
+            if np.any(self._c_explicit >= bound):
+                _logger.warning(
+                    "GeometricL1AttitudeController: c = %s violates the Routh stability "
+                    "bound c < k_Omega (k_R + Gamma) / Gamma = %s; the predictor-adaptation "
+                    "loop is unstable on those axes.",
+                    np.array2string(self._c_explicit, precision=4),
+                    np.array2string(bound, precision=4),
+                )
+        return self._c_explicit
+
     def reset(self) -> None:
         """Reset adaptation state for a new simulation."""
         self._initialized = False
@@ -69,7 +126,13 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
         self._sigma_filtered = np.zeros(3)
 
     def _projection(self, theta_hat: Vec3, y: Vec3) -> Vec3:
-        r"""Gamma-Projection operator (Eq. 42, Remark 5)."""
+        r"""Gamma-Projection operator (Lavretsky & Gibson, arXiv:1112.4232, Def. 11).
+
+        The denominator is :math:`\nabla f^\top\Gamma\nabla f`, as in that
+        definition (the paper's Eq. 42 prints :math:`\nabla f^\top\nabla f`).
+        In practice the hard clip in :meth:`compute` keeps :math:`\hat\sigma`
+        inside the ball, so this branch rarely fires.
+        """
         Gamma: np.ndarray = np.diag(self._Gamma)
         Gy: Vec3 = Gamma @ y
         grad_f: Vec3 = 2 * theta_hat / (self._eps_proj * self._sigma_max**2)
@@ -78,10 +141,10 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
         )
 
         if f > 0 and y @ Gamma @ grad_f > 0:
-            grad_norm_sq: float = np.dot(grad_f, grad_f)
-            if grad_norm_sq < 1e-10:
+            grad_weighted_sq: float = grad_f @ Gamma @ grad_f
+            if grad_weighted_sq < 1e-10:
                 return Gy
-            return Gy - (Gamma @ grad_f) * (grad_f @ Gy) / grad_norm_sq * f
+            return Gy - (Gamma @ grad_f) * (grad_f @ Gy) / grad_weighted_sq * f
         return Gy
 
     def compute(
@@ -97,7 +160,10 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
             t: current time.
             state: (R, Omega) — SO3 rotation and TSO3 angular velocity.
             thrust_force: desired thrust force vector in world frame.
-            desired_att: optional (Rd, Omegad, dOmegad) feedforward.
+            desired_att: optional (Rd, Omegad, dOmegad) feedforward. ``Rd``
+                contributes its heading only, exactly as in
+                :meth:`GeometricAttitudeController.compute`; ``b₃`` stays with
+                the thrust command so the position loop keeps its path in.
 
         Returns:
             (f, M) — scalar thrust and 3D torque vector.
@@ -107,8 +173,12 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
         J: np.ndarray = self.inertia
         Jinv: np.ndarray = self._inertia_inv
 
-        # Desired attitude
-        Rd: SO3 = self._cmd_accel_to_cmd_att(thrust_force)
+        # Desired attitude: b3 from the thrust command, heading from the
+        # reference attitude when there is one. See
+        # :meth:`GeometricAttitudeController._cmd_accel_to_cmd_att`.
+        Rd: SO3 = self._cmd_accel_to_cmd_att(
+            thrust_force, reference=None if desired_att is None else desired_att[0]
+        )
         Omegad: TSO3
         dOmegad: Vec3
         if desired_att is not None:
@@ -117,6 +187,11 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
             Omegad = TSO3()
             dOmegad = np.zeros(3)
 
+        if self._initialized and t < self._plant.last_t:
+            # Time ran backwards: a new run on a model that did not reset us.
+            # Carrying the predictor and σ̂ across would start the run from the
+            # previous one's end state.
+            self.reset()
         dt: float = t - self._plant.last_t
         if dt <= 0:
             dt = 1e-6
@@ -151,11 +226,12 @@ class GeometricL1AttitudeController(GeometricAttitudeController):
 
         # Adaptation law (Eq. 37-39)
         P: np.ndarray = J @ RmtR @ Jinv @ RtRm
-        y: Vec3 = -(P.T @ eOm_tilde.vector + self._c * P.T @ Jinv.T @ eR_tilde.vector)
+        y: Vec3 = -(P.T @ eOm_tilde.vector + P.T @ Jinv.T @ (self.c * eR_tilde.vector))
         self._sigma_hat_dot = self._projection(self._sigma_hat, y)
         self._sigma_hat += self._sigma_hat_dot * dt
-        # Hard clip as safety
-        sigma_norm: float = np.linalg.norm(self._sigma_hat)
+        # Hard clip: this, not the projection, is what bounds ||sigma_hat|| (the
+        # projection's band lies outside sigma_max, so it starts inside the ball).
+        sigma_norm: float = float(np.linalg.norm(self._sigma_hat))
         if sigma_norm > self._sigma_max:
             self._sigma_hat *= self._sigma_max / sigma_norm
 

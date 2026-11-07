@@ -220,7 +220,9 @@ class QuadrotorFleet(base.BaseModel):
             for i in range(self.nQ):
                 s = self.quadrotors[i].state
                 # Position control -> thrust force vector
-                F = self.quadrotors[i].position_controller.compute(self.t, (s.position, s.velocity))
+                F = self.quadrotors[i].position_controller.compute(
+                    self.t, (s.position, s.velocity, s.orientation)
+                )
                 # Attitude control -> scalar thrust + torque
                 f, M = self.quadrotors[i].attitude_controller.compute(
                     self.t, (s.orientation, s.angular_velocity), F

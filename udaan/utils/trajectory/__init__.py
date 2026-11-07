@@ -1,3 +1,4 @@
+from .figure8 import Figure8Trajectory as Figure8Trajectory
 from .flip import FlipTrajectory as FlipTrajectory
 from .flip import SpiralTrajectory as SpiralTrajectory
 from .trajectory import (
@@ -33,3 +34,5 @@ from .trajectory import (
 from .trajectory import (
     setpoint as setpoint,
 )
+from .waypoint import StepSetpoint as StepSetpoint
+from .waypoint import WaypointTrajectory as WaypointTrajectory

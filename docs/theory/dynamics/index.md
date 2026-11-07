@@ -1,0 +1,9 @@
+# Dynamics
+
+Equations of motion for each system modelled in `udaan`.
+
+```{toctree}
+:maxdepth: 1
+
+quadrotor
+```

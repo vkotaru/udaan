@@ -8,5 +8,7 @@ in `udaan`, grouped by topic.
 :caption: Theory
 
 preliminaries
+dynamics/index
 differential-flatness/index
+controllers/index
 ```

@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from udaan.core.defaults import DEFAULT_QUAD_INERTIA, DEFAULT_QUAD_MASS, GRAVITY
+from udaan.core.defaults import DEFAULT_M1_QUAD_INERTIA, DEFAULT_M1_QUAD_MASS, GRAVITY
 from udaan.flatness import Jet, Quadrotor, QuadrotorFlats
 from udaan.models.quadrotor.base import QuadrotorBase
 
@@ -46,9 +46,9 @@ def _circle_flats(
 
 class TestConstruction:
     def test_build_from_physical_params(self):
-        q = Quadrotor(mass=DEFAULT_QUAD_MASS, inertia=DEFAULT_QUAD_INERTIA)
-        assert q.mass == pytest.approx(DEFAULT_QUAD_MASS)
-        np.testing.assert_allclose(q.inertia, DEFAULT_QUAD_INERTIA)
+        q = Quadrotor(mass=DEFAULT_M1_QUAD_MASS, inertia=DEFAULT_M1_QUAD_INERTIA)
+        assert q.mass == pytest.approx(DEFAULT_M1_QUAD_MASS)
+        np.testing.assert_allclose(q.inertia, DEFAULT_M1_QUAD_INERTIA)
 
     def test_from_model_reads_model_params(self):
         model = QuadrotorBase()
@@ -105,7 +105,7 @@ class TestFlatsValidation:
 class TestHover:
     @pytest.fixture
     def quad(self):
-        return Quadrotor(mass=DEFAULT_QUAD_MASS, inertia=DEFAULT_QUAD_INERTIA)
+        return Quadrotor(mass=DEFAULT_M1_QUAD_MASS, inertia=DEFAULT_M1_QUAD_INERTIA)
 
     @pytest.fixture
     def ref_inputs(self, quad):
@@ -113,7 +113,7 @@ class TestHover:
 
     def test_hover_thrust_equals_weight(self, ref_inputs):
         _, inputs = ref_inputs
-        assert inputs.thrust == pytest.approx(DEFAULT_QUAD_MASS * GRAVITY, abs=1e-10)
+        assert inputs.thrust == pytest.approx(DEFAULT_M1_QUAD_MASS * GRAVITY, abs=1e-10)
 
     def test_hover_moment_is_zero(self, ref_inputs):
         _, inputs = ref_inputs
@@ -137,7 +137,7 @@ class TestHover:
 class TestConstantAccel:
     @pytest.fixture
     def quad(self):
-        return Quadrotor(mass=DEFAULT_QUAD_MASS, inertia=DEFAULT_QUAD_INERTIA)
+        return Quadrotor(mass=DEFAULT_M1_QUAD_MASS, inertia=DEFAULT_M1_QUAD_INERTIA)
 
     @pytest.fixture
     def ref_inputs(self, quad):
@@ -149,10 +149,10 @@ class TestConstantAccel:
 
     def test_thrust_matches_m_sqrt_g2_plus_ax2(self, ref_inputs):
         _, inputs = ref_inputs
-        expected = DEFAULT_QUAD_MASS * np.sqrt(GRAVITY**2 + 1.0**2)
+        expected = DEFAULT_M1_QUAD_MASS * np.sqrt(GRAVITY**2 + 1.0**2)
         assert inputs.thrust == pytest.approx(expected, abs=1e-10)
         # And it should be strictly larger than hover thrust.
-        assert inputs.thrust > DEFAULT_QUAD_MASS * GRAVITY
+        assert inputs.thrust > DEFAULT_M1_QUAD_MASS * GRAVITY
 
     def test_body_z_tilted_forward(self, ref_inputs):
         ref, _ = ref_inputs
@@ -172,7 +172,7 @@ class TestConstantAccel:
 class TestPureYawRate:
     @pytest.fixture
     def quad(self):
-        return Quadrotor(mass=DEFAULT_QUAD_MASS, inertia=DEFAULT_QUAD_INERTIA)
+        return Quadrotor(mass=DEFAULT_M1_QUAD_MASS, inertia=DEFAULT_M1_QUAD_INERTIA)
 
     @pytest.fixture
     def ref_inputs(self, quad):
@@ -202,7 +202,7 @@ class TestYawWithAcceleration:
 
     @pytest.fixture
     def quad(self):
-        return Quadrotor(mass=DEFAULT_QUAD_MASS, inertia=DEFAULT_QUAD_INERTIA)
+        return Quadrotor(mass=DEFAULT_M1_QUAD_MASS, inertia=DEFAULT_M1_QUAD_INERTIA)
 
     @pytest.fixture
     def ref_inputs(self, quad):
@@ -232,7 +232,7 @@ class TestYawWithAcceleration:
         # inertia is diagonal). Off-axis components must vanish.
         np.testing.assert_allclose(inputs.moment[:2], np.zeros(2), atol=1e-10)
         # The e3 component is J_zz · ψ̈ (no Coriolis contribution here).
-        Jzz = DEFAULT_QUAD_INERTIA[2, 2]
+        Jzz = DEFAULT_M1_QUAD_INERTIA[2, 2]
         assert inputs.moment[2] == pytest.approx(Jzz * 0.3, abs=1e-10)
 
 
@@ -246,7 +246,7 @@ class TestRoundTrip:
 
     @pytest.fixture
     def quad(self):
-        return Quadrotor(mass=DEFAULT_QUAD_MASS, inertia=DEFAULT_QUAD_INERTIA)
+        return Quadrotor(mass=DEFAULT_M1_QUAD_MASS, inertia=DEFAULT_M1_QUAD_INERTIA)
 
     @pytest.fixture
     def model(self):

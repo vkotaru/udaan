@@ -165,6 +165,16 @@ not uniquely defined. The implementation in
 {py:class}`udaan.flatness.Quadrotor` raises an error at this
 configuration; the regular region for the flatness map is the open
 subset of jet space on which $b_3 \times b_{1,d} \neq 0$.
+
+A pitch loop crosses this set: with $\psi = 0$, $b_3 = (\sin\theta, 0,
+\cos\theta)$ passes through $e_1$, and $b_2 = \operatorname{sign}(\cos\theta)\,
+e_2$ flips, turning $R$ by $180°$ about $b_3$ for the whole inverted half.
+{py:class}`~udaan.utils.trajectory.FlipTrajectory` therefore supplies its own
+reference attitude during the flip phase — the rotation about the fixed pitch
+axis, $R = \exp(\theta\,\hat e_2)$, $\Omega = \dot\theta\, e_2$,
+$\dot\Omega = \ddot\theta\, e_2$, which has the same $b_3$ and agrees with
+the map while upright — and `QuadrotorBase.simulate()` prefers it there
+(`reference_attitude(t)`, `None` outside the flip).
 :::
 
 Using $b_1 = b_2 \times b_3$ rather than a second direct projection

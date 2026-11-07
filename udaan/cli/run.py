@@ -10,6 +10,32 @@ run_app = typer.Typer(help="Run a simulation.", context_settings=_ctx)
 _record_option = typer.Option(None, "--record", "-r", help="Save recording to file (.gif or .mp4).")
 
 
+#: The backends ``udaan run quadrotor --model`` offers.  ``vfx`` is deliberately
+#: absent even though :class:`~udaan.models.quadrotor.QuadrotorVfx` exists and is
+#: importable: driven from the CLI, it blocks inside VPython and does not return,
+#: ``--no-render`` included, because the VPython backend opens its
+#: browser-served scene at construction rather than at render time.  Advertising
+#: a hanging option is worse than not offering it, so the command refuses
+#: ``-m vfx`` by name.
+_CLI_MODELS = ("base", "mujoco")
+
+
+def _check_model(model: str, allowed: tuple[str, ...]) -> None:
+    """Reject an unrecognised ``--model`` instead of silently picking a backend.
+
+    The routing block it guards is a chain of ``if``/``elif`` with a final
+    ``else``, so without this guard a typo lands on whichever backend sits in
+    the ``else``, and the run reports a backend the caller never asked for.
+    """
+    if model not in allowed:
+        typer.secho(
+            f"Unknown model '{model}'. Expected one of: {', '.join(allowed)}.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
 def _hold_viewer(mdl):
     """Keep MuJoCo viewer open after simulation if it has one."""
     if hasattr(mdl, "_mjMdl") and mdl._mjMdl is not None:
@@ -26,24 +52,40 @@ def _setup_recording(mdl, record_path):
         mj._viewer._frames = []
 
 
+#: ``udaan run quadrotor --traj`` choices.
+_QUADROTOR_TRAJECTORIES = (
+    "hover",
+    "step",
+    "mission",
+    "flip",
+    "spiral",
+    "circle",
+    "lissajous",
+    "figure8",
+)
+
+
 @run_app.command("quadrotor")
 def quadrotor(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
-    model: str = typer.Option(
-        "mujoco", "--model", "-m", help="Quadrotor model: base, vfx, or mujoco."
-    ),
+    model: str = typer.Option("mujoco", "--model", "-m", help="Quadrotor model: base or mujoco."),
     trajectory: str = typer.Option(
         "hover",
         "--trajectory",
         "--traj",
-        help="Trajectory: hover, flip, spiral, circle, lissajous.",
+        help="Trajectory: hover, step, mission, flip, spiral, circle, lissajous, figure8.",
     ),
     trail: bool = typer.Option(True, "--trail/--no-trail", help="Show trajectory trail."),
     verbose: int = typer.Option(0, "--verbose", "-v", help="Verbosity level (0-2)."),
     record: str | None = _record_option,
     position: str | None = typer.Option(
-        None, "--position", "-p", help="Initial position as 'x,y,z'."
+        None,
+        "--position",
+        "-p",
+        help="Initial position as 'x,y,z' (the circle's and figure-8's centre, the "
+        "mission's take-off point; default 1,1,0 for hover/lissajous/mission, 1,1,2 "
+        "otherwise).",
     ),
 ):
     """Simulate a quadrotor with geometric SE(3) control."""
@@ -58,51 +100,103 @@ def quadrotor(
 
     from . import parse_vec
 
-    x0 = parse_vec(position, default=np.array([1.0, 1.0, 0.0]))
+    _check_model(model, _CLI_MODELS)
+    if trajectory not in _QUADROTOR_TRAJECTORIES:
+        typer.secho(
+            f"Unknown trajectory '{trajectory}'. "
+            f"Expected one of: {', '.join(_QUADROTOR_TRAJECTORIES)}.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
 
+    # Hover and the mission take off from the ground. The step, circle, spiral,
+    # flip and figure-8 are flown *at* `x0` (the circle's and figure-8's centre,
+    # the others' start), so their default sits 2 m up, clear of the floor. An
+    # explicit `-p` is taken as given.
+    on_ground = trajectory in ("hover", "lissajous", "mission")
+    default_start = [1.0, 1.0, 0.0] if on_ground else [1.0, 1.0, 2.0]
+    x0 = parse_vec(position, default=np.array(default_start))
+
+    mdl: QuadrotorBase
     if model == "mujoco":
         from udaan.models.quadrotor import QuadrotorMujoco
 
         mdl = QuadrotorMujoco(render=render, verbose=verbose)
-    elif model == "vfx":
-        from udaan.models.quadrotor import QuadrotorVfx
-
-        mdl = QuadrotorVfx(render=render, verbose=verbose)
     else:
         mdl = QuadrotorBase(verbose=verbose)
 
-    # Set trajectory
+    # Set trajectory.  Each branch binds its own name: the four classes share
+    # only `Trajectory`, and `duration` lives on two of them, so a single
+    # `traj` would be typed as the base and lose it. Each also starts the
+    # vehicle on its own reference, so the run opens on the manoeuvre rather
+    # than on a jump to it.
     if trajectory == "flip":
         from udaan.utils.trajectory import FlipTrajectory
 
-        traj = FlipTrajectory(start=x0)
-        mdl._pos_controller.setpoint = traj.get
-        time = traj.duration
+        flip = FlipTrajectory(start=x0)
+        mdl._pos_controller.setpoint = flip.get
+        time = flip.duration
+        x0 = flip.get(0.0)[0]
     elif trajectory == "spiral":
         from udaan.utils.trajectory import SpiralTrajectory
 
-        traj = SpiralTrajectory(start=x0)
-        mdl._pos_controller.setpoint = traj.get
-        time = traj.duration
+        spiral = SpiralTrajectory(start=x0)
+        mdl._pos_controller.setpoint = spiral.get
+        time = spiral.duration
+        x0 = spiral.get(0.0)[0]
     elif trajectory == "circle":
         from udaan.utils.trajectory import CircularTraj
 
-        traj = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time)
-        mdl._pos_controller.setpoint = traj.get
+        circle = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time)
+        mdl._pos_controller.setpoint = circle.get
+        x0 = circle.get(0.0)[0]
     elif trajectory == "lissajous":
         from udaan.utils.trajectory import CrazyTrajectory
 
         # Lift the trajectory center so the z-oscillation (±1.5 m) stays above ground.
         center = x0 + np.array([0.0, 0.0, 2.0])
-        traj = CrazyTrajectory(tf=time, center=center)
-        mdl._pos_controller.setpoint = traj.get
-        x0 = traj.get(0.0)[0]
+        lissajous = CrazyTrajectory(tf=time, center=center)
+        mdl._pos_controller.setpoint = lissajous.get
+        x0 = lissajous.get(0.0)[0]
+    elif trajectory == "step":
+        from udaan.utils.trajectory import StepSetpoint
+
+        # Hold x0, then a true step of (1, 1, 0.5) m at t = 2 s (no feedforward).
+        step = StepSetpoint(x0, x0 + np.array([1.0, 1.0, 0.5]), step_time=2.0)
+        mdl._pos_controller.setpoint = step.get
+    elif trajectory == "mission":
+        from udaan.utils.trajectory import WaypointTrajectory
+
+        # Take off from x0, five waypoints (stopping at each), land back on x0.
+        offsets = [
+            (0, 0, 0),
+            (0, 0, 1.5),
+            (2, 0, 1.5),
+            (2, 2, 2.5),
+            (0, 2, 1.5),
+            (0, 0, 1.5),
+            (0, 0, 0),
+        ]
+        mission = WaypointTrajectory([x0 + np.array(o, dtype=float) for o in offsets])
+        mdl._pos_controller.setpoint = mission.get
+        time = mission.duration
+    elif trajectory == "figure8":
+        from udaan.utils.trajectory import Figure8Trajectory
+
+        # Two figure-8s about x0 with the heading swinging ±90°.
+        figure8 = Figure8Trajectory(center=x0)
+        mdl._pos_controller.setpoint = figure8.get
+        mdl.yaw_setpoint = figure8.yaw
+        time = figure8.duration
+        x0 = figure8.get(0.0)[0]
     else:
         # Hover: default setpoint is [0,0,1], start from x0
         pass
 
-    if hasattr(mdl, "_mjMdl") and mdl._mjMdl._viewer is not None:
-        mdl._mjMdl._viewer.show_trails = trail
+    mj = getattr(mdl, "_mjMdl", None)
+    if mj is not None and mj._viewer is not None:
+        mj._viewer.show_trails = trail
     _setup_recording(mdl, record)
     typer.echo(f"Running quadrotor ({model}, {trajectory}) for {time:.1f}s ...")
     mdl.simulate(tf=time, position=x0)

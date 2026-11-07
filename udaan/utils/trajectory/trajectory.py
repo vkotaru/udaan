@@ -22,9 +22,13 @@ class SmoothTraj(Trajectory):
         self._x0 = x0
         self._xf = xf
         self._tf = tf
-        self._pos_params = []
-        self._vel_params = []
-        self._acc_params = []
+        # Placeholders of the right kind, immediately superseded by the
+        # compute_traj_params() call below; every concrete subclass replaces all
+        # three with a (n_basis, 3) coefficient array. (SmoothSineTraj overrides
+        # get() and never reads them.)
+        self._pos_params: np.ndarray = np.empty((0, 3))
+        self._vel_params: np.ndarray = np.empty((0, 3))
+        self._acc_params: np.ndarray = np.empty((0, 3))
 
         self._t = lambda s: np.array([1.0, s, s**2, s**3, s**4, s**5])
 
@@ -40,12 +44,22 @@ class SmoothTraj(Trajectory):
             warnings.warn("cannot have t < 0")
             return self._x0, np.zeros(3), np.zeros(3)
         else:
-            s = t / self._tf
-            return (
-                (np.array([self._t(s)]) @ self._pos_params)[0],
-                (np.array([self._t(s)]) @ self._vel_params)[0],
-                (np.array([self._t(s)]) @ self._acc_params)[0],
-            )
+            return self._evaluate(t)
+
+    def _evaluate(self, t):
+        """Position, velocity and acceleration at ``0 < t < t_f``.
+
+        The coefficient arrays are polynomials in normalised time ``s = t/t_f``,
+        so the rows they produce are ``d/ds`` and ``d²/ds²``. The chain rule
+        turns those into time derivatives: ``d/dt = (1/t_f) d/ds``.
+        """
+        s = t / self._tf
+        basis = np.array([self._t(s)])
+        return (
+            (basis @ self._pos_params)[0],
+            (basis @ self._vel_params)[0] / self._tf,
+            (basis @ self._acc_params)[0] / self._tf**2,
+        )
 
 
 class SmoothTraj5(SmoothTraj):
@@ -160,33 +174,45 @@ class PolyTraj5(SmoothTraj):
         elif t <= 0:
             return self._x0, self._v0, self._a0
         else:
-            s = t / self._tf
-            return (
-                (np.array([self._t(s)]) @ self._pos_params)[0],
-                (np.array([self._t(s)]) @ self._vel_params)[0],
-                (np.array([self._t(s)]) @ self._acc_params)[0],
-            )
+            return self._evaluate(t)
+
+    def get_full(self, t):
+        """Position through snap, ``(p, v, a, j, s)``, all in time units.
+
+        The same quintic as :meth:`get`, differentiated twice more. Jerk and
+        snap are what the flatness feedforward needs; a caller that pads them
+        with zeros feeds the attitude loop a body-rate reference that is not
+        the derivative of its attitude reference.
+        """
+        if t >= self._tf:
+            return self._xf, self._vf, self._af, np.zeros(3), np.zeros(3)
+        if t <= 0:
+            return self._x0, self._v0, self._a0, np.zeros(3), np.zeros(3)
+        p, v, a = self._evaluate(t)
+        s = t / self._tf
+        # pos = Σ c_k s^k, so d³/ds³ and d⁴/ds⁴ have closed-form coefficients.
+        c = self._pos_params
+        jerk_s = 6 * c[3] + 24 * c[4] * s + 60 * c[5] * s**2
+        snap_s = 24 * c[4] + 120 * c[5] * s
+        return p, v, a, jerk_s / self._tf**3, snap_s / self._tf**4
 
     def compute_traj_params(self):
+        # The polynomial lives in normalised time s = t/t_f, so the boundary
+        # derivatives have to be expressed per unit s first: dx/ds = t_f dx/dt,
+        # d²x/ds² = t_f² d²x/dt².
+        tf = self._tf
+        v0, vf = self._v0 * tf, self._vf * tf
+        a0, af = self._a0 * tf**2, self._af * tf**2
         a3 = np.zeros(3)
         a4 = np.zeros(3)
         a5 = np.zeros(3)
         for i in range(3):
-            p = self.solve_params(
-                self._x0[i],
-                self._v0[i],
-                self._a0[i],
-                self._xf[i],
-                self._vf[i],
-                self._af[i],
-            )
+            p = self.solve_params(self._x0[i], v0[i], a0[i], self._xf[i], vf[i], af[i])
             a3[i], a4[i], a5[i] = p[0][0], p[1][0], p[2][0]
 
-        self._pos_params = np.array([self._x0, self._v0, 0.5 * self._a0, a3, a4, a5])
-        self._vel_params = np.array([self._v0, self._a0, 3.0 * a3, 4.0 * a4, 5.0 * a5, np.zeros(3)])
-        self._acc_params = np.array(
-            [self._a0, 6.0 * a3, 12.0 * a4, 20.0 * a5, np.zeros(3), np.zeros(3)]
-        )
+        self._pos_params = np.array([self._x0, v0, 0.5 * a0, a3, a4, a5])
+        self._vel_params = np.array([v0, a0, 3.0 * a3, 4.0 * a4, 5.0 * a5, np.zeros(3)])
+        self._acc_params = np.array([a0, 6.0 * a3, 12.0 * a4, 20.0 * a5, np.zeros(3), np.zeros(3)])
 
 
 class CircularTraj(Trajectory):
@@ -297,6 +323,49 @@ class CrazyTrajectory(Trajectory):
         d3x = np.array([-self.ax * s1 * w1**3, -self.ay * c2 * w2**3, self.az * s3 * w3**3])
         d4x = np.array([-self.ax * c1 * w1**4, self.ay * s2 * w2**4, self.az * c3 * w3**4])
         return x, dx, d2x, d3x, d4x
+
+    def get_jet(self, t, order):
+        """Return the position jet ``(order + 1, 3)``, every row in closed form.
+
+        The deeper protocol ``get_full`` cannot serve. A flatness map whose jet
+        depth is fixed — M1's snap, M3's and M4's order 6 — can be fed from
+        ``get_full`` with a couple of zero rows and lose only the tail of the
+        moment feedforward. M5's is not fixed: an ``n``-link chain needs the
+        payload position through its ``2n + 4``-th derivative
+        (:func:`udaan.flatness.chain.chain_jet_order`), which is 10 at the
+        default three links and 14 at five, so *most* of the jet would be
+        fabricated. This trajectory is a sum of sinusoids, so every derivative
+        is a phase shift and there is nothing to fabricate:
+
+        .. math::
+
+            \\frac{d^k}{dt^k}\\cos(\\omega t + \\varphi)
+                = \\omega^k \\cos(\\omega t + \\varphi + k\\pi/2).
+
+        Args:
+            t: time.
+            order: highest derivative required; row ``k`` is the ``k``-th.
+
+        Returns:
+            ``(order + 1, 3)`` array, unscaled by factorials — the
+            :class:`~udaan.flatness.Jet` convention.
+        """
+        if order < 0:
+            raise ValueError(f"order must be >= 0, got {order}")
+        omega = 2 * np.pi * np.array([self.f1, self.f2, self.f3])
+        phase = np.array([self.phix, self.phiy, self.phiz])
+        amplitude = np.array([self.ax, self.ay, self.az])
+        # x = c + [a1 (1 - cos θ1), a2 sin θ2, a3 cos θ3]; the constant part of
+        # the first component belongs to row 0 only.
+        theta = omega * t + phase
+        jet = np.zeros((order + 1, 3))
+        for k in range(order + 1):
+            shifted = theta + 0.5 * np.pi * k
+            jet[k, 0] = -amplitude[0] * omega[0] ** k * np.cos(shifted[0])
+            jet[k, 1] = amplitude[1] * omega[1] ** k * np.sin(shifted[1])
+            jet[k, 2] = amplitude[2] * omega[2] ** k * np.cos(shifted[2])
+        jet[0] += self._center + np.array([self.ax, 0.0, 0.0])
+        return jet
 
 
 def setpoint(t, sp=np.array([0.0, 0.0, 1.0])):
