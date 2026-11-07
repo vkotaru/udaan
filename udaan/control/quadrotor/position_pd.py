@@ -13,8 +13,12 @@ class PositionPDController(PDController):
         super().__init__(**kwargs)
         self.mass = 1.0 if "mass" not in kwargs else kwargs["mass"]
 
-        self._gains.kp = DEFAULT_POS_KP.copy()
-        self._gains.kd = DEFAULT_POS_KD.copy()
+        # Defaults only where the caller gave none: PDController has already
+        # installed any `kp`/`kd` kwargs, which must not be overwritten.
+        if "kp" not in kwargs:
+            self._gains.kp = DEFAULT_POS_KP.copy()
+        if "kd" not in kwargs:
+            self._gains.kd = DEFAULT_POS_KD.copy()
 
         self.pos_setpoint = np.array([0.0, 0.0, 0.0])
 

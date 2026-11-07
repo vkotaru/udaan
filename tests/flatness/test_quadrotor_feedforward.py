@@ -22,7 +22,7 @@ import pytest
 from scipy.integrate import solve_ivp
 from scipy.spatial.transform import Rotation as _ScipyRot
 
-from udaan.core.defaults import DEFAULT_QUAD_INERTIA, DEFAULT_QUAD_MASS, GRAVITY
+from udaan.core.defaults import DEFAULT_M1_QUAD_INERTIA, DEFAULT_M1_QUAD_MASS, GRAVITY
 from udaan.flatness import Jet, Quadrotor, QuadrotorFlats
 from udaan.manif import SO3
 from udaan.models.quadrotor import QuadrotorBase
@@ -61,7 +61,7 @@ def circle_flats(t: float, r: float = 1.0, omega: float = 1.0, z0: float = 1.0) 
 
 
 def _f2s_default() -> Quadrotor:
-    return Quadrotor(mass=DEFAULT_QUAD_MASS, inertia=DEFAULT_QUAD_INERTIA)
+    return Quadrotor(mass=DEFAULT_M1_QUAD_MASS, inertia=DEFAULT_M1_QUAD_INERTIA)
 
 
 def _seed_model(model: QuadrotorBase, ref) -> None:
@@ -181,8 +181,8 @@ def _run_high_order(flats_of_t, tf: float = TF) -> tuple:
     integrator error to round-off, isolating any flat-to-state formula
     error in the residual."""
     f2s = _f2s_default()
-    m = DEFAULT_QUAD_MASS
-    J = np.asarray(DEFAULT_QUAD_INERTIA, dtype=float)
+    m = DEFAULT_M1_QUAD_MASS
+    J = np.asarray(DEFAULT_M1_QUAD_INERTIA, dtype=float)
     J_inv = np.linalg.inv(J)
 
     # Seed from reference at t=0

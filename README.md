@@ -61,13 +61,15 @@ pip install -e ".[all]"
 # Quadrotor with geometric SE(3) control
 udaan run quadrotor                                    # MuJoCo (default)
 udaan run quadrotor -m base                            # pure dynamics (no viz)
-udaan run quadrotor -m vfx                             # VPython visualization
 
 # Trajectory tracking
 udaan run quadrotor --traj hover -p 1,1,0              # hover (default)
 udaan run quadrotor --traj spiral -p 0,0,2             # helical spiral
 udaan run quadrotor --traj lissajous -p 0,0,2          # 3D Lissajous
 udaan run quadrotor --traj circle -p 0,0,1             # circular
+udaan run quadrotor --traj step                        # setpoint step (no feedforward)
+udaan run quadrotor --traj mission                     # take off, waypoints, land
+udaan run quadrotor --traj figure8                     # figure-8 with yaw
 
 # Cable-suspended payload
 udaan run quad-payload -t 10 -c tendon                 # spatial tendon cable

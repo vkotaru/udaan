@@ -5,6 +5,7 @@ from .geometric_l1_attitude import GeometricL1AttitudeController as GeometricL1A
 from .position_l1 import PositionL1Controller as PositionL1Controller
 from .position_pd import PositionPDController as PositionPDController
 from .propeller_allocation import DirectPropellerForceController as DirectPropellerForceController
+from .propeller_allocation import quadrotor_allocation_matrix as quadrotor_allocation_matrix
 
 __all__ = [
     "PositionPDController",
@@ -12,4 +13,5 @@ __all__ = [
     "DirectPropellerForceController",
     "PositionL1Controller",
     "GeometricL1AttitudeController",
+    "quadrotor_allocation_matrix",
 ]

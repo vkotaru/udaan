@@ -1,6 +1,10 @@
 <mujoco model="Quadrotor">
   <include file="scene.xml"/>
   <compiler angle="degree" coordinate="local" inertiafromgeom="false"/>
+  <!-- QuadrotorMujoco overwrites this timestep with dt / N, N = physics_rate_hz · dt,
+       so it does not set that model's clock. 1.25 ms (800 Hz at a 5 ms dt) applies
+       only to anything that loads this file directly. -->
+  <option timestep="0.00125"/>
 
   <worldbody>
     <body name="quadrotor" pos="0.0 0.0 2.0" quat="1 0 0 0">
@@ -20,18 +24,18 @@
         quat="-0.92388 0 0 0.382683" size="0.2 0.01 0.01" mass="0.01" rgba="0.4 0.4 0.45 1"/>
       <!-- Propellers -->
       <geom name="quadrotor_rotor_prop_geom_0" type="cylinder" size="0.1 0.005"
-        pos="0.14142 0.14142 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
+        pos="0.1414213562 0.1414213562 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
       <geom name="quadrotor_rotor_prop_geom_1" type="cylinder" size="0.1 0.005"
-        pos="-0.14142 0.14142 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
+        pos="-0.1414213562 0.1414213562 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
       <geom name="quadrotor_rotor_prop_geom_2" type="cylinder" size="0.1 0.005"
-        pos="-0.14142 -0.14142 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
+        pos="-0.1414213562 -0.1414213562 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
       <geom name="quadrotor_rotor_prop_geom_3" type="cylinder" size="0.1 0.005"
-        pos="0.14142 -0.14142 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
+        pos="0.1414213562 -0.1414213562 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
       <!-- Actuator sites (invisible) -->
-      <site name="site0" pos="0.14142 0.14142 0" size="0.005" rgba="0 0 0 0"/>
-      <site name="site1" pos="-0.14142 0.14142 0" size="0.005" rgba="0 0 0 0"/>
-      <site name="site2" pos="-0.14142 -0.14142 0" size="0.005" rgba="0 0 0 0"/>
-      <site name="site3" pos="0.14142 -0.14142 0" size="0.005" rgba="0 0 0 0"/>
+      <site name="site0" pos="0.1414213562 0.1414213562 0" size="0.005" rgba="0 0 0 0"/>
+      <site name="site1" pos="-0.1414213562 0.1414213562 0" size="0.005" rgba="0 0 0 0"/>
+      <site name="site2" pos="-0.1414213562 -0.1414213562 0" size="0.005" rgba="0 0 0 0"/>
+      <site name="site3" pos="0.1414213562 -0.1414213562 0" size="0.005" rgba="0 0 0 0"/>
       <site name="quadrotor_thrust" pos="0 0 0" size="0.005" rgba="0 0 0 0"/>
       <site name="quadrotor_Mx" pos="0 0 0" size="0.005" rgba="0 0 0 0"/>
       <site name="quadrotor_My" pos="0 0 0" size="0.005" rgba="0 0 0 0"/>
@@ -40,13 +44,16 @@
   </worldbody>
 
   <actuator>
-    <motor ctrllimited="true" site="site0" ctrlrange="0 10" gear="0 0 1 0 0 -0.025"/>
-    <motor ctrllimited="true" site="site1" ctrlrange="0 10" gear="0 0 1 0 0  0.025"/>
-    <motor ctrllimited="true" site="site2" ctrlrange="0 10" gear="0 0 1 0 0 -0.025"/>
-    <motor ctrllimited="true" site="site3" ctrlrange="0 10" gear="0 0 1 0 0  0.025"/>
-    <motor ctrllimited="true" site="quadrotor_thrust" ctrlrange="0 40" gear="0 0 1 0 0 0"/>
-    <motor ctrllimited="true" site="quadrotor_Mx" ctrlrange="-3 3" gear="0 0 0 1 0 0"/>
-    <motor ctrllimited="true" site="quadrotor_My" ctrlrange="-3 3" gear="0 0 0 0 1 0"/>
-    <motor ctrllimited="true" site="quadrotor_Mz" ctrlrange="-3 3" gear="0 0 0 0 0 1"/>
+    <motor ctrllimited="true" site="site0" ctrlrange="0 10" gear="0 0 1 0 0 -0.0249945776"/>
+    <motor ctrllimited="true" site="site1" ctrlrange="0 10" gear="0 0 1 0 0  0.0249945776"/>
+    <motor ctrllimited="true" site="site2" ctrlrange="0 10" gear="0 0 1 0 0 -0.0249945776"/>
+    <motor ctrllimited="true" site="site3" ctrlrange="0 10" gear="0 0 1 0 0  0.0249945776"/>
+    <!-- Wrench ranges equal udaan.core.defaults DEFAULT_{MIN,MAX}_{THRUST,TORQUE},
+         which the model clips to first; tests/test_quadrotor_mujoco.py checks they
+         agree. A narrower range here would silently re-clip the model's command. -->
+    <motor ctrllimited="true" site="quadrotor_thrust" ctrlrange="0 20" gear="0 0 1 0 0 0"/>
+    <motor ctrllimited="true" site="quadrotor_Mx" ctrlrange="-5 5" gear="0 0 0 1 0 0"/>
+    <motor ctrllimited="true" site="quadrotor_My" ctrlrange="-5 5" gear="0 0 0 0 1 0"/>
+    <motor ctrllimited="true" site="quadrotor_Mz" ctrlrange="-2 2" gear="0 0 0 0 0 1"/>
   </actuator>
 </mujoco>

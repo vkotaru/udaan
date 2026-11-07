@@ -52,9 +52,6 @@ dependencies = [
 mujoco = [
     "mujoco>=3.0",
 ]
-l1 = [
-    "control>=0.9",
-]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
@@ -79,7 +76,7 @@ rl = [
 plot = [
     "bokeh>=3.0",
 ]
-all = ["udaan[mujoco,l1,dev,docs,rl,plot]"]
+all = ["udaan[mujoco,dev,docs,rl,plot]"]
 
 [project.scripts]
 udaan = "udaan.cli:app"
