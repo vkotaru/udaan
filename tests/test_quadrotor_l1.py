@@ -373,7 +373,7 @@ def test_simulate_hands_the_orientation_to_the_predictor():
 
 @pytest.mark.mujoco
 def test_fleet_hands_the_orientation_to_its_position_controllers():
-    from udaan.models.mujoco import QuadrotorFleet
+    from udaan.models.fleet import QuadrotorFleet
 
     fleet = QuadrotorFleet(num_quadrotors=2, render=False)
     seen = []

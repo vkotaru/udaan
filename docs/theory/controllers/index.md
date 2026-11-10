@@ -7,5 +7,9 @@ arguments behind them.
 :maxdepth: 1
 
 quadrotor-se3
+quadrotor-payload
+multi-quad-payload
+quadrotor-flexcable
+multi-quad-hose
 geometric-l1
 ```

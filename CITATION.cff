@@ -1,9 +1,34 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
+type: software
 authors:
   - family-names: Kotaru
     given-names: Prasanth
-title: "Udaan: A Python mujoco based models and controllers for quadcopter cable-suspended payload systems."
-url: https://github.com/vkotaru/udaan
-version: v1.0.0
-date-released: 2025-04-07
+title: "Udaan: quadrotor dynamics and control for cable-suspended payload systems"
+abstract: >-
+  A Python package of MuJoCo-backed models and geometric controllers for
+  quadrotors carrying cable-suspended payloads, covering six systems: a single
+  quadrotor, a quadrotor with a cable-suspended point-mass payload, multiple
+  quadrotors sharing a point-mass payload, multiple quadrotors sharing a
+  rigid-body payload, a quadrotor with a flexible multi-link cable, and multiple
+  quadrotors attached in series along a flexible hose. Each system ships with
+  analytical dynamics, a MuJoCo backend, a controller and a differential-flatness
+  flat-to-state map.
+# `version` tracks udaan/__init__.py and pyproject.toml. `date-released` is
+# added when the matching tag is cut — v2.0.0 is unreleased (see CHANGELOG.md),
+# so there is no release date to state yet.
+version: 2.0.0
+license: BSD-3-Clause
+url: https://udaan.readthedocs.io
+repository-code: https://github.com/vkotaru/udaan
+repository-artifact: https://pypi.org/project/udaan/
+keywords:
+  - robotics
+  - quadrotor
+  - control
+  - mujoco
+  - simulation
+  - geometric-control
+  - differential-flatness
+  - cable-suspended-payload
+  - aerial-manipulation

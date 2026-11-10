@@ -1,5 +1,7 @@
 """Quadrotor with cable-suspended payload — Bokeh plotting and history capture."""
 
+from typing import Any
+
 import numpy as np
 from bokeh.layouts import gridplot
 from bokeh.plotting import figure
@@ -18,7 +20,7 @@ def record_quadrotor_cspayload_state(mdl, tf, target):
     """
     from ...manif import Rot2Eul
 
-    h = {
+    h: dict[str, list[float]] = {
         "t": [],
         "x": [],
         "y": [],
@@ -73,7 +75,7 @@ def record_quadrotor_cspayload_state(mdl, tf, target):
         h["wx"].append(float(mdl.state.angular_velocity[0]))
         h["wy"].append(float(mdl.state.angular_velocity[1]))
         h["wz"].append(float(mdl.state.angular_velocity[2]))
-        h["payload_err"].append(np.linalg.norm(mdl.state.payload_position - target))
+        h["payload_err"].append(float(np.linalg.norm(mdl.state.payload_position - target)))
 
         u = mdl._payload_controller.compute(mdl.t, mdl.state)
         wrench = mdl._repackage_input(u)
@@ -90,7 +92,7 @@ def record_quadrotor_cspayload_state(mdl, tf, target):
 def plot_quadrotor_cspayload_simulation(history, target=None):
     """Create a Bokeh grid of time-series plots for cspayload simulation history."""
     t = history["t"]
-    plots = []
+    plots: list[Any] = []
 
     def _fig(title, ylabel):
         return figure(

@@ -1,9 +1,12 @@
 """Fleet demo presets.
 
 Each demo has:
-- config(): returns {"num_quadrotors": N, "disturbances": {...}}
-- configure(fleet): sets up controllers on the fleet
+
+- ``config()``: returns ``{"num_quadrotors": N, "disturbances": {...}}``
+- ``configure(fleet)``: sets up controllers on the fleet
 """
+
+from typing import Any
 
 import numpy as np
 
@@ -65,7 +68,7 @@ def _gain_sweep_configure(fleet):
         fleet._labels[i] = f"PD ({label})"
 
 
-DEMOS = {
+DEMOS: dict[str, dict[str, Any]] = {
     "l1-comparison": {
         "config": _l1_comparison_config,
         "configure": _l1_comparison_configure,
@@ -157,7 +160,7 @@ def _cspayload_gain_sweep_configure(fleet, same_start=False):
     return starts
 
 
-CSPAYLOAD_DEMOS = {
+CSPAYLOAD_DEMOS: dict[str, dict[str, Any]] = {
     "same-gains": {
         "config": _cspayload_same_gains_config,
         "configure": _cspayload_same_gains_configure,

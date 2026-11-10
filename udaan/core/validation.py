@@ -8,7 +8,7 @@ a ``LinAlgError`` from ``np.linalg.solve`` or a ``nan`` behind a
 ``RuntimeWarning``. The guard belongs at assignment, where the caller can still
 see which parameter was wrong.
 
-This module is the single implementation of that guard.
+This module is the single implementation, shared by every model.
 """
 
 from __future__ import annotations

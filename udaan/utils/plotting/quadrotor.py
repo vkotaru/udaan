@@ -1,5 +1,7 @@
 """Quadrotor simulation plotting — Bokeh interactive time-series."""
 
+from typing import Any
+
 import numpy as np
 from bokeh.layouts import gridplot
 from bokeh.plotting import figure
@@ -18,7 +20,7 @@ def record_quadrotor_state(mdl, tf, target):
     """
     from ...manif import Rot2Eul
 
-    h = {
+    h: dict[str, list[float]] = {
         "t": [],
         "x": [],
         "y": [],
@@ -54,9 +56,11 @@ def record_quadrotor_state(mdl, tf, target):
         h["wx"].append(float(mdl.state.angular_velocity[0]))
         h["wy"].append(float(mdl.state.angular_velocity[1]))
         h["wz"].append(float(mdl.state.angular_velocity[2]))
-        h["pos_err"].append(np.linalg.norm(mdl.state.position - target))
+        h["pos_err"].append(float(np.linalg.norm(mdl.state.position - target)))
 
-        u = mdl._pos_controller.compute(mdl.t, (mdl.state.position, mdl.state.velocity))
+        u = mdl._pos_controller.compute(
+            mdl.t, (mdl.state.position, mdl.state.velocity, mdl.state.orientation)
+        )
         wrench = mdl._repackage_input(u)
         h["f"].append(wrench[0])
         h["Mx"].append(wrench[1])
@@ -79,7 +83,7 @@ def plot_quadrotor_simulation(history, target=None):
         Bokeh gridplot layout. Call bokeh.io.show(layout) to display.
     """
     t = history["t"]
-    plots = []
+    plots: list[Any] = []
 
     def _fig(title, ylabel):
         p = figure(
