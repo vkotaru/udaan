@@ -9,4 +9,5 @@ arguments behind them.
 quadrotor-se3
 quadrotor-payload
 geometric-l1
+multi-quad-payload
 ```

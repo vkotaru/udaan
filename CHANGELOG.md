@@ -189,6 +189,86 @@
 - `QuadrotorCsPayloadBase`'s `_prop_controller`: `simulate()` flies the payload
   controller on the `prop_forces` path too.
 
+### Multi-quadrotor cable-suspended point-mass payload (M3)
+
+#### Added
+
+- **`udaan.models.multi_quad_cspayload`** — `MultiQuadCsPayloadBase` (analytical
+  dynamics) and `MultiQuadCsPayloadMujoco` (MuJoCo backend): `nQ` rigid-body
+  quadrotors, each on its own taut cable, carrying one point-mass payload. The
+  per-vehicle input is a thrust magnitude and a body moment. Cables are
+  integrated on `S2` with `udaan.manif.zoh_step`. Both backends fly the
+  generated airframe (`DEFAULT_GENERATED_QUAD_MASS`,
+  `DEFAULT_GENERATED_QUAD_INERTIA`), close the payload loop at 200 Hz, each
+  attitude loop at 800 Hz (`attitude_rate_hz`) and the physics at 1600 Hz
+  (`physics_rate_hz`), with a clock that counts substeps; `simulate()` flies
+  the same law on the ACCELERATION, WRENCH and PROP_FORCES inputs. The
+  analytical model counts the substeps on which a rigid cable pushes
+  (`compressive_cable_steps`, `cable_tensions()`) and warns on the first.
+  `MultiQuadCsPayloadState.cable_tensions` carries each cable's tension of the
+  last physics substep on both backends (`nan` until the first substep after a
+  reset); on the MuJoCo backend `cable_tensions()` is each tendon's limit
+  force, zero while it is slack. The
+  MuJoCo backend generates its MJCF from the construction parameters into the
+  user asset cache, reads the body-frame inertia, cable lengths and actuator
+  `ctrlrange` from it, writes MuJoCo's timestep as `dt/N` and each tendon's
+  `solreflimit` as two timesteps, raises when MuJoCo reports a diverged
+  integration, and its `reset()` places the taut ring at the current cable
+  lengths and accepts `payload_position` and `payload_velocity` (a rigid
+  velocity of the whole formation). Masses, cable lengths and inertias are
+  validated at assignment.
+- `udaan.utils.formation` (`check_formation`, `default_formation_radius`,
+  `min_formation_radius`, `neighbour_spacing`, `default_spawn_height`):
+  neighbouring airframes on a ring must be `DEFAULT_ROTOR_SPAN` plus
+  `DEFAULT_FORMATION_CLEARANCE` apart and the radius below every cable length;
+  the default radius grows with `nQ` and the spawn height follows the cable
+  length. Both M3 models and the generator refuse a ring that breaks either.
+- **`udaan.control.multi_quad_cspayload.MultiQuadCsPayloadController`** — a
+  geometric cascade: payload PD in acceleration units, a `TensionSplitPolicy`
+  distributing the net force into per-cable forces and their first two
+  derivatives, per-cable `S2` tracking, then each vehicle's
+  `GeometricAttitudeController`. The along-cable thrust is floored at
+  `MULTI_MIN_CABLE_TENSION_FRACTION` of each cable's hover tension
+  (`min_tensions`), and each vehicle's thrust vector is bounded to
+  `MULTI_MAX_COMMANDED_TILT_DEG` (50°) from vertical before its attitude loop
+  (`max_tilt_deg`, `bound_tilt`): the vertical part is floored at `T_min` and
+  the horizontal part scaled down to the bound where it leans past it. Gains follow
+  the time-scale design `multi_cable_cascade_gains` (`CABLE_CASCADE_*`),
+  computed from the cable lengths and airframe inertias and recomputed on
+  `sync_from_model`; `kp`, `kd`, `cable_kp` and `cable_kd` override it.
+- **`udaan.flatness.MultiQuadCsPayload`** — flat output
+  `(x_L, {ψ_i}, {internal cable forces})`; the internal forces come from a
+  `TensionSplitPolicy` (`RingTensionSplit` by default, `AffineTensionSplit`,
+  `LegacyFixedTensionSplit`). `simulate()` passes the controller's own policy
+  object into the flat map, and enables feed-forward when the bound trajectory
+  provides the jet the map needs. `MultiQuadCsPayloadBase.yaw_setpoint` sets the
+  heading channel. `recover()` marks samples whose airframes are not all upright
+  (`MultiQuadCsPayloadRefState.upright`), `check_reference()` scans a trajectory
+  before flight, and `simulate()` flies those samples without the airframe
+  feed-forward, counts them in `feedforward_drops` and warns once with the
+  intervals.
+- `udaan.flatness.cable` (`tension_direction_jet`, `point_mass_cable_force`,
+  `cable_direction_jet`) and `udaan.flatness.derivatives` (`leibniz_product`,
+  `leibniz_dot`, `leibniz_matmul`, `normalize_derivatives`).
+- `udaan.utils.grasp` (`formation_cable_attitudes`) and
+  `udaan.utils.assets.cache` (generated
+  MJCF goes to `$UDAAN_ASSET_DIR` or the platform user cache, written
+  atomically, with `scene.xml` beside it).
+- `udaan.utils.assets.multi_quad_cspayload` and `payload_height`: the M3 MJCF
+  generator, parameterised by `num_quadrotors`, `cable_length`, `payload_mass`,
+  `quad_mass`, `formation_radius` and `spawn_height` (both derived when not
+  given), with a `1/DEFAULT_PHYSICS_RATE_HZ` timestep, tendon `solreflimit` of
+  two timesteps, each airframe's `ctrlrange` from `core.defaults` and undamped
+  root joints. `MujocoAssetCreator.option()`,
+  `create_quadrotor0(mass=, root_damping=, thrust_range=, torque_range=)`,
+  `MujocoAssetCreator.spatial(solreflimit=)` and `MJCF_GENERATOR_VERSION`. `MujocoAssetCreator.save_to` writes `scene.xml`
+  beside the asset when it is not already there.
+- CLI: `udaan run multi-quad-payload` and `udaan generate-xml multi-quad-payload`.
+  `udaan run multi-quad` and `udaan generate-xml multi-quad` keep running the
+  `MultiQuadrotorCSPointmass` model and its generator.
+- Docs: theory pages for the M3 dynamics, controller and flat map. Example:
+  `examples/multi_quad_cspayload.py`.
+
 ## v1.4.1 (2026-11-11)
 
 ### Fixed
