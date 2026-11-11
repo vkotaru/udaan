@@ -69,10 +69,22 @@ class GeometricAttitudeController(Controller):
         eR = 0.5·vee(Rdᵀ·R - Rᵀ·Rd)   (attitude error on so(3))
         eΩ = Ω - Rᵀ·Rd·Ωd              (angular velocity error)
         f  = F · R·e3                    (scalar thrust)
+
+    Keyword Args:
+        inertia: ``J``, ``(3, 3)`` in kg·m².
+        kp: ``k_R``, ``(3,)`` (default
+            :data:`~udaan.core.defaults.DEFAULT_ATT_KP`).
+        kd: ``k_Ω``, ``(3,)`` (default
+            :data:`~udaan.core.defaults.DEFAULT_ATT_KD`).
     """
 
     def __init__(self, **kwargs):
-        self._gains = Gains(kp=DEFAULT_ATT_KP.copy(), kd=DEFAULT_ATT_KD.copy())
+        kp = kwargs.get("kp")
+        kd = kwargs.get("kd")
+        self._gains = Gains(
+            kp=DEFAULT_ATT_KP.copy() if kp is None else np.array(kp, dtype=float),
+            kd=DEFAULT_ATT_KD.copy() if kd is None else np.array(kd, dtype=float),
+        )
 
         self._inertia = np.eye(3)
         self._inertia_inv = np.eye(3)

@@ -194,3 +194,67 @@ class S2:
     def from_spherical(phi=0.0, th=0.0):
         """Point on S2 from spherical coordinates (azimuth phi, polar th)."""
         return S2(np.array([np.cos(phi) * np.sin(th), np.sin(phi) * np.sin(th), np.cos(th)]))
+
+
+def zoh_step(q: S2, omega: TS2, omega_dot, h: float) -> tuple[S2, TS2]:
+    r"""One zero-order-hold Euler substep of the ``S2`` kinematics, on the manifold.
+
+    A cable-carrying model integrates a direction ``q`` and its rate ``ω``.
+    The plain Euler step is two lines::
+
+        q  <- q.step(ω h)                       # exact rotation, stays on S2
+        ω  <- ω + h ω̇(q_old)                    # leaves T_q S2
+
+    The first line is a true rotation, so ``‖q‖`` never drifts. The second is
+    the problem: ``ω̇`` is built at ``q_old`` and is therefore tangent to
+    ``q_old``, not to the ``q`` the first line just produced. Each substep
+    leaves an ``O(h)`` residual along the *new* ``q``, and those residuals
+    accumulate — halving the substep halves the accumulated ``|q·ω|`` rather
+    than quartering it: the drift is first order.
+
+    ``S2``'s angular velocity is only defined up to a component along ``q``:
+    ``q̇ = ω × q`` annihilates it, and a cable model's ``ω̇`` is a cross product
+    with ``q`` (or a solve whose gauge row forces ``ω̇ · q = 0``). The residual is
+    therefore a *gauge* quantity of the continuous dynamics, dynamically inert
+    there but free to grow without bound. Projecting it out with
+    :meth:`TS2.transport` — ``(I - q qᵀ) ω`` at the updated ``q`` — costs one
+    outer product per cable and pins ``|q·ω|`` at machine precision for good.
+
+    Two things do *not* change **within one substep**, which is why this is
+    safe to apply uniformly:
+
+    * ``q̇ = ω × q`` is unaffected, so ``q_next``, the velocities derived from
+      it and the centripetal ``‖q̇‖²`` coefficients are bit-identical for that
+      substep.
+    * The integrator stays first-order accurate. Removing a component that no
+      right-hand side reads at that substep cannot change the local truncation
+      error.
+
+    Over a *run*, however, the trajectory does move, and it is worth being
+    exact about why — "the gauge is dynamically inert" is true of the
+    continuous dynamics and not of this discrete step. ``ω_next`` is what the
+    next substep hands to :meth:`S2.step`, and
+    ``q_next = expm(hat(ω h)) q`` is **not** gauge-invariant: a component of
+    ``ω`` along ``q`` tilts the rotation axis and lengthens the angle, so the
+    same ``q̇`` produces a different ``q_next`` at second order. The projected
+    and unprojected steps therefore integrate slightly different trajectories
+    over a run.
+
+    A controller whose error state reads the measured rate without projecting
+    it would otherwise see a drifting gauge component as an error it can
+    neither reduce nor act on; pinning it at machine precision removes that
+    term.
+
+    Args:
+        q: current direction on ``S2``.
+        omega: current rate in ``T_q S2``.
+        omega_dot: angular acceleration evaluated at the *current* ``q``.
+        h: substep size.
+
+    Returns:
+        ``(q_next, omega_next)`` with ``omega_next`` exactly tangent to
+        ``q_next``.
+    """
+    q_next = q.step(np.asarray(omega) * h)
+    omega_next = TS2(np.asarray(omega) + np.asarray(omega_dot) * h).transport(q_next)
+    return q_next, omega_next

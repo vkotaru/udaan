@@ -1,10 +1,16 @@
 <?xml version="1.0"?>
 <mujoco model="QuadFlexibleCablePayload">
   <include file="scene.xml"/>
-  <compiler angle="degree" coordinate="local" inertiafromgeom="true"/>
+  <!-- "auto": the airframe takes its explicit <inertial> below (M1's airframe); the
+       cable links and the payload take theirs from their geoms. -->
+  <compiler angle="degree" coordinate="local" inertiafromgeom="auto"/>
+  <!-- QuadrotorCsPayloadMujoco overwrites this timestep with dt / N,
+       N = physics_rate_hz · dt, so it does not set that model's clock. -->
+  <option timestep="0.00125"/>
 
   <worldbody>
     <body name="quadrotor" pos="0 0 2" quat="1 0 0 0">
+      <inertial pos="0 0 0" mass="0.75" diaginertia="0.0053 0.0049 0.0098"/>
       <geom name="quadrotor_geom" type="box" pos="0 0 0" size="0.08 0.04 0.025"
         mass="0.75" rgba="0.15 0.15 0.15 1"/>
       <joint name="quadrotor_root_joint" type="free" />
@@ -50,187 +56,51 @@
         rgba="0 0 0 0" />
       <site name="quadrotor_Mz" type="box" pos="0.0 0.0 0.0" quat="1 0 0 0" size="0.06 0.035 0.025"
         rgba="0 0 0 0" />
-      <body name="cable_0" pos="0.0 0.0 -0.02" quat="1 0 0 0">
-        <joint name="cable_quad_joint_0" type="ball" limited="false" pos="0.0 0.0 0.02"
-          damping="0.0001" stiffness="0" />
-        <geom name="cable_cylinder_0" type="cylinder" size="0.01 0.02" pos="0.0 0.0 0.0"
-          mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-        <body name="cable_1" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-          <joint name="cable_quad_joint_1" type="ball" limited="false" pos="0.0 0.0 0.02"
-            damping="0.001" stiffness="0.0" />
-          <geom name="cable_cylinder_1" type="cylinder" size="0.0015 0.02" pos="0.0 0.0 0.0"
-            mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-          <body name="cable_2" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-            <joint name="cable_quad_joint_2" type="ball" limited="false" pos="0.0 0.0 0.02"
-              damping="0.001" stiffness="0.0" />
-            <geom name="cable_cylinder_2" type="cylinder" size="0.0015 0.02" pos="0.0 0.0 0.0"
-              mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-            <body name="cable_3" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-              <joint name="cable_quad_joint_3" type="ball" limited="false" pos="0.0 0.0 0.02"
-                damping="0.001" stiffness="0.0" />
-              <geom name="cable_cylinder_3" type="cylinder" size="0.0015 0.02" pos="0.0 0.0 0.0"
-                mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-              <body name="cable_4" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                <joint name="cable_quad_joint_4" type="ball" limited="false" pos="0.0 0.0 0.02"
-                  damping="0.001" stiffness="0.0" />
-                <geom name="cable_cylinder_4" type="cylinder" size="0.0015 0.02" pos="0.0 0.0 0.0"
-                  mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-                <body name="cable_5" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                  <joint name="cable_quad_joint_5" type="ball" limited="false" pos="0.0 0.0 0.02"
-                    damping="0.001" stiffness="0.0" />
-                  <geom name="cable_cylinder_5" type="cylinder" size="0.0015 0.02" pos="0.0 0.0 0.0"
-                    mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-                  <body name="cable_6" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                    <joint name="cable_quad_joint_6" type="ball" limited="false" pos="0.0 0.0 0.02"
-                      damping="0.001" stiffness="0.0" />
-                    <geom name="cable_cylinder_6" type="cylinder" size="0.0015 0.02"
-                      pos="0.0 0.0 0.0" mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-                    <body name="cable_7" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                      <joint name="cable_quad_joint_7" type="ball" limited="false"
-                        pos="0.0 0.0 0.02" damping="0.001" stiffness="0.0" />
-                      <geom name="cable_cylinder_7" type="cylinder" size="0.0015 0.02"
-                        pos="0.0 0.0 0.0" mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-                      <body name="cable_8" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                        <joint name="cable_quad_joint_8" type="ball" limited="false"
-                          pos="0.0 0.0 0.02" damping="0.001" stiffness="0.0" />
-                        <geom name="cable_cylinder_8" type="cylinder" size="0.0015 0.02"
-                          pos="0.0 0.0 0.0" mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-                        <body name="cable_9" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                          <joint name="cable_quad_joint_9" type="ball" limited="false"
-                            pos="0.0 0.0 0.02" damping="0.001" stiffness="0.0" />
-                          <geom name="cable_cylinder_9" type="cylinder" size="0.0015 0.02"
-                            pos="0.0 0.0 0.0" mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-                          <body name="cable_10" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                            <joint name="cable_quad_joint_10" type="ball" limited="false"
-                              pos="0.0 0.0 0.02" damping="0.001" stiffness="0.0" />
-                            <geom name="cable_cylinder_10" type="cylinder" size="0.0015 0.02"
-                              pos="0.0 0.0 0.0" mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-                            <body name="cable_11" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                              <joint name="cable_quad_joint_11" type="ball" limited="false"
-                                pos="0.0 0.0 0.02" damping="0.001" stiffness="0.0" />
-                              <geom name="cable_cylinder_11" type="cylinder" size="0.0015 0.02"
-                                pos="0.0 0.0 0.0" mass="0.0004" density="50" rgba="0.85 0.85 0.85 1" />
-                              <body name="cable_12" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                                <joint name="cable_quad_joint_12" type="ball" limited="false"
-                                  pos="0.0 0.0 0.02" damping="0.001" stiffness="0.0" />
-                                <geom name="cable_cylinder_12" type="cylinder" size="0.0015 0.02"
-                                  pos="0.0 0.0 0.0" mass="0.0004" density="50"
-                                  rgba="0.85 0.85 0.85 1" />
-                                <body name="cable_13" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                                  <joint name="cable_quad_joint_13" type="ball" limited="false"
-                                    pos="0.0 0.0 0.02" damping="0.001" stiffness="0.0" />
-                                  <geom name="cable_cylinder_13" type="cylinder" size="0.0015 0.02"
-                                    pos="0.0 0.0 0.0" mass="0.0004" density="50"
-                                    rgba="0.85 0.85 0.85 1" />
-                                  <body name="cable_14" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                                    <joint name="cable_quad_joint_14" type="ball" limited="false"
-                                      pos="0.0 0.0 0.02" damping="0.001" stiffness="0.0" />
-                                    <geom name="cable_cylinder_14" type="cylinder"
-                                      size="0.0015 0.02" pos="0.0 0.0 0.0" mass="0.0004"
-                                      density="50" rgba="0.85 0.85 0.85 1" />
-                                    <body name="cable_15" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                                      <joint name="cable_quad_joint_15" type="ball" limited="false"
-                                        pos="0.0 0.0 0.02" damping="0.001" stiffness="0.0" />
-                                      <geom name="cable_cylinder_15" type="cylinder"
-                                        size="0.0015 0.02" pos="0.0 0.0 0.0" mass="0.0004"
-                                        density="50" rgba="0.85 0.85 0.85 1" />
-                                      <body name="cable_16" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                                        <joint name="cable_quad_joint_16" type="ball"
-                                          limited="false" pos="0.0 0.0 0.02" damping="0.001"
-                                          stiffness="0.0" />
-                                        <geom name="cable_cylinder_16" type="cylinder"
-                                          size="0.0015 0.02" pos="0.0 0.0 0.0" mass="0.0004"
-                                          density="50" rgba="0.85 0.85 0.85 1" />
-                                        <body name="cable_17" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                                          <joint name="cable_quad_joint_17" type="ball"
-                                            limited="false" pos="0.0 0.0 0.02" damping="0.001"
-                                            stiffness="0.0" />
-                                          <geom name="cable_cylinder_17" type="cylinder"
-                                            size="0.0015 0.02" pos="0.0 0.0 0.0" mass="0.0004"
-                                            density="50" rgba="0.85 0.85 0.85 1" />
-                                          <body name="cable_18" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                                            <joint name="cable_quad_joint_18" type="ball"
-                                              limited="false" pos="0.0 0.0 0.02" damping="0.001"
-                                              stiffness="0.0" />
-                                            <geom name="cable_cylinder_18" type="cylinder"
-                                              size="0.0015 0.02" pos="0.0 0.0 0.0" mass="0.0004"
-                                              density="50" rgba="0.85 0.85 0.85 1" />
-                                            <body name="cable_19" pos="0.0 0.0 -0.04" quat="1 0 0 0">
-                                              <joint name="cable_quad_joint_19" type="ball"
-                                                limited="false" pos="0.0 0.0 0.02" damping="0.001"
-                                                stiffness="0.0" />
-                                              <geom name="cable_cylinder_19" type="cylinder"
-                                                size="0.0015 0.02" pos="0.0 0.0 0.0" mass="0.0004"
-                                                density="50" rgba="0.85 0.85 0.85 1" />
-                                              <body name="cable_20" pos="0.0 0.0 -0.04"
-                                                quat="1 0 0 0">
-                                                <joint name="cable_quad_joint_20" type="ball"
-                                                  limited="false" pos="0.0 0.0 0.02" damping="0.001"
-                                                  stiffness="0.0" />
-                                                <geom name="cable_cylinder_20" type="cylinder"
-                                                  size="0.0015 0.02" pos="0.0 0.0 0.0" mass="0.0004"
-                                                  density="50" rgba="0.85 0.85 0.85 1" />
-                                                <body name="cable_21" pos="0.0 0.0 -0.04"
-                                                  quat="1 0 0 0">
-                                                  <joint name="cable_quad_joint_21" type="ball"
-                                                    limited="false" pos="0.0 0.0 0.02"
-                                                    damping="0.001" stiffness="0.0" />
-                                                  <geom name="cable_cylinder_21" type="cylinder"
-                                                    size="0.0015 0.02" pos="0.0 0.0 0.0"
-                                                    mass="0.0004" density="50"
-                                                    rgba="0.85 0.85 0.85 1" />
-                                                  <body name="cable_22" pos="0.0 0.0 -0.04"
-                                                    quat="1 0 0 0">
-                                                    <joint name="cable_quad_joint_22" type="ball"
-                                                      limited="false" pos="0.0 0.0 0.02"
-                                                      damping="0.001" stiffness="0.0" />
-                                                    <geom name="cable_cylinder_22" type="cylinder"
-                                                      size="0.0015 0.02" pos="0.0 0.0 0.0"
-                                                      mass="0.0004" density="50"
-                                                      rgba="0.85 0.85 0.85 1" />
-                                                    <body name="cable_23" pos="0.0 0.0 -0.04"
-                                                      quat="1 0 0 0">
-                                                      <joint name="cable_quad_joint_23" type="ball"
-                                                        limited="false" pos="0.0 0.0 0.02"
-                                                        damping="0.001" stiffness="0.0" />
-                                                      <geom name="cable_cylinder_23" type="cylinder"
-                                                        size="0.0015 0.02" pos="0.0 0.0 0.0"
-                                                        mass="0.0004" density="50"
-                                                        rgba="0.85 0.85 0.85 1" />
-                                                      <body name="cable_24" pos="0.0 0.0 -0.04"
-                                                        quat="1 0 0 0">
-                                                        <joint name="cable_quad_joint_24"
-                                                          type="ball" limited="false"
-                                                          pos="0.0 0.0 0.02" damping="0.001"
-                                                          stiffness="0.0" />
-                                                        <geom name="cable_cylinder_24"
-                                                          type="cylinder" size="0.0015 0.02"
-                                                          pos="0.0 0.0 0.0" mass="0.0004"
-                                                          density="50" rgba="0.85 0.85 0.85 1" />
-                                                        <body name="pyld" pos="0.0 0.0 -0.045"
-                                                          quat="1 0 0 0">
-                                                          <geom name="pyld" type="box"
-                                                            pos="0.0 0.0 0.0" quat="1 0 0 0"
-                                                            size="0.05 0.05 0.025" mass="0.15"
-                                                            density="1" rgba="0.2 0.8 0.4 1" />
-                                                          <joint name="pyld_joint" type="ball"
-                                                            limited="false" pos="0.0 0.0 0.0"
-                                                            damping="0" stiffness="0.0" />
-                                                        </body>
-                                                      </body>
-                                                    </body>
-                                                  </body>
-                                                </body>
-                                              </body>
-                                            </body>
-                                          </body>
-                                        </body>
-                                      </body>
-                                    </body>
-                                  </body>
-                                </body>
-                              </body>
-                            </body>
+      <!-- 10 links of 0.1 m, 1 g each. Link i's body origin is its distal end and
+           its ball joint its proximal end, so the payload, welded at the last link's distal
+           end, hangs exactly 1 m below the airframe's origin. -->
+      <body name="cable_0" pos="0 0 -0.1">
+        <joint name="cable_joint_0" type="ball" pos="0 0 0.1" damping="0"/>
+        <geom name="cable_geom_0" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+          mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+        <body name="cable_1" pos="0 0 -0.1">
+          <joint name="cable_joint_1" type="ball" pos="0 0 0.1" damping="0"/>
+          <geom name="cable_geom_1" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+            mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+          <body name="cable_2" pos="0 0 -0.1">
+            <joint name="cable_joint_2" type="ball" pos="0 0 0.1" damping="0"/>
+            <geom name="cable_geom_2" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+              mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+            <body name="cable_3" pos="0 0 -0.1">
+              <joint name="cable_joint_3" type="ball" pos="0 0 0.1" damping="0"/>
+              <geom name="cable_geom_3" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+                mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+              <body name="cable_4" pos="0 0 -0.1">
+                <joint name="cable_joint_4" type="ball" pos="0 0 0.1" damping="0"/>
+                <geom name="cable_geom_4" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+                  mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+                <body name="cable_5" pos="0 0 -0.1">
+                  <joint name="cable_joint_5" type="ball" pos="0 0 0.1" damping="0"/>
+                  <geom name="cable_geom_5" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+                    mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+                  <body name="cable_6" pos="0 0 -0.1">
+                    <joint name="cable_joint_6" type="ball" pos="0 0 0.1" damping="0"/>
+                    <geom name="cable_geom_6" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+                      mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+                    <body name="cable_7" pos="0 0 -0.1">
+                      <joint name="cable_joint_7" type="ball" pos="0 0 0.1" damping="0"/>
+                      <geom name="cable_geom_7" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+                        mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+                      <body name="cable_8" pos="0 0 -0.1">
+                        <joint name="cable_joint_8" type="ball" pos="0 0 0.1" damping="0"/>
+                        <geom name="cable_geom_8" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+                          mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+                        <body name="cable_9" pos="0 0 -0.1">
+                          <joint name="cable_joint_9" type="ball" pos="0 0 0.1" damping="0"/>
+                          <geom name="cable_geom_9" type="capsule" fromto="0 0 0 0 0 0.1" size="0.003"
+                            mass="0.001" contype="0" conaffinity="0" rgba="0.85 0.85 0.85 1"/>
+                          <body name="payload" pos="0 0 0">
+                            <geom name="payload_geom" type="box" size="0.05 0.05 0.025" mass="0.15" rgba="0.2 0.8 0.4 1"/>
                           </body>
                         </body>
                       </body>
@@ -246,20 +116,23 @@
   </worldbody>
   <actuator>
     <motor ctrllimited="true" site="site0" ctrlrange="0.0 10.0"
-      gear="0. 0. 1. 0. 0. -.024994577607878814" /> # each propeller can generate a force of 10N <motor
-      ctrllimited="true" site="site1" ctrlrange="0.0 10.0" gear="0. 0. 1. 0. 0. .024994577607878814" />
-     <motor
-      ctrllimited="true" site="site2" ctrlrange="0.0 10.0"
       gear="0. 0. 1. 0. 0. -.024994577607878814" />
-     <motor ctrllimited="true" site="site3"
-      ctrlrange="0.0 10.0" gear="0. 0. 1. 0. 0. .024994577607878814" />
-     <motor ctrllimited="true"
-      site="quadrotor_thrust" ctrlrange="0.0 40.0" gear="0.0 0.0 1.0 0.0 0.0 0.0" />
-     <motor
-      ctrllimited="true" site="quadrotor_Mx" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 1.0 0.0 0.0" />
-     <motor
-      ctrllimited="true" site="quadrotor_My" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 0.0 1.0 0.0" />
-     <motor
-      ctrllimited="true" site="quadrotor_Mz" ctrlrange="-3.0 3.0" gear="0.0 0.0 0.0 0.0 0.0 1.0" />
+    <motor ctrllimited="true" site="site1" ctrlrange="0.0 10.0"
+      gear="0. 0. 1. 0. 0. .024994577607878814" />
+    <motor ctrllimited="true" site="site2" ctrlrange="0.0 10.0"
+      gear="0. 0. 1. 0. 0. -.024994577607878814" />
+    <motor ctrllimited="true" site="site3" ctrlrange="0.0 10.0"
+      gear="0. 0. 1. 0. 0. .024994577607878814" />
+    <!-- Wrench ranges equal udaan.core.defaults DEFAULT_{MIN,MAX}_{THRUST,TORQUE},
+         which the model clips to first; tests/test_quadrotor_cspayload_mujoco.py
+         checks they agree. -->
+    <motor ctrllimited="true" site="quadrotor_thrust" ctrlrange="0.0 20.0"
+      gear="0.0 0.0 1.0 0.0 0.0 0.0" />
+    <motor ctrllimited="true" site="quadrotor_Mx" ctrlrange="-5.0 5.0"
+      gear="0.0 0.0 0.0 1.0 0.0 0.0" />
+    <motor ctrllimited="true" site="quadrotor_My" ctrlrange="-5.0 5.0"
+      gear="0.0 0.0 0.0 0.0 1.0 0.0" />
+    <motor ctrllimited="true" site="quadrotor_Mz" ctrlrange="-2.0 2.0"
+      gear="0.0 0.0 0.0 0.0 0.0 1.0" />
   </actuator>
 </mujoco>

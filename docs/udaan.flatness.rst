@@ -8,6 +8,7 @@ Submodules
    :maxdepth: 2
 
    udaan.flatness.base
+   udaan.flatness.feasibility
    udaan.flatness.jet
    udaan.flatness.quadrotor
    udaan.flatness.quadrotor_cspayload

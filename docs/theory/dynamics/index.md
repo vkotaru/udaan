@@ -6,4 +6,5 @@ Equations of motion for each system modelled in `udaan`.
 :maxdepth: 1
 
 quadrotor
+quadrotor-cspayload
 ```

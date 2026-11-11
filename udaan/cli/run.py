@@ -10,20 +10,23 @@ run_app = typer.Typer(help="Run a simulation.", context_settings=_ctx)
 _record_option = typer.Option(None, "--record", "-r", help="Save recording to file (.gif or .mp4).")
 
 
-#: The backends ``udaan run quadrotor --model`` offers.  ``vfx`` is deliberately
-#: absent even though :class:`~udaan.models.quadrotor.QuadrotorVfx` exists and is
-#: importable: driven from the CLI, it blocks inside VPython and does not return,
+#: The backends ``--model`` offers.  ``vfx`` is deliberately absent even though
+#: :class:`~udaan.models.quadrotor.QuadrotorVfx` and
+#: :class:`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadVfx` exist and are
+#: importable: driven from the CLI, both block inside VPython and do not return,
 #: ``--no-render`` included, because the VPython backend opens its
 #: browser-served scene at construction rather than at render time.  Advertising
-#: a hanging option is worse than not offering it, so the command refuses
-#: ``-m vfx`` by name.
+#: a hanging option is worse than not offering it, so the CLI refuses ``-m vfx``
+#: by name.
 _CLI_MODELS = ("base", "mujoco")
+#: ``quad-payload --cable-model`` choices: the cable models of ``QuadrotorCsPayloadMujoco``.
+_CABLE_MODELS = ("tendon", "links")
 
 
 def _check_model(model: str, allowed: tuple[str, ...]) -> None:
     """Reject an unrecognised ``--model`` instead of silently picking a backend.
 
-    The routing block it guards is a chain of ``if``/``elif`` with a final
+    Every routing block it guards is a chain of ``if``/``elif`` with a final
     ``else``, so without this guard a typo lands on whichever backend sits in
     the ``else``, and the run reports a backend the caller never asked for.
     """
@@ -208,10 +211,10 @@ def quad_payload(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
     render: bool = typer.Option(True, help="Enable visualization."),
     model: str = typer.Option(
-        "mujoco", "--model", "-m", help="Quad-payload model: mujoco or base."
+        "mujoco", "--model", "-m", help="Quad-payload model: base or mujoco."
     ),
     cable_model: str = typer.Option(
-        "tendon", "--cable-model", "-c", help="Cable model: tendon, links, or cable."
+        "tendon", "--cable-model", "-c", help="Cable model: tendon or links."
     ),
     record: str | None = _record_option,
     position: str | None = typer.Option(
@@ -221,27 +224,31 @@ def quad_payload(
     """Simulate a quadrotor with cable-suspended payload."""
     import numpy as np
 
+    from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadBase
+
     from . import parse_vec
 
+    _check_model(model, _CLI_MODELS)
     x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
-    if cable_model == "cable":
+    if cable_model not in _CABLE_MODELS:
         typer.secho(
-            "WARNING: cable model 'cable' is not officially supported; "
-            "included for experimentation only.",
-            fg=typer.colors.YELLOW,
-            bold=True,
+            f"Unknown cable model '{cable_model}'. Expected one of: {', '.join(_CABLE_MODELS)}.",
+            fg=typer.colors.RED,
             err=True,
         )
+        raise typer.Exit(1)
+    mdl: QuadrotorCsPayloadBase
     if model == "mujoco":
         from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadMujoco
 
         mdl = QuadrotorCsPayloadMujoco(render=render, cable_model=cable_model)
     else:
-        from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadVfx
-
-        mdl = QuadrotorCsPayloadVfx(render=render)
+        mdl = QuadrotorCsPayloadBase()
     _setup_recording(mdl, record)
-    typer.echo(f"Running quad-payload ({model}, {cable_model}) for {time}s ...")
+    # `--cable-model` is a MuJoCo cable discretisation; the analytical backend
+    # has a single taut cable, so naming one there would misreport the run.
+    detail = f"{model}, {cable_model}" if model == "mujoco" else model
+    typer.echo(f"Running quad-payload ({detail}) for {time}s ...")
     mdl.simulate(tf=time, payload_position=x0)
     _hold_viewer(mdl)
 

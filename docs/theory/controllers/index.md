@@ -7,5 +7,6 @@ arguments behind them.
 :maxdepth: 1
 
 quadrotor-se3
+quadrotor-payload
 geometric-l1
 ```

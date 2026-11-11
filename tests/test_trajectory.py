@@ -120,6 +120,23 @@ class TestCircularTraj:
         _, dx, _ = traj.get(1.0)
         np.testing.assert_allclose(np.linalg.norm(dx), speed, atol=1e-10)
 
+    def test_jet_matches_get_and_finite_differences(self):
+        traj = CircularTraj(center=np.array([0.5, -1.0, 2.0]), radius=1.5, speed=2.0, th0=0.3)
+        t, h = 1.7, 1e-5
+        jet = traj.get_jet(t, 6)
+        assert jet.shape == (7, 3)
+        for row, ref in zip(jet[:3], traj.get(t), strict=True):
+            np.testing.assert_allclose(row, ref, atol=1e-12)
+        for k in range(1, 7):
+            fd = (traj.get_jet(t + h, k - 1)[k - 1] - traj.get_jet(t - h, k - 1)[k - 1]) / (2 * h)
+            np.testing.assert_allclose(jet[k], fd, rtol=1e-6, atol=1e-6)
+        for row, ref in zip(traj.get_full(t), jet[:5], strict=True):
+            np.testing.assert_allclose(row, ref)
+
+    def test_jet_refuses_negative_order(self):
+        with pytest.raises(ValueError):
+            CircularTraj().get_jet(0.0, -1)
+
 
 class TestCrazyTrajectory:
     def test_returns_three_arrays(self):

@@ -97,6 +97,24 @@ DEFAULT_PROP_MAX_FORCE = 10.0
 DEFAULT_PAYLOAD_MASS = 0.2  # kg
 DEFAULT_CABLE_LENGTH = 1.0  # m
 
+# The quadrotor with a cable-suspended payload (M2) flies the M1 airframe
+# (`DEFAULT_M1_QUAD_MASS`, `DEFAULT_M1_QUAD_INERTIA`) with the payload and cable
+# below, which are the payload body and the cable of `quad_payload_mj.xml` and
+# `quad_flxcbl_mj.xml` (tests/test_quadrotor_cspayload_mujoco.py checks it). The
+# shared `DEFAULT_PAYLOAD_MASS` and `DEFAULT_CABLE_LENGTH` above belong to the
+# multi-vehicle models.
+
+#: M2 payload mass ``m_L``, in kg.
+DEFAULT_M2_PAYLOAD_MASS = 0.15
+#: M2 cable length ``ℓ``, in m: the airframe-to-payload distance of a taut cable.
+DEFAULT_M2_CABLE_LENGTH = 1.0
+#: Smallest cable tension the M2 payload controller commands, as a fraction of
+#: the payload weight: ``T_min = MIN_CABLE_TENSION_FRACTION · m_L · g``. The
+#: thrust component along the cable never falls below ``T_min``, so a payload
+#: loop that asks for a net downward force keeps the cable taut and the
+#: commanded attitude upright instead of turning it over.
+MIN_CABLE_TENSION_FRACTION = 0.1
+
 # =============================================================================
 # Default control gains
 # =============================================================================
@@ -129,8 +147,53 @@ DEFAULT_ATT_KD = np.array([0.35, 0.35, 0.225])
 #: reaches it.
 MIN_ATTITUDE_HINT_CONDITIONING = 0.3
 
-# Payload controller gains (Sreenath 2013)
+# Payload controller gains (Sreenath 2013): fixed payload-loop (k_x, k_v) and
+# cable-loop (k_q, k_ω) gains for QuadCSPayloadController, which takes them
+# through its position_kp, position_kd, cable_kp and cable_kd keywords. They do
+# not depend on the machine. On the default M2 machine (DEFAULT_M1_QUAD_MASS,
+# DEFAULT_M1_QUAD_INERTIA, DEFAULT_M2_PAYLOAD_MASS) with the cascade's own
+# attitude gains, the closed loop at hover is stable for cable lengths
+# 0.25 m ≤ ℓ ≤ 1.76 m and unstable outside it. The controller's default gains
+# are the time-scale design below.
+
+#: Payload position gain ``k_x``, in N/m.
 DEFAULT_PAYLOAD_POS_KP = np.array([4.0, 4.0, 8.0])
+#: Payload velocity gain ``k_v``, in N·s/m.
 DEFAULT_PAYLOAD_POS_KD = np.array([3.0, 3.0, 6.0])
+#: Cable direction gain ``k_q``, in N.
 DEFAULT_PAYLOAD_CABLE_KP = np.array([24.0, 24.0, 24.0])
+#: Cable rate gain ``k_ω``, in N·s.
 DEFAULT_PAYLOAD_CABLE_KD = np.array([8.0, 8.0, 8.0])
+
+# Cable-suspended payload cascade gains (M2): a time-scale design.
+#
+# The cascade has three nested loops, attitude ≫ cable ≫ payload, and each is
+# placed at its own natural frequency so that each inner loop has settled on the
+# time scale its outer loop acts on:
+#
+#   attitude  ω_a = CABLE_CASCADE_ATTITUDE_BANDWIDTH
+#   cable     ω_c = min(CABLE_CASCADE_PENDULUM_FACTOR · √(g/ℓ), ω_a / r)
+#   payload   ω_p = ω_c / r                    (lateral)
+#   vertical  ω_z = ω_a / r²                   (payload z)
+#
+# with r = CABLE_CASCADE_LOOP_RATIO and damping ζ = CABLE_CASCADE_DAMPING on
+# every loop. The cable loop follows the pendulum frequency √(g/ℓ), so the
+# gains scale with the cable length rather than holding one length's tuning;
+# the cap ω_a / r keeps it separated from the attitude loop on short cables.
+# `udaan.control.quadrotor_cspayload.cable_cascade_gains` turns these into
+# gains from m_Q, m_L, ℓ and J.
+
+#: Attitude-loop natural frequency ``ω_a`` of the cable cascade, in rad/s.
+CABLE_CASCADE_ATTITUDE_BANDWIDTH = 40.0
+#: Frequency ratio ``r`` between neighbouring loops of the cable cascade.
+CABLE_CASCADE_LOOP_RATIO = 5.0
+#: Cable-loop frequency as a multiple ``c`` of the pendulum frequency ``√(g/ℓ)``.
+CABLE_CASCADE_PENDULUM_FACTOR = 2.0
+#: Damping ratio ``ζ`` of every loop of the cable cascade.
+CABLE_CASCADE_DAMPING = 0.7
+
+#: Smallest vertical component ``b₃·e₃`` of a flatness reference's thrust
+#: direction for which the airframe counts as upright. A reference sample at or
+#: below it needs the airframe level or inverted; see
+#: :mod:`udaan.flatness.feasibility`.
+MIN_UPRIGHT_THRUST_Z = 0.0
