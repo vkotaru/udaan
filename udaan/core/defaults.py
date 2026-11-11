@@ -115,6 +115,72 @@ DEFAULT_M2_CABLE_LENGTH = 1.0
 #: commanded attitude upright instead of turning it over.
 MIN_CABLE_TENSION_FRACTION = 0.1
 
+#: Radius of the point-mass payload sphere, in metres (geometry only).
+DEFAULT_PAYLOAD_RADIUS = 0.05  # m
+
+# =============================================================================
+# Default multi-quadrotor (cooperative transport) parameters
+# =============================================================================
+
+#: Number of quadrotors in a cooperative-transport team.
+DEFAULT_NUM_QUADROTORS = 3
+
+#: Horizontal radius of the quadrotor ring around the payload, in metres.
+#: Must stay strictly below the cable length so the cables can be taut.
+DEFAULT_FORMATION_RADIUS = 0.5  # m
+
+#: Height of the quadrotor ring above the ground at spawn, in metres. The
+#: payload height is *derived* from this, the cable length and the formation
+#: radius so that the cables start taut — never chosen independently.
+DEFAULT_SPAWN_HEIGHT = 2.0  # m
+
+#: Tip-to-tip span of the generated airframe, in metres: two 0.2 m arms
+#: (:data:`DEFAULT_ARM_LENGTH`) plus a 0.1 m rotor disc at each tip, as emitted by
+#: :meth:`~udaan.utils.assets.mujoco_asset_creator.MujocoAssetCreator.create_quadrotor0`.
+DEFAULT_ROTOR_SPAN = 0.6  # m
+
+#: Margin between the rotor spans of neighbouring quadrotors on a ring, in
+#: metres. A ring whose neighbours are closer than ``DEFAULT_ROTOR_SPAN`` plus
+#: this is refused (:func:`udaan.utils.formation.check_formation`), and the
+#: default radius grows with the number of quadrotors to keep it
+#: (:func:`udaan.utils.formation.default_formation_radius`).
+DEFAULT_FORMATION_CLEARANCE = 0.1  # m
+
+#: Height of the payload at spawn in a generated ring formation, in metres. The
+#: ring sits one taut-cable drop ``sqrt(l² − r²)`` above it
+#: (:func:`udaan.utils.formation.default_spawn_height`).
+DEFAULT_PAYLOAD_SPAWN_HEIGHT = 1.0  # m
+
+#: Mass of the generated airframe, in kg: what the multi-vehicle generators pass
+#: :meth:`~udaan.utils.assets.mujoco_asset_creator.MujocoAssetCreator.create_quadrotor0`
+#: as its ``mass``.
+DEFAULT_GENERATED_QUAD_MASS = 0.9  # kg
+#: Body-frame inertia of the generated airframe at
+#: :data:`DEFAULT_GENERATED_QUAD_MASS`, in kg·m²: ``R diag(I) Rᵀ`` of MuJoCo's
+#: principal moments ``I`` and principal frame ``R = R(body_iquat)``. The
+#: analytical multi-vehicle models start from it so that they fly the airframe
+#: their MuJoCo backends fly.
+DEFAULT_GENERATED_QUAD_INERTIA = np.diag([4.842347925e-3, 5.933258135e-3, 1.048606061e-2])  # kg*m^2
+
+#: Time constant of a generated cable tendon's length limit, in MuJoCo
+#: timesteps: ``solreflimit = (DEFAULT_TENDON_LIMIT_TIMESTEPS · h, 1)`` with ``h``
+#: the timestep. Two timesteps is the stiffest limit MuJoCo integrates stably,
+#: so the cable holds its length.
+DEFAULT_TENDON_LIMIT_TIMESTEPS = 2.0
+
+#: Smallest along-cable thrust the M3 payload cascade commands, as a fraction of
+#: each cable's hover tension (its share ``‖T̄_i‖`` of the payload weight under
+#: the tension-split policy). The thrust component along cable ``i`` never falls
+#: below it, so a payload loop that asks for a net downward force keeps the
+#: cable taut and the commanded attitude upright.
+MULTI_MIN_CABLE_TENSION_FRACTION = 0.1
+
+#: Largest angle from vertical of the thrust vector the M3 payload cascade
+#: hands each attitude loop, in degrees (``MultiQuadCsPayloadController``'s
+#: ``max_tilt_deg``). The command's vertical part is floored at its cable's
+#: tension floor and its horizontal part scaled down, where needed, to this angle.
+MULTI_MAX_COMMANDED_TILT_DEG = 50.0
+
 # =============================================================================
 # Default control gains
 # =============================================================================
@@ -197,3 +263,12 @@ CABLE_CASCADE_DAMPING = 0.7
 #: below it needs the airframe level or inverted; see
 #: :mod:`udaan.flatness.feasibility`.
 MIN_UPRIGHT_THRUST_Z = 0.0
+
+# Multi-quadrotor cooperative payload gains (M3) follow the same time-scale
+# design, CABLE_CASCADE_* above, in **acceleration** units: the payload PD
+# commands an acceleration (``k_p = ω²``, ``k_d = 2ζω``) and the cable PD carries
+# its own ``m_i l_i`` (``k_q = ω_c,i²``, ``k_ω = 2ζ ω_c,i``), so no mass enters
+# them and they mean the same thing at every ``nQ``. Each cable's ``ω_c,i``
+# follows its own length, and the payload loop sits a ratio ``r`` below the
+# slowest cable. `udaan.control.multi_quad_cspayload.multi_cable_cascade_gains`
+# computes them from the model's cable lengths and airframe inertias.

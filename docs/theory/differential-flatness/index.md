@@ -91,6 +91,7 @@ abstraction makes available.
 jet
 quadrotor
 quadrotor-cspayload
+multi-quad-cspayload
 ```
 
 ## References

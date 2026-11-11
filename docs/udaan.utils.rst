@@ -18,7 +18,9 @@ Submodules
 .. toctree::
    :maxdepth: 2
 
+   udaan.utils.formation
    udaan.utils.geometry
+   udaan.utils.grasp
    udaan.utils.logging
    udaan.utils.resize_gif
 

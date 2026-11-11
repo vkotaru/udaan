@@ -180,3 +180,32 @@ def test_fleet_palette_is_not_red_and_distinct(module):
     for i in range(len(colours)):
         for j in range(i + 1, len(colours)):
             assert np.linalg.norm(colours[i] - colours[j]) >= 0.3, (names[i], names[j])
+
+
+@pytest.mark.mujoco
+@pytest.mark.parametrize("num_quadrotors", [1, 3])
+def test_multi_quad_cspayload_generator_front_rotors_are_front_colour(tmp_path, num_quadrotors):
+    mujoco = pytest.importorskip("mujoco")
+    from udaan.utils.assets.xml_model_generator import multi_quad_cspayload
+
+    path = multi_quad_cspayload(
+        num_quadrotors=num_quadrotors, filename=str(tmp_path / "m3.xml"), verbose=False
+    )
+    model = mujoco.MjModel.from_xml_path(path)
+    discs = _rotor_discs(model)
+    airframes = {airframe for _, airframe, _, _ in discs}
+    assert len(airframes) == num_quadrotors
+    front = set()
+    for airframe in airframes:
+        own = [d for d in discs if d[1] == airframe]
+        assert len(own) == 4, airframe
+        own_front = [d for d in own if d[2] > 1e-9]
+        assert len(own_front) == 2, (airframe, [d[0] for d in own_front])
+        for name, _, _, rgba in own_front:
+            np.testing.assert_allclose(rgba[:3], FRONT_ROTOR_RGB, err_msg=name)
+            front.add(name)
+    for g in range(model.ngeom):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g) or f"geom {g}"
+        rgba = model.geom_rgba[g]
+        if rgba[3] > 0 and name not in front:
+            assert not _is_red(rgba), (name, rgba)
