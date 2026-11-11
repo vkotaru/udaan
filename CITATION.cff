@@ -5,5 +5,5 @@ authors:
     given-names: Prasanth
 title: "Udaan: A Python mujoco based models and controllers for quadcopter cable-suspended payload systems."
 url: https://github.com/vkotaru/udaan
-version: v1.0.0
-date-released: 2025-04-07
+version: v1.4.0
+date-released: 2026-11-10
