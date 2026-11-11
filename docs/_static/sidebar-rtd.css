@@ -95,3 +95,20 @@ article:has(.landing-logo) > section > h1:first-of-type {
   max-width: 42rem;
   color: var(--color-foreground-secondary);
 }
+
+/* README demo gallery: each centred paragraph of `.media/*.gif` images is a
+ * three-column grid with one aspect ratio, so a row never wraps inside the
+ * content column and the GIFs (480×338 to 480×360) line up. The README's
+ * `width="250"` still applies on GitHub. */
+article p[align="center"]:has(> img[src*="/.media/"][src$=".gif"]) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+article p[align="center"] > img[src*="/.media/"][src$=".gif"] {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
