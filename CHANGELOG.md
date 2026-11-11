@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The MuJoCo viewer's mouse drag and scroll work on MuJoCo 3.11 and later,
+  whose `mjv_moveCamera` takes no `mjvScene` argument; the call matches the
+  installed MuJoCo's signature.
+
 ## v1.4.0 (2026-11-10)
 
 ### Quadrotor (M1)

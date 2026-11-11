@@ -16,6 +16,22 @@ from ...utils.logging import get_logger
 _logger = get_logger(__name__)
 
 
+def _move_camera(model, action, reldx, reldy, scene, camera):
+    """Call ``mujoco.mjv_moveCamera`` with the signature the installed MuJoCo has.
+
+    MuJoCo 3.11 removed the ``scene`` argument: the call is
+    ``(m, action, reldx, reldy, cam)`` from 3.11 and
+    ``(m, action, reldx, reldy, scn, cam)`` before it.
+    """
+    if _MOVE_CAMERA_TAKES_SCENE:
+        mujoco.mjv_moveCamera(model, action, reldx, reldy, scene, camera)
+    else:
+        mujoco.mjv_moveCamera(model, action, reldx, reldy, camera)
+
+
+_MOVE_CAMERA_TAKES_SCENE = "scn" in (mujoco.mjv_moveCamera.__doc__ or "").split("\n", 1)[0]
+
+
 class _GlfwViewer:
     """Lightweight GLFW-based MuJoCo viewer with mouse interaction."""
 
@@ -54,13 +70,16 @@ class _GlfwViewer:
         else:
             return
 
-        mujoco.mjv_moveCamera(
-            self._model, action, dx / width, dy / height, self._scene, self._camera
-        )
+        _move_camera(self._model, action, dx / width, dy / height, self._scene, self._camera)
 
     def _scroll_callback(self, window, xoffset, yoffset):
-        mujoco.mjv_moveCamera(
-            self._model, mujoco.mjtMouse.mjMOUSE_ZOOM, 0, -0.05 * yoffset, self._scene, self._camera
+        _move_camera(
+            self._model,
+            mujoco.mjtMouse.mjMOUSE_ZOOM,
+            0.0,
+            -0.05 * yoffset,
+            self._scene,
+            self._camera,
         )
 
     def _key_callback(self, window, key, scancode, action, mods):
