@@ -269,6 +269,54 @@
 - Docs: theory pages for the M3 dynamics, controller and flat map. Example:
   `examples/multi_quad_cspayload.py`.
 
+### Multi-quadrotor cable-suspended rigid-body payload (M4)
+
+#### Added
+
+- `udaan.models.multi_quad_rigidbody`: `MultiQuadRigidbodyBase` (analytical
+  dynamics of `nQ` quadrotors carrying one rigid-body payload on taut cables
+  attached at body-frame points) and `MultiQuadRigidbodyMujoco` (its MuJoCo
+  backend, on a generated, cached MJCF). Both run the payload cascade at
+  200 Hz, the airframe attitude loops at `attitude_rate_hz` (800 Hz) and the
+  physics at `physics_rate_hz` (1600 Hz), on every input path; the clock
+  counts substeps; the MuJoCo backend writes its timestep as `dt/N`, its
+  tendons' `solreflimit` as two timesteps, reads and writes the airframe
+  inertia in the body frame, and raises `RuntimeError` on a diverged step.
+  `slack_cable_steps` counts steps with a slack cable on both backends (a
+  compressive tension on the analytical model, a tendon short of its length
+  on MuJoCo). The analytical airframe defaults are the generated MJCF's.
+- `udaan.control.multi_quad_rigidbody.MultiQuadRigidbodyController`: geometric
+  cascade from payload pose to a wrench, cable tensions, cable directions and
+  airframe attitudes, with the reference cable rates of the flat map in its
+  cable loops (`compute(t, state, cable_reference)`, `cable_reference_rates`)
+  and time-scale gains computed from the cable lengths and the payload inertia
+  (`udaan.control.multi_quad_rigidbody.gains`; the payload attitude loop at
+  `RIGID_PAYLOAD_ATTITUDE_FREQUENCY_RATIO` times the payload's lateral
+  frequency, keywords `attitude_kp`/`attitude_kd`).
+- `udaan.flatness.MultiQuadRigidbody`: flat-to-state map with flat output
+  `(x_L, R_L, {ψ_i}, λ)`, an `upright` flag on its reference state and
+  `check_reference` for a trajectory before flight; `simulate()` drops the
+  airframe feed-forward on samples that need a non-upright airframe, counts
+  them in `feedforward_drops` and warns once with the intervals.
+  `udaan.flatness.allocation` (`WrenchAllocation`, `TensionDistributionPolicy`,
+  `RingTensionDistribution`, `FixedTensionDistribution`,
+  `MinimumTensionDistribution`, `null_space_basis`) for the wrench-to-tension
+  split; the cascade's default policy floors every allocated tension at
+  `RIGID_MIN_CABLE_TENSION_FRACTION` of its hover share.
+- `udaan.utils.grasp`: ring attachment points, the grasp map, the hover wrench
+  map, and the rigid-payload ring's default radius, clearance check and spawn
+  height.
+- `udaan.utils.assets.multi_quad_rigidbody` and `rigid_payload_height`: the M4
+  MJCF generator, with a taut spawn, a default formation radius and spawn
+  height derived from the geometry, and a refusal of rings whose airframes are
+  closer than the rotor span plus a clearance.
+- `udaan run multi-quad-rigidbody`: runs `MultiQuadRigidbodyMujoco` (`-n`,
+  `--cable-length`, `--payload-mass`, `--attachment-radius`, `--radius`,
+  `--height`) and `udaan generate-xml multi-quad-rigidbody`.
+  `udaan run multi-quad-rigid` is unchanged.
+- Docs: theory pages for the M4 dynamics and flat map. Example:
+  `examples/multi_quad_rigidbody.py`.
+
 ## v1.4.1 (2026-11-11)
 
 ### Fixed

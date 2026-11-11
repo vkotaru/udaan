@@ -182,15 +182,8 @@ def test_fleet_palette_is_not_red_and_distinct(module):
             assert np.linalg.norm(colours[i] - colours[j]) >= 0.3, (names[i], names[j])
 
 
-@pytest.mark.mujoco
-@pytest.mark.parametrize("num_quadrotors", [1, 3])
-def test_multi_quad_cspayload_generator_front_rotors_are_front_colour(tmp_path, num_quadrotors):
-    mujoco = pytest.importorskip("mujoco")
-    from udaan.utils.assets.xml_model_generator import multi_quad_cspayload
-
-    path = multi_quad_cspayload(
-        num_quadrotors=num_quadrotors, filename=str(tmp_path / "m3.xml"), verbose=False
-    )
+def _assert_generated_rotor_colours(mujoco, path, num_quadrotors):
+    """Every airframe in ``path`` has two front discs in the front colour and nothing else red."""
     model = mujoco.MjModel.from_xml_path(path)
     discs = _rotor_discs(model)
     airframes = {airframe for _, airframe, _, _ in discs}
@@ -209,3 +202,27 @@ def test_multi_quad_cspayload_generator_front_rotors_are_front_colour(tmp_path, 
         rgba = model.geom_rgba[g]
         if rgba[3] > 0 and name not in front:
             assert not _is_red(rgba), (name, rgba)
+
+
+@pytest.mark.mujoco
+@pytest.mark.parametrize("num_quadrotors", [1, 3])
+def test_multi_quad_cspayload_generator_front_rotors_are_front_colour(tmp_path, num_quadrotors):
+    mujoco = pytest.importorskip("mujoco")
+    from udaan.utils.assets.xml_model_generator import multi_quad_cspayload
+
+    path = multi_quad_cspayload(
+        num_quadrotors=num_quadrotors, filename=str(tmp_path / "m3.xml"), verbose=False
+    )
+    _assert_generated_rotor_colours(mujoco, path, num_quadrotors)
+
+
+@pytest.mark.mujoco
+@pytest.mark.parametrize("num_quadrotors", [1, 3, 4])
+def test_multi_quad_rigidbody_generator_front_rotors_are_front_colour(tmp_path, num_quadrotors):
+    mujoco = pytest.importorskip("mujoco")
+    from udaan.utils.assets.xml_model_generator import multi_quad_rigidbody
+
+    path = multi_quad_rigidbody(
+        num_quadrotors=num_quadrotors, filename=str(tmp_path / "m4.xml"), verbose=False
+    )
+    _assert_generated_rotor_colours(mujoco, path, num_quadrotors)
