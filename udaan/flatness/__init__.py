@@ -13,9 +13,19 @@ with flat output ``(x_Q, ψ)``.
 :class:`QuadrotorCsPayload` — flat-to-state recovery for a quadrotor
 with a cable-suspended point-mass payload, with flat output
 ``(x_L, ψ)``.
+
+Feasibility
+-----------
+:mod:`~udaan.flatness.feasibility` — whether a reference keeps every airframe
+upright: :func:`is_upright`, :func:`scan_reference` and
+:class:`ReferenceFeasibility`.
 """
 
 from .base import Flat2State as Flat2State
+from .feasibility import ReferenceFeasibility as ReferenceFeasibility
+from .feasibility import infeasible_intervals as infeasible_intervals
+from .feasibility import is_upright as is_upright
+from .feasibility import scan_reference as scan_reference
 from .jet import Jet as Jet
 from .jet import yaw_jet as yaw_jet
 from .quadrotor import (
@@ -54,5 +64,9 @@ __all__ = [
     "QuadrotorFlats",
     "QuadrotorInputs",
     "QuadrotorRefState",
+    "ReferenceFeasibility",
+    "infeasible_intervals",
+    "is_upright",
+    "scan_reference",
     "yaw_jet",
 ]

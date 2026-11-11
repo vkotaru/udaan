@@ -7,6 +7,7 @@ Submodules
 .. toctree::
    :maxdepth: 2
 
+   udaan.control.quadrotor_cspayload.gains
    udaan.control.quadrotor_cspayload.payload_controller
 
 Module contents

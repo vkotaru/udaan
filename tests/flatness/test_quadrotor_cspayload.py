@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 
 from udaan.core.defaults import (
-    DEFAULT_CABLE_LENGTH,
-    DEFAULT_PAYLOAD_MASS,
-    DEFAULT_QUAD_INERTIA,
-    DEFAULT_QUAD_MASS,
+    DEFAULT_M1_QUAD_INERTIA,
+    DEFAULT_M1_QUAD_MASS,
+    DEFAULT_M2_CABLE_LENGTH,
+    DEFAULT_M2_PAYLOAD_MASS,
     GRAVITY,
 )
 from udaan.flatness import (
@@ -62,15 +62,15 @@ def _circle_flats(
 class TestConstruction:
     def test_build_from_physical_params(self):
         f2s = QuadrotorCsPayload(
-            mass_q=DEFAULT_QUAD_MASS,
-            mass_l=DEFAULT_PAYLOAD_MASS,
-            inertia=DEFAULT_QUAD_INERTIA,
-            cable_length=DEFAULT_CABLE_LENGTH,
+            mass_q=DEFAULT_M1_QUAD_MASS,
+            mass_l=DEFAULT_M2_PAYLOAD_MASS,
+            inertia=DEFAULT_M1_QUAD_INERTIA,
+            cable_length=DEFAULT_M2_CABLE_LENGTH,
         )
-        assert f2s.mass_q == pytest.approx(DEFAULT_QUAD_MASS)
-        assert f2s.mass_l == pytest.approx(DEFAULT_PAYLOAD_MASS)
-        assert f2s.cable_length == pytest.approx(DEFAULT_CABLE_LENGTH)
-        np.testing.assert_allclose(f2s.inertia, DEFAULT_QUAD_INERTIA)
+        assert f2s.mass_q == pytest.approx(DEFAULT_M1_QUAD_MASS)
+        assert f2s.mass_l == pytest.approx(DEFAULT_M2_PAYLOAD_MASS)
+        assert f2s.cable_length == pytest.approx(DEFAULT_M2_CABLE_LENGTH)
+        np.testing.assert_allclose(f2s.inertia, DEFAULT_M1_QUAD_INERTIA)
 
     def test_from_model_reads_model_params(self):
         model = QuadrotorCsPayloadBase()
@@ -148,10 +148,10 @@ class TestHover:
     @pytest.fixture
     def f2s(self):
         return QuadrotorCsPayload(
-            mass_q=DEFAULT_QUAD_MASS,
-            mass_l=DEFAULT_PAYLOAD_MASS,
-            inertia=DEFAULT_QUAD_INERTIA,
-            cable_length=DEFAULT_CABLE_LENGTH,
+            mass_q=DEFAULT_M1_QUAD_MASS,
+            mass_l=DEFAULT_M2_PAYLOAD_MASS,
+            inertia=DEFAULT_M1_QUAD_INERTIA,
+            cable_length=DEFAULT_M2_CABLE_LENGTH,
         )
 
     @pytest.fixture
@@ -160,12 +160,12 @@ class TestHover:
 
     def test_hover_thrust_equals_total_weight(self, ref_inputs):
         _, inputs = ref_inputs
-        expected = (DEFAULT_QUAD_MASS + DEFAULT_PAYLOAD_MASS) * GRAVITY
+        expected = (DEFAULT_M1_QUAD_MASS + DEFAULT_M2_PAYLOAD_MASS) * GRAVITY
         assert inputs.thrust == pytest.approx(expected, abs=1e-10)
 
     def test_hover_tension_equals_payload_weight(self, ref_inputs):
         _, inputs = ref_inputs
-        expected = DEFAULT_PAYLOAD_MASS * GRAVITY
+        expected = DEFAULT_M2_PAYLOAD_MASS * GRAVITY
         assert inputs.tension == pytest.approx(expected, abs=1e-10)
 
     def test_hover_moment_is_zero(self, ref_inputs):
@@ -182,7 +182,7 @@ class TestHover:
         # x_L = 0, q = -e_3, so x_Q = x_L - ℓ q = +ℓ e_3.
         ref, _ = ref_inputs
         np.testing.assert_allclose(
-            ref.position, np.array([0.0, 0.0, DEFAULT_CABLE_LENGTH]), atol=1e-10
+            ref.position, np.array([0.0, 0.0, DEFAULT_M2_CABLE_LENGTH]), atol=1e-10
         )
 
     def test_hover_orientation_is_identity(self, ref_inputs):
@@ -258,7 +258,7 @@ class TestYawWithAcceleration:
     def test_moment_yaw_axis(self, ref_inputs):
         _, inputs = ref_inputs
         np.testing.assert_allclose(inputs.moment[:2], np.zeros(2), atol=1e-10)
-        Jzz = DEFAULT_QUAD_INERTIA[2, 2]
+        Jzz = DEFAULT_M1_QUAD_INERTIA[2, 2]
         assert inputs.moment[2] == pytest.approx(Jzz * 0.3, abs=1e-10)
 
 
@@ -334,7 +334,7 @@ class TestRoundTrip:
         state0 = ref0.as_state()
         model.reset(
             payload_position=state0.payload_position,
-            payload_velocity=state0.payload_velocity,
+            velocity=state0.velocity,
             cable_attitude=state0.cable_attitude,
             cable_angular_velocity=state0.cable_angular_velocity,
             orientation=state0.orientation,
@@ -362,7 +362,7 @@ class TestRoundTrip:
         state0 = ref0.as_state()
         model.reset(
             payload_position=state0.payload_position,
-            payload_velocity=state0.payload_velocity,
+            velocity=state0.velocity,
             cable_attitude=state0.cable_attitude,
             cable_angular_velocity=state0.cable_angular_velocity,
             orientation=state0.orientation,

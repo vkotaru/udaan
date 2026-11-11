@@ -252,6 +252,38 @@ class CircularTraj(Trajectory):
     def get(self, t):
         return self._x(t), self._dx(t), self._d2x(t)
 
+    def get_full(self, t):
+        """Return (position, velocity, acceleration, jerk, snap) at time t."""
+        return tuple(self.get_jet(t, 4))
+
+    def get_jet(self, t, order):
+        """Return the position jet ``(order + 1, 3)``, every row in closed form.
+
+        Each derivative of the circle is a quarter-turn phase shift:
+
+        .. math::
+
+            \\frac{d^k}{dt^k}\\,(\\cos\\theta, \\sin\\theta)
+                = \\omega^k\\,(\\cos(\\theta + k\\pi/2), \\sin(\\theta + k\\pi/2)),
+            \\qquad \\theta = \\theta_0 + \\omega t.
+
+        Args:
+            t: time.
+            order: highest derivative required; row ``k`` is the ``k``-th.
+
+        Returns:
+            ``(order + 1, 3)`` array, unscaled by factorials.
+        """
+        if order < 0:
+            raise ValueError(f"order must be >= 0, got {order}")
+        k = np.arange(order + 1)
+        phase = self._th0 + self._w * t + k * np.pi / 2
+        jet = np.zeros((order + 1, 3))
+        jet[:, 0] = self._radius * self._w**k * np.cos(phase)
+        jet[:, 1] = self._radius * self._w**k * np.sin(phase)
+        jet[0] += self._center
+        return jet
+
 
 class CrazyTrajectory(Trajectory):
     """3-axis sinusoidal Lissajous-style trajectory."""

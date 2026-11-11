@@ -36,16 +36,17 @@ from math import comb
 import numpy as np
 
 from ..core.defaults import (
-    DEFAULT_CABLE_LENGTH,
-    DEFAULT_PAYLOAD_MASS,
-    DEFAULT_QUAD_INERTIA,
-    DEFAULT_QUAD_MASS,
+    DEFAULT_M1_QUAD_INERTIA,
+    DEFAULT_M1_QUAD_MASS,
+    DEFAULT_M2_CABLE_LENGTH,
+    DEFAULT_M2_PAYLOAD_MASS,
     GRAVITY,
 )
 from ..core.types import Mat3, Vec3
 from ..manif import S2, SO3, TS2, TSO3
 from .base import Flat2State
-from .jet import Jet
+from .feasibility import ReferenceFeasibility, is_upright, scan_reference
+from .jet import Jet, yaw_jet
 from .quadrotor import _attitude_from_thrust_vector
 
 _E3 = np.array([0.0, 0.0, 1.0])
@@ -185,6 +186,11 @@ class QuadrotorCsPayloadRefState:
     angular_velocity: TSO3 = field(default_factory=TSO3)
     angular_acceleration: Vec3 = field(default_factory=_zeros3)
 
+    #: Whether the airframe is upright, ``b₃·e₃ > MIN_UPRIGHT_THRUST_Z``
+    #: (:func:`udaan.flatness.feasibility.is_upright`). ``False`` marks a
+    #: sample no upright airframe can fly.
+    upright: bool = True
+
     def as_state(self):
         """Project onto the model's ``QuadrotorCsPayloadState`` shape (drops
         all ``*_acceleration`` extras; wraps cable fields as :class:`S2`/:class:`TS2`)."""
@@ -222,7 +228,15 @@ class QuadrotorCsPayloadInputs:
 
 class QuadrotorCsPayload(Flat2State):
     """Differential-flatness recovery for a quadrotor with a cable-suspended,
-    point-mass payload (taut cable, single rigid-body quadrotor)."""
+    point-mass payload (taut cable, single rigid-body quadrotor).
+
+    The default parameters are the M2 machine: the M1 airframe
+    (:data:`~udaan.core.defaults.DEFAULT_M1_QUAD_MASS`,
+    :data:`~udaan.core.defaults.DEFAULT_M1_QUAD_INERTIA`) with a
+    :data:`~udaan.core.defaults.DEFAULT_M2_PAYLOAD_MASS` payload on a
+    :data:`~udaan.core.defaults.DEFAULT_M2_CABLE_LENGTH` cable.
+    :meth:`from_model` reads them off a model instead.
+    """
 
     Flats = QuadrotorCsPayloadFlats
     RefState = QuadrotorCsPayloadRefState
@@ -231,10 +245,10 @@ class QuadrotorCsPayload(Flat2State):
     def __init__(
         self,
         *,
-        mass_q: float = DEFAULT_QUAD_MASS,
-        mass_l: float = DEFAULT_PAYLOAD_MASS,
-        inertia: Mat3 = DEFAULT_QUAD_INERTIA,
-        cable_length: float = DEFAULT_CABLE_LENGTH,
+        mass_q: float = DEFAULT_M1_QUAD_MASS,
+        mass_l: float = DEFAULT_M2_PAYLOAD_MASS,
+        inertia: Mat3 = DEFAULT_M1_QUAD_INERTIA,
+        cable_length: float = DEFAULT_M2_CABLE_LENGTH,
         gravity: float = GRAVITY,
     ):
         self.mass_q = float(mass_q)
@@ -257,6 +271,43 @@ class QuadrotorCsPayload(Flat2State):
             cable_length=model.cable_length,
         )
 
+    def check_reference(
+        self,
+        jet,
+        tf: float,
+        *,
+        yaw=None,
+        t0: float = 0.0,
+        dt: float = 0.005,
+    ) -> ReferenceFeasibility:
+        """Run the map along a payload trajectory before flight and judge each sample.
+
+        Args:
+            jet: ``jet(t, order) -> (order + 1, 3)`` payload position jet (a
+                trajectory's ``get_jet``); called with ``order = 6``.
+            tf: end time, in s (exclusive).
+            yaw: ``ψ(t) -> (ψ, ψ̇, ψ̈)``, or ``None`` for ψ ≡ 0.
+            t0: start time, in s.
+            dt: sampling period, in s (default 5 ms, the payload-loop period).
+
+        Returns:
+            :class:`~udaan.flatness.feasibility.ReferenceFeasibility`; its
+            ``intervals`` are where the reference needs an airframe that is not
+            upright (or where the map refuses the sample).
+        """
+
+        def orientation(t):
+            flats = QuadrotorCsPayloadFlats(
+                x_L=Jet(np.asarray(jet(t, 6), dtype=float)), psi=yaw_jet(yaw, t)
+            )
+            try:
+                ref, _ = self.recover(flats)
+            except ValueError:
+                return None
+            return np.asarray(ref.orientation)
+
+        return scan_reference(orientation, tf, t0=t0, dt=dt)
+
     def recover(
         self, flats: QuadrotorCsPayloadFlats
     ) -> tuple[QuadrotorCsPayloadRefState, QuadrotorCsPayloadInputs]:
@@ -267,7 +318,9 @@ class QuadrotorCsPayload(Flat2State):
         J = self.inertia
 
         # ── Payload-position derivatives, x_L through pop ──────────────
-        x_L = [flats.x_L[k] for k in range(7)]  # rows 0..6
+        # ``x_L`` is a dim-3 jet, so every level is a 3-vector; the asarray is
+        # a no-op at runtime and pins that fact for the checker.
+        x_L = [np.asarray(flats.x_L[k], dtype=float) for k in range(7)]  # rows 0..6
 
         # ── Newton–Euler on the payload alone: m_L ẍ_L = -T q - m_L g e_3.
         # The cable force is  T_vec := T q = -m_L (ẍ_L + g e_3); from it
@@ -325,9 +378,9 @@ class QuadrotorCsPayload(Flat2State):
             B,
             dB,
             d2B,
-            flats.psi.value,
-            flats.psi.velocity,
-            flats.psi.acceleration,
+            float(flats.psi.value),
+            float(flats.psi.velocity),
+            float(flats.psi.acceleration),
             J,
         )
 
@@ -344,6 +397,7 @@ class QuadrotorCsPayload(Flat2State):
             orientation=SO3(R),
             angular_velocity=TSO3(Omega),
             angular_acceleration=dOmega,
+            upright=is_upright(R),
         )
         inputs = QuadrotorCsPayloadInputs(thrust=f, moment=moment, tension=tension)
         return ref, inputs

@@ -11,7 +11,7 @@ what each supports — use it to pick the right entry point for your task.
 | Model | `base` (dynamics only) | `vfx` (VPython) | `mujoco` (MuJoCo) | Fleet |
 |---|:---:|:---:|:---:|:---:|
 | {py:class}`~udaan.models.quadrotor.QuadrotorBase` | ✓ | ✓ | ✓ | ✓ (via `fleet`) |
-| {py:class}`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadBase` | ✓ | ✓ | ✓ (tendon / links / cable) | ✓ (via `cspayload-fleet`) |
+| {py:class}`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadBase` | ✓ | ✓ | ✓ (tendon / links) | ✓ (via `cspayload-fleet`) |
 | {py:class}`~udaan.models.mujoco.MultiQuadrotorCSPointmass` | — | — | ✓ | — |
 | {py:class}`~udaan.models.mujoco.MultiQuadRigidbody` | — | — | ✓ | — |
 
@@ -98,9 +98,8 @@ is flown on every path.
 
 | `cable_model` | MuJoCo backend | Captures slack? | Notes |
 |---|---|:---:|---|
-| `tendon` | spatial tendon constraint | — | fast, less realistic under slack |
-| `links` (default) | rigid N-link chain | ✓ | most stable, recommended default |
-| `cable` | MuJoCo composite cable | ✓ | experimental; see {doc}`../theory/dynamics/quadrotor-cspayload` caveats |
+| `tendon` (default) | massless spatial tendon with a length limit | ✓ | holds its length; carries no force when slack |
+| `links` | 10-link chain of ball joints | ✓ | carries the cable's own 10 g |
 
 ## Quadrotor
 
@@ -137,7 +136,7 @@ flat map, whose world-frame heading convention is singular on a pitch loop. See
 
 ```bash
 udaan run quad-payload -c tendon        # spatial-tendon cable model
-udaan run quad-payload -c links         # N-link rigid cable model
+udaan run quad-payload -c links         # 10-link chain cable model
 ```
 
 The controller used is derived in {doc}`../theory/controllers/quadrotor-payload`; the

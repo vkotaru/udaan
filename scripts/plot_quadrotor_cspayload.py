@@ -3,7 +3,7 @@
 Usage:
     python scripts/plot_quadrotor_cspayload.py
     python scripts/plot_quadrotor_cspayload.py --start 1,1,0 --target 0,0,1 --tf 10
-    python scripts/plot_quadrotor_cspayload.py --backend mujoco --cable-model links
+    python scripts/plot_quadrotor_cspayload.py --backend mujoco --cable-model tendon
 """
 
 import argparse
@@ -26,8 +26,8 @@ if __name__ == "__main__":
     parser.add_argument("--backend", choices=["base", "mujoco"], default="base")
     parser.add_argument(
         "--cable-model",
-        choices=["tendon", "links", "cable"],
-        default="links",
+        choices=["tendon", "links"],
+        default="tendon",
         help="MuJoCo cable model (mujoco backend only)",
     )
     args = parser.parse_args()

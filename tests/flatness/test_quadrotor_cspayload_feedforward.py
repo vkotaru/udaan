@@ -6,7 +6,7 @@ controller. Tracking error after a finite horizon should be bounded by the
 integrator's residual.
 
 Two integrators are exercised:
-  - The shipped ZOH-Euler in QuadrotorCsPayloadBase (h = 1.25 ms inner step,
+  - The shipped ZOH-Euler in QuadrotorCsPayloadBase (h = 0.625 ms inner step,
     feedforward held constant across the 5 ms outer step).
   - A high-order adaptive RK (DOP853 via scipy.integrate.solve_ivp)
     re-evaluating (f, M) continuously and using a quaternion attitude
@@ -27,10 +27,10 @@ from scipy.integrate import solve_ivp
 from scipy.spatial.transform import Rotation as _ScipyRot
 
 from udaan.core.defaults import (
-    DEFAULT_CABLE_LENGTH,
-    DEFAULT_PAYLOAD_MASS,
-    DEFAULT_QUAD_INERTIA,
-    DEFAULT_QUAD_MASS,
+    DEFAULT_M1_QUAD_INERTIA,
+    DEFAULT_M1_QUAD_MASS,
+    DEFAULT_M2_CABLE_LENGTH,
+    DEFAULT_M2_PAYLOAD_MASS,
     GRAVITY,
 )
 from udaan.flatness import (
@@ -83,10 +83,10 @@ def circle_flats(
 
 def _f2s_default() -> QuadrotorCsPayload:
     return QuadrotorCsPayload(
-        mass_q=DEFAULT_QUAD_MASS,
-        mass_l=DEFAULT_PAYLOAD_MASS,
-        inertia=DEFAULT_QUAD_INERTIA,
-        cable_length=DEFAULT_CABLE_LENGTH,
+        mass_q=DEFAULT_M1_QUAD_MASS,
+        mass_l=DEFAULT_M2_PAYLOAD_MASS,
+        inertia=DEFAULT_M1_QUAD_INERTIA,
+        cable_length=DEFAULT_M2_CABLE_LENGTH,
     )
 
 
@@ -94,7 +94,7 @@ def _seed_model(model: QuadrotorCsPayloadBase, ref) -> None:
     state = ref.as_state()
     model.reset(
         payload_position=np.asarray(state.payload_position).copy(),
-        payload_velocity=np.asarray(state.payload_velocity).copy(),
+        velocity=np.asarray(state.velocity).copy(),
         cable_attitude=state.cable_attitude,
         cable_angular_velocity=state.cable_angular_velocity,
         orientation=state.orientation,
@@ -172,7 +172,7 @@ class TestOpenLoopCircle:
     def test_tracking_error_is_purely_numerical(self):
         e = _run_open_loop(circle_flats)
 
-        # ZOH-Euler at h = 1.25 ms over TF s. Generous bounds (~10× the
+        # ZOH-Euler at h = 0.625 ms over TF s. Generous bounds (~10× the
         # single-quadrotor tolerance, since the cable adds two
         # integration paths and S²/TS² subspace projection).
         assert e["payload_pos"] < 5e-2, f"payload pos {e['payload_pos']:.2e} m"
@@ -257,10 +257,10 @@ def _run_high_order(flats_of_t, tf: float = TF) -> dict:
     error to round-off, isolating any flat-to-state formula error in the
     residual."""
     f2s = _f2s_default()
-    m_Q = DEFAULT_QUAD_MASS
-    m_L = DEFAULT_PAYLOAD_MASS
-    L = DEFAULT_CABLE_LENGTH
-    J = np.asarray(DEFAULT_QUAD_INERTIA, dtype=float)
+    m_Q = DEFAULT_M1_QUAD_MASS
+    m_L = DEFAULT_M2_PAYLOAD_MASS
+    L = DEFAULT_M2_CABLE_LENGTH
+    J = np.asarray(DEFAULT_M1_QUAD_INERTIA, dtype=float)
     J_inv = np.linalg.inv(J)
 
     ref0, _ = f2s.recover(flats_of_t(0.0))
