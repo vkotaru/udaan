@@ -1,6 +1,8 @@
 #!/usr/bin/python
 
 from ...core.defaults import (
+    DEFAULT_ATTACHMENT_HEIGHT,
+    DEFAULT_ATTACHMENT_RADIUS,
     DEFAULT_CABLE_LENGTH,
     DEFAULT_FORMATION_RADIUS,
     DEFAULT_GENERATED_QUAD_MASS,
@@ -12,10 +14,18 @@ from ...core.defaults import (
     DEFAULT_PAYLOAD_MASS,
     DEFAULT_PAYLOAD_RADIUS,
     DEFAULT_PHYSICS_RATE_HZ,
+    DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS,
+    DEFAULT_RIGID_PAYLOAD_MASS,
     DEFAULT_SPAWN_HEIGHT,
     DEFAULT_TENDON_LIMIT_TIMESTEPS,
 )
 from ..formation import check_formation, default_formation_radius, default_spawn_height
+from ..grasp import (
+    check_rigid_formation,
+    rigid_formation_radius,
+    rigid_spawn_height,
+    ring_attachment_points,
+)
 from .mujoco_asset_creator import *
 
 
@@ -198,6 +208,225 @@ def multi_quad_cspayload(
             range=[0.0, cable_length],
             solreflimit=(DEFAULT_TENDON_LIMIT_TIMESTEPS * timestep, 1.0),
         )
+
+    writer.save_to(filename, verbose=verbose)
+    return filename
+
+
+def rigid_payload_height(
+    cable_length: float = DEFAULT_CABLE_LENGTH,
+    formation_radius: float = DEFAULT_FORMATION_RADIUS,
+    spawn_height: float = DEFAULT_SPAWN_HEIGHT,
+    attachment_height: float = DEFAULT_ATTACHMENT_HEIGHT,
+) -> float:
+    r"""Payload-centre height that makes every cable of an M4 ring taut.
+
+    The rigid-body sibling of :func:`payload_height`, and the difference is the
+    whole point of M4: the cable does **not** end at the payload's centre of
+    mass, it ends at attachment point ``r_i``.  Quadrotor ``i`` sits radially
+    *outboard of its own attachment* — the pairing
+    :func:`~udaan.utils.grasp.ring_attachment_points` /
+    :func:`~udaan.utils.grasp.formation_cable_attitudes` builds, and the one
+    that makes the hover trim moment-free — so the right triangle the cable
+    closes has horizontal leg ``formation_radius`` alone, not
+    ``attachment_radius + formation_radius``::
+
+        r_f² + (z_Q - z_L - h_a)² = l²
+        =>  z_L = z_Q - h_a - sqrt(l² - r_f²)
+
+    with ``z_Q = spawn_height`` the height of the quadrotor ring, ``h_a =
+    attachment_height`` the attachment ring's height above the payload centre,
+    and ``r_f = formation_radius`` the *horizontal offset of each quadrotor
+    from its own attachment point*.
+
+    Any other payload height spawns the cables off their tendon limit; below
+    it they start slack, carry zero tension at ``t = 0``, and (the tendons
+    having no stiffness) the payload free-falls until the limit catches it — a
+    mode the analytical model does not have.
+
+    A single quadrotor hovers on the payload's own vertical axis, where
+    ``r_f = 0`` and this reduces to ``z_L = z_Q - h_a - l``.
+
+    Raises:
+        ValueError: if ``formation_radius`` is negative, or if
+            ``cable_length <= formation_radius`` — the cable is then too short
+            to reach its attachment's axis and the triangle has no solution.
+    """
+    if formation_radius < 0.0:
+        raise ValueError(f"formation_radius must be >= 0, got {formation_radius}")
+    if cable_length <= formation_radius:
+        raise ValueError(
+            f"cable_length ({cable_length}) must be strictly greater than the formation "
+            f"radius ({formation_radius}); a taut cable from the quadrotor ring down to "
+            "its own attachment point has no solution otherwise"
+        )
+    return float(spawn_height - attachment_height - np.sqrt(cable_length**2 - formation_radius**2))
+
+
+def multi_quad_rigidbody(
+    num_quadrotors: int = DEFAULT_NUM_QUADROTORS,
+    filename: str = "./assets/multi_quad_rigidbody.xml",
+    cable_length: float = DEFAULT_CABLE_LENGTH,
+    payload_mass: float = DEFAULT_RIGID_PAYLOAD_MASS,
+    payload_half_extents=DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS,
+    quad_mass: float = DEFAULT_GENERATED_QUAD_MASS,
+    attachment_radius: float = DEFAULT_ATTACHMENT_RADIUS,
+    attachment_height: float = DEFAULT_ATTACHMENT_HEIGHT,
+    formation_radius: float | None = None,
+    spawn_height: float | None = None,
+    verbose: bool = True,
+) -> str:
+    """Write the MJCF for ``num_quadrotors`` quadrotors carrying one rigid slab.
+
+    The rigid-body sibling of :func:`multi_quad_pointmass`.  The payload is a
+    box of ``payload_half_extents``; ``num_quadrotors`` sites ``pyld_poc{i}``
+    sit on the ring :func:`~udaan.utils.grasp.ring_attachment_points` defines,
+    and quadrotor ``i`` is placed *radially outboard of site* ``i`` on the same
+    azimuth, tied to it by a spatial tendon limited to ``cable_length``.
+
+    Four invariants hold by construction:
+
+    * **The formation starts taut.**  The payload height comes from
+      :func:`rigid_payload_height`, so every cable is exactly at its tendon
+      limit at ``t = 0``.
+    * **The azimuths agree with the model's.**  Both rings run at ``2πi/nQ``,
+      the azimuths :func:`~udaan.utils.grasp.ring_attachment_points` and
+      :func:`~udaan.utils.grasp.formation_cable_attitudes` share, so the grasp
+      geometry this file encodes is the one
+      :class:`~udaan.control.multi_quad_rigidbody.MultiQuadRigidbodyController`
+      allocates through and its hover trim is exact. What matters is the
+      **pairing** of sites with cable directions: sites on any other azimuth,
+      read through the model's ``2πi/nQ`` cable directions as the controller
+      reads them, leave a non-zero ``hover_residual``.
+    * **The free joints are undamped.**  ``MujocoAssetCreator.joint`` defaults
+      to ``damping=0.1``, and applied to the quadrotors' and the payload's
+      *free* joints that is a viscous drag on every translational and
+      rotational degree of freedom.
+      :class:`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase` has no
+      such term, so damping would be a physics difference between the
+      backends, not an integration one. It is therefore switched off here
+      rather than modelled; the analytical model stays the definition of the
+      machine.
+    * **The integrator timestep is the default physics rate's**,
+      ``1/DEFAULT_PHYSICS_RATE_HZ``. The MuJoCo backend overwrites it with
+      ``dt/N`` from its own ``physics_rate_hz``, and writes the tendons' limit
+      stiffness from that timestep.
+
+    The ring is checked by :func:`udaan.utils.grasp.check_rigid_formation`:
+    neighbouring airframes must be at least
+    :data:`~udaan.core.defaults.DEFAULT_ROTOR_SPAN` plus
+    :data:`~udaan.core.defaults.DEFAULT_FORMATION_CLEARANCE` apart, and the
+    formation radius must stay below the cable length.
+
+    Args:
+        num_quadrotors: number of quadrotors, >= 1.
+        filename: path to write the MJCF to.
+        cable_length: taut cable length, in metres, shared by every cable.
+        payload_mass: rigid-body payload mass, in kg.
+        payload_half_extents: ``(a, b, c)`` half-extents of the slab, in metres.
+        quad_mass: total mass of each quadrotor, in kg.
+        attachment_radius: radius of the attachment ring in the payload body
+            frame, in metres.
+        attachment_height: height of the attachment ring above the payload
+            centre of mass, in metres.
+        formation_radius: horizontal offset of each quadrotor from *its own*
+            attachment point, in metres; ``None`` is
+            :func:`udaan.utils.grasp.rigid_formation_radius`.
+        spawn_height: height of the quadrotor ring, in metres; ``None`` is
+            :func:`udaan.utils.grasp.rigid_spawn_height`, which puts the
+            payload's centre at
+            :data:`~udaan.core.defaults.DEFAULT_PAYLOAD_SPAWN_HEIGHT`.
+        verbose: log the generated XML.
+
+    Returns:
+        The ``filename`` written.
+
+    Raises:
+        ValueError: for a non-positive quadrotor count, a cable too short for
+            the formation radius, neighbouring airframes closer than the rotor
+            span plus the clearance, an attachment ring that leaves the
+            payload, or a payload that would spawn at or below the ground
+            plane.
+    """
+    if num_quadrotors < 1:
+        raise ValueError(f"num_quadrotors must be >= 1, got {num_quadrotors}")
+
+    extents = np.asarray(payload_half_extents, dtype=float).reshape(-1)
+    if extents.shape[0] != 3:
+        raise ValueError(f"payload_half_extents must be a 3-vector; got {extents.tolist()}")
+    if np.any(extents <= 0.0):
+        raise ValueError(f"payload_half_extents must be positive; got {extents.tolist()}")
+
+    radius_a = 0.0 if num_quadrotors == 1 else float(attachment_radius)
+    if radius_a < 0.0:
+        raise ValueError(f"attachment_radius must be >= 0, got {attachment_radius}")
+    # The sites are rigidly attached to the slab, so they have to be *on* it:
+    # an attachment ring wider than the footprint describes a cable anchored to
+    # thin air, and the moment arm r_i the whole grasp is built from would then
+    # be a number with no body behind it.
+    if radius_a > float(min(extents[0], extents[1])):
+        raise ValueError(
+            f"attachment_radius ({radius_a}) leaves the payload footprint "
+            f"(half-extents {extents[0]} x {extents[1]}); the attachment sites would "
+            "hang off the slab"
+        )
+    if abs(float(attachment_height)) > float(extents[2]):
+        raise ValueError(
+            f"attachment_height ({attachment_height}) is outside the slab's half-thickness "
+            f"({extents[2]})"
+        )
+
+    if formation_radius is None:
+        formation_radius = rigid_formation_radius(num_quadrotors, radius_a)
+    radius_f = 0.0 if num_quadrotors == 1 else float(formation_radius)
+    points = ring_attachment_points(num_quadrotors, radius_a, float(attachment_height))
+    check_rigid_formation(points, radius_f, cable_length)
+    if spawn_height is None:
+        spawn_height = rigid_spawn_height(cable_length, radius_f, float(attachment_height))
+    z_payload = rigid_payload_height(cable_length, radius_f, spawn_height, attachment_height)
+    if z_payload - extents[2] <= 0.0:
+        # As fatal as an infeasible triangle: a payload spawned inside the
+        # ground plane is not a model anyone asked for, and a log warning is
+        # invisible by default.
+        raise ValueError(
+            f"payload would spawn with its underside at z={z_payload - extents[2]:.3f} m, at "
+            f"or below the ground plane; raise spawn_height ({spawn_height}) or shorten "
+            f"the cable ({cable_length})"
+        )
+
+    angles = np.linspace(0.0, 2 * np.pi, num_quadrotors, endpoint=False)
+
+    writer = MujocoAssetCreator("MultiQuadRigidbody")
+    writer.option(timestep=1.0 / DEFAULT_PHYSICS_RATE_HZ)
+    for i in range(num_quadrotors):
+        # Radially outboard of attachment ``i``, on its own azimuth, lifted by
+        # the vertical leg of the taut triangle. At nQ = 1 both radii are zero
+        # and the quadrotor sits straight above the payload's axis.
+        radius_q = radius_a + radius_f
+        writer.create_quadrotor0(
+            writer.worldbody,
+            f"quad{i}",
+            np.array([radius_q * np.cos(angles[i]), radius_q * np.sin(angles[i]), spawn_height]),
+            mass=quad_mass,
+            root_damping=0.0,
+        )
+
+    pyld = writer.body(writer.worldbody, "pyld", pos=np.array([0.0, 0.0, z_payload]))
+    writer.box(pyld, "pyld", size=extents, rgb=[0.2, 0.8, 0.4], mass=payload_mass)
+    for i in range(num_quadrotors):
+        writer.site(
+            pyld,
+            f"pyld_poc{i}",
+            pos=points[i],
+            type="sphere",
+            size=[0.01],
+            rgba=[0, 0, 0, 0],
+        )
+    writer.joint(pyld, "pyld_joint", type="free", damping=0.0)
+
+    tendon = writer.tendon(writer.root)
+    for i in range(num_quadrotors):
+        writer.spatial(tendon, f"quad{i}_end1", f"pyld_poc{i}", range=[0.0, cable_length])
 
     writer.save_to(filename, verbose=verbose)
     return filename

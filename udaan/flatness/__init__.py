@@ -20,6 +20,13 @@ output ``(x_L, {ψ_i}, {internal cable forces})``.  The internal-force
 part is supplied by a pluggable :class:`TensionSplitPolicy`
 (:class:`RingTensionSplit` by default).
 
+:class:`MultiQuadRigidbody` — flat-to-state recovery for ``nQ``
+quadrotors sharing one cable-suspended **rigid-body** payload, with flat
+output ``(x_L, R_L, {ψ_i}, λ)``.  Here the payload has an attitude, so the
+free part of the split is the null space of the grasp map, resolved by a
+:class:`TensionDistributionPolicy` (:class:`RingTensionDistribution` by
+default) through the :class:`WrenchAllocation` primitive.
+
 Feasibility
 -----------
 :mod:`~udaan.flatness.feasibility` — whether a reference keeps every airframe
@@ -27,6 +34,24 @@ upright: :func:`is_upright`, :func:`scan_reference` and
 :class:`ReferenceFeasibility`.
 """
 
+from .allocation import (
+    FixedTensionDistribution as FixedTensionDistribution,
+)
+from .allocation import (
+    RingTensionDistribution as RingTensionDistribution,
+)
+from .allocation import (
+    TensionDistributionPolicy as TensionDistributionPolicy,
+)
+from .allocation import (
+    WrenchAllocation as WrenchAllocation,
+)
+from .allocation import (
+    WrenchAllocationError as WrenchAllocationError,
+)
+from .allocation import (
+    null_space_basis as null_space_basis,
+)
 from .base import Flat2State as Flat2State
 from .cable import cable_direction_jet as cable_direction_jet
 from .cable import point_mass_cable_force as point_mass_cable_force
@@ -71,6 +96,21 @@ from .multi_quad_cspayload import (
 from .multi_quad_cspayload import (
     TensionSplitPolicy as TensionSplitPolicy,
 )
+from .multi_quad_rigidbody import (
+    MultiQuadRigidbody as MultiQuadRigidbody,
+)
+from .multi_quad_rigidbody import (
+    MultiQuadRigidbodyFlats as MultiQuadRigidbodyFlats,
+)
+from .multi_quad_rigidbody import (
+    MultiQuadRigidbodyInputs as MultiQuadRigidbodyInputs,
+)
+from .multi_quad_rigidbody import (
+    MultiQuadRigidbodyRefState as MultiQuadRigidbodyRefState,
+)
+from .multi_quad_rigidbody import (
+    rotation_jet as rotation_jet,
+)
 from .quadrotor import (
     Quadrotor as Quadrotor,
 )
@@ -99,6 +139,7 @@ from .quadrotor_cspayload import (
 __all__ = [
     "DEFAULT_MIN_TENSION",
     "AffineTensionSplit",
+    "FixedTensionDistribution",
     "Flat2State",
     "Jet",
     "LegacyFixedTensionSplit",
@@ -106,6 +147,10 @@ __all__ = [
     "MultiQuadCsPayloadFlats",
     "MultiQuadCsPayloadInputs",
     "MultiQuadCsPayloadRefState",
+    "MultiQuadRigidbody",
+    "MultiQuadRigidbodyFlats",
+    "MultiQuadRigidbodyInputs",
+    "MultiQuadRigidbodyRefState",
     "Quadrotor",
     "QuadrotorCsPayload",
     "QuadrotorCsPayloadFlats",
@@ -115,9 +160,13 @@ __all__ = [
     "QuadrotorInputs",
     "QuadrotorRefState",
     "ReferenceFeasibility",
+    "RingTensionDistribution",
     "RingTensionSplit",
+    "TensionDistributionPolicy",
     "TensionSplitContractError",
     "TensionSplitPolicy",
+    "WrenchAllocation",
+    "WrenchAllocationError",
     "cable_direction_jet",
     "infeasible_intervals",
     "is_upright",
@@ -125,7 +174,9 @@ __all__ = [
     "leibniz_matmul",
     "leibniz_product",
     "normalize_derivatives",
+    "null_space_basis",
     "point_mass_cable_force",
+    "rotation_jet",
     "scan_reference",
     "tension_direction_jet",
     "yaw_jet",

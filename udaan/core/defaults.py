@@ -90,6 +90,15 @@ DEFAULT_PROP_MIN_FORCE = 0.0
 #: Upper bound on a single rotor's force, in N.
 DEFAULT_PROP_MAX_FORCE = 10.0
 
+#: Collective-thrust ceiling for the multi-quadrotor rigid-body model (M4), in N.
+#:
+#: Higher than :data:`DEFAULT_MAX_THRUST` because each vehicle there carries a
+#: share of a rigid-body payload on top of its own weight, and the formation
+#: also has to supply the payload's attitude control through cable tensions.
+DEFAULT_MULTI_QUAD_MAX_THRUST = 30.0
+#: Body-torque bound for M4, in N·m — isotropic, unlike the single-vehicle case.
+DEFAULT_MULTI_QUAD_MAX_TORQUE = np.array([3.0, 3.0, 3.0])
+
 # =============================================================================
 # Default payload parameters
 # =============================================================================
@@ -133,6 +142,45 @@ DEFAULT_FORMATION_RADIUS = 0.5  # m
 #: payload height is *derived* from this, the cable length and the formation
 #: radius so that the cables start taut — never chosen independently.
 DEFAULT_SPAWN_HEIGHT = 2.0  # m
+
+# =============================================================================
+# Default rigid-body payload parameters (M4)
+# =============================================================================
+#
+# The M4 payload is a *rigid body*, not a point mass, so it needs a mass, an
+# inertia tensor and a set of body-frame attachment points — the last of these
+# is what makes the system able to exert a moment on the load at all.  The
+# defaults describe a thin square slab, which is also what
+# :func:`udaan.utils.assets.multi_quad_rigidbody` emits when it is not told
+# otherwise — so the analytical model and the generated MJCF agree by
+# construction.
+
+#: Mass of the default rigid-body payload, in kg.
+DEFAULT_RIGID_PAYLOAD_MASS = 1.0  # kg
+
+#: Half-extents ``(a, b, c)`` of the default slab payload, in metres.
+DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS = np.array([0.5, 0.5, 0.05])  # m
+
+#: Inertia of the default slab payload about its centre of mass, in kg*m^2.
+#: Uniform box: ``I = (m/3) diag(b²+c², a²+c², a²+b²)`` with *half*-extents,
+#: which is exactly the formula MuJoCo's ``inertiafromgeom`` applies to a
+#: ``type="box"`` geom — so the analytical model and the MJCF agree by
+#: construction rather than by coincidence.
+DEFAULT_RIGID_PAYLOAD_INERTIA = (DEFAULT_RIGID_PAYLOAD_MASS / 3.0) * np.diag(
+    [
+        DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[1] ** 2 + DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[2] ** 2,
+        DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[0] ** 2 + DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[2] ** 2,
+        DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[0] ** 2 + DEFAULT_RIGID_PAYLOAD_HALF_EXTENTS[1] ** 2,
+    ]
+)
+
+#: Horizontal radius of the ring of cable attachment points on the payload,
+#: measured in the payload body frame, in metres.
+DEFAULT_ATTACHMENT_RADIUS = 0.5  # m
+
+#: Height of the attachment ring above the payload centre of mass, in metres.
+#: Matches the top face of the default slab.
+DEFAULT_ATTACHMENT_HEIGHT = 0.05  # m
 
 #: Tip-to-tip span of the generated airframe, in metres: two 0.2 m arms
 #: (:data:`DEFAULT_ARM_LENGTH`) plus a 0.1 m rotor disc at each tip, as emitted by
@@ -272,3 +320,27 @@ MIN_UPRIGHT_THRUST_Z = 0.0
 # follows its own length, and the payload loop sits a ratio ``r`` below the
 # slowest cable. `udaan.control.multi_quad_cspayload.multi_cable_cascade_gains`
 # computes them from the model's cable lengths and airframe inertias.
+
+# Rigid-body payload attitude loop (M4).
+#
+# The extra loop M4 has and M3 does not: a geometric SO(3) PD on the payload
+# attitude whose output is a *moment*. It is placed in the same time-scale
+# design as the payload's position loop, at a multiple of the payload's lateral
+# frequency ω_p (which sits a ratio r below the slowest cable),
+#
+#   ω_L = RIGID_PAYLOAD_ATTITUDE_FREQUENCY_RATIO · ω_p,
+#
+# with damping CABLE_CASCADE_DAMPING, on the payload's own inertia J_L:
+# k_R = J_L,ii ω_L², k_Ω = 2ζ J_L,ii ω_L per body axis, in N·m.
+# `udaan.control.multi_quad_rigidbody.rigid_payload_cascade_gains` computes them.
+
+#: Payload attitude-loop frequency ``ω_L`` as a multiple of the payload's
+#: lateral position-loop frequency ``ω_p``.
+RIGID_PAYLOAD_ATTITUDE_FREQUENCY_RATIO = 3.0
+
+#: Floor on every tension the M4 payload cascade allocates, as a fraction of
+#: that cable's own hover tension: the default tension policy
+#: (:class:`~udaan.flatness.MinimumTensionDistribution`) moves the grasp's
+#: null-space coordinate so that each cable's force along its hover direction
+#: stays at or above it.
+RIGID_MIN_CABLE_TENSION_FRACTION = 0.1

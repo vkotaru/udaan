@@ -23,7 +23,7 @@ from pathlib import Path
 import mujoco
 import pytest
 
-from udaan.utils.assets import multi_quad_cspayload
+from udaan.utils.assets import multi_quad_cspayload, multi_quad_rigidbody
 from udaan.utils.assets.cache import (
     PACKAGED_MJCF_DIR,
     SCENE_XML,
@@ -102,6 +102,13 @@ class TestSceneTravelsWithTheAsset:
         """
         target = tmp_path / "out.xml"
         multi_quad_cspayload(num_quadrotors=2, filename=str(target), verbose=False)
+        assert (tmp_path / SCENE_XML).exists(), "scene.xml was not written beside the asset"
+        model = mujoco.MjModel.from_xml_path(str(target))
+        assert model.nbody > 1
+
+    def test_a_generated_rigid_payload_asset_loads_from_a_fresh_directory(self, tmp_path):
+        target = tmp_path / "out.xml"
+        multi_quad_rigidbody(num_quadrotors=3, filename=str(target), verbose=False)
         assert (tmp_path / SCENE_XML).exists(), "scene.xml was not written beside the asset"
         model = mujoco.MjModel.from_xml_path(str(target))
         assert model.nbody > 1
@@ -199,6 +206,21 @@ class TestReadOnlyInstall:
             from udaan.models.multi_quad_cspayload import MultiQuadCsPayloadMujoco
 
             model = MultiQuadCsPayloadMujoco(num_quadrotors=2)
+            assert str(tmp_path) in model._mjMdl.full_path
+        finally:
+            PACKAGED_MJCF_DIR.chmod(mode)
+
+    @pytest.mark.skipif(_IS_ROOT, reason="root ignores directory permissions")
+    def test_rigid_payload_generation_survives_an_unwritable_package_directory(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("UDAAN_ASSET_DIR", str(tmp_path))
+        mode = PACKAGED_MJCF_DIR.stat().st_mode
+        PACKAGED_MJCF_DIR.chmod(0o555)
+        try:
+            from udaan.models.multi_quad_rigidbody import MultiQuadRigidbodyMujoco
+
+            model = MultiQuadRigidbodyMujoco(num_quadrotors=3)
             assert str(tmp_path) in model._mjMdl.full_path
         finally:
             PACKAGED_MJCF_DIR.chmod(mode)
