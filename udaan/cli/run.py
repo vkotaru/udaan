@@ -206,6 +206,10 @@ def quadrotor(
     _hold_viewer(mdl)
 
 
+#: ``udaan run quad-payload --traj`` choices.
+_QUAD_PAYLOAD_TRAJECTORIES = ("hover", "circle", "spiral")
+
+
 @run_app.command("quad-payload")
 def quad_payload(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
@@ -216,9 +220,26 @@ def quad_payload(
     cable_model: str = typer.Option(
         "tendon", "--cable-model", "-c", help="Cable model: tendon or links."
     ),
+    trajectory: str = typer.Option(
+        "hover",
+        "--trajectory",
+        "--traj",
+        help="Payload trajectory: hover, circle (1 m radius, 1 m/s), spiral (horizontal "
+        "helix: 0.8 m radius, 2 m/s, two loops climbing 1 m).",
+    ),
+    cable_length: float | None = typer.Option(
+        None,
+        "--cable-length",
+        help="Cable length in metres (default: the model's own, 1 m). The link chain's "
+        "length is fixed by its MJCF, so -c links accepts only that length.",
+    ),
     record: str | None = _record_option,
     position: str | None = typer.Option(
-        None, "--position", "-p", help="Initial payload position as 'x,y,z'."
+        None,
+        "--position",
+        "-p",
+        help="Initial payload position as 'x,y,z' (the circle's centre, the helix's start; "
+        "default -1,2,0.5 for hover, 0,0,1.5 otherwise).",
     ),
 ):
     """Simulate a quadrotor with cable-suspended payload."""
@@ -229,7 +250,6 @@ def quad_payload(
     from . import parse_vec
 
     _check_model(model, _CLI_MODELS)
-    x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
     if cable_model not in _CABLE_MODELS:
         typer.secho(
             f"Unknown cable model '{cable_model}'. Expected one of: {', '.join(_CABLE_MODELS)}.",
@@ -237,6 +257,22 @@ def quad_payload(
             err=True,
         )
         raise typer.Exit(1)
+    if trajectory not in _QUAD_PAYLOAD_TRAJECTORIES:
+        typer.secho(
+            f"Unknown trajectory '{trajectory}'. "
+            f"Expected one of: {', '.join(_QUAD_PAYLOAD_TRAJECTORIES)}.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    # Hover starts the payload at `x0` and flies it to the payload
+    # controller's own setpoint. The circle and the helix are flown *at* `x0` (the circle's centre, the
+    # helix's start), so their default sits 1.5 m up, with the airframe a
+    # cable length above it. An explicit `-p` is taken as given.
+    default_start = [-1.0, 2.0, 0.5] if trajectory == "hover" else [0.0, 0.0, 1.5]
+    x0 = parse_vec(position, default=np.array(default_start))
+
     mdl: QuadrotorCsPayloadBase
     if model == "mujoco":
         from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadMujoco
@@ -244,11 +280,43 @@ def quad_payload(
         mdl = QuadrotorCsPayloadMujoco(render=render, cable_model=cable_model)
     else:
         mdl = QuadrotorCsPayloadBase()
+
+    # The model refuses a non-positive or non-finite length, and the link chain
+    # any length but its MJCF's.
+    if cable_length is not None:
+        try:
+            mdl.cable_length = cable_length
+        except ValueError as err:
+            typer.secho(f"--cable-length: {err}.", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from err
+        # The default controllers' gains and feed-forward are designed for ℓ.
+        mdl._init_default_controllers()
+
+    # Each trajectory binds `get_full`, whose owner also has `get_jet`, so the
+    # cable and airframe feed-forwards both engage. The payload starts at rest
+    # on its reference's initial position.
+    if trajectory == "circle":
+        from udaan.utils.trajectory import CircularTraj
+
+        circle = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time)
+        mdl.payload_controller.setpoint = circle.get_full
+        x0 = circle.get(0.0)[0]
+    elif trajectory == "spiral":
+        from udaan.utils.trajectory import HelixTrajectory
+
+        helix = HelixTrajectory(start=x0)
+        mdl.payload_controller.setpoint = helix.get_full
+        time = helix.duration
+        x0 = helix.get(0.0)[0]
+
     _setup_recording(mdl, record)
     # `--cable-model` is a MuJoCo cable discretisation; the analytical backend
     # has a single taut cable, so naming one there would misreport the run.
     detail = f"{model}, {cable_model}" if model == "mujoco" else model
-    typer.echo(f"Running quad-payload ({detail}) for {time}s ...")
+    typer.echo(
+        f"Running quad-payload ({detail}, {trajectory}, cable {mdl.cable_length:g} m) "
+        f"for {time:.1f}s ..."
+    )
     mdl.simulate(tf=time, payload_position=x0)
     _hold_viewer(mdl)
 

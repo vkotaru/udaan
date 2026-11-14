@@ -6,6 +6,16 @@
 
 #### Added
 
+- `udaan.utils.trajectory.HelixTrajectory`: a horizontal helix, the
+  `SpiralTrajectory` jet with its axes permuted so the circle lies in the
+  xy-plane and the advance is a climb along z (defaults: start `(0, 0, 1.5)`,
+  radius 0.8 m, 2 m/s, two loops, 1 m climb, 1 s holds, 2 s ramps). It has
+  `get`, `get_full` and `get_jet`, so flatness feed-forward engages.
+- `udaan run quad-payload --traj {hover,circle,spiral}` (default `hover`):
+  `circle` is a 1 m circle at 1 m/s centred on `-p`, `spiral` the default
+  `HelixTrajectory` starting at `-p`; both default `-p` to `0,0,1.5`.
+  `--cable-length` sets the cable length in metres and rebuilds the default
+  controllers for it; the link chain refuses any length but its MJCF's.
 - `udaan.manif.zoh_step`: one zero-order-hold Euler substep on `S2` that steps
   `q` and then projects `ω` onto the tangent plane at the new `q`.
 - **Loop rates are constructor keywords** on `QuadrotorCsPayloadBase` and

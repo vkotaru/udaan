@@ -498,6 +498,106 @@ class TestSpiralTrajectory:
             assert all(np.isfinite(row).all() for row in spiral.get_full(t))
 
 
+class TestHelixTrajectory:
+    """The horizontal helix: SpiralTrajectory's jet with its axes permuted, so the
+    circle lies in the xy-plane and the advance is a climb along z."""
+
+    @staticmethod
+    def _times(helix):
+        t1, t2, ramp = helix._t1, helix._t2, helix._t_ramp
+        return np.concatenate(
+            [
+                np.linspace(t1 + 0.05, t1 + ramp - 0.05, 5),  # ramp-in
+                np.linspace(t1 + ramp + 0.05, t2 - ramp - 0.05, 5),  # cruise
+                np.linspace(t2 - ramp + 0.05, t2 - 0.05, 5),  # ramp-out
+            ]
+        )
+
+    def test_full_jet_rows_are_finite_differences_of_each_other(self):
+        """Rows 1-4 of get_full (velocity to snap) are d/dt of rows 0-3."""
+        from udaan.utils.trajectory import HelixTrajectory
+
+        helix = HelixTrajectory()
+        for t in self._times(helix):
+            full = helix.get_full(t)
+            for row in range(4):
+                np.testing.assert_allclose(
+                    full[row + 1], _central_difference(helix.get_full, t, row, h=1e-5), atol=1e-5
+                )
+
+    def test_get_and_get_jet_agree_with_get_full(self):
+        from udaan.utils.trajectory import HelixTrajectory
+
+        helix = HelixTrajectory()
+        for t in (0.3, *self._times(helix), helix._t2 + 0.3):
+            full = np.array(helix.get_full(t))
+            np.testing.assert_allclose(np.array(helix.get(t)), full[:3], atol=1e-12)
+            np.testing.assert_allclose(helix.get_jet(t, 4), full, atol=1e-12)
+
+    def test_circle_is_horizontal_and_the_advance_is_vertical(self):
+        """The xy-projection stays on a circle of radius r about x0 + (0, r, 0), and
+        z rises monotonically from the start height by ``climb``."""
+        from udaan.utils.trajectory import HelixTrajectory
+
+        start, r, climb = np.array([0.5, -1.0, 1.5]), 0.8, 1.0
+        helix = HelixTrajectory(start=start, radius=r, climb=climb)
+        centre = start[:2] + np.array([0.0, r])
+        times = np.linspace(0.0, helix.duration, 801)
+        pos = np.array([helix.get(t)[0] for t in times])
+        np.testing.assert_allclose(np.linalg.norm(pos[:, :2] - centre, axis=1), r, atol=1e-12)
+        assert np.all(np.diff(pos[:, 2]) >= -1e-12)
+        np.testing.assert_allclose(pos[0], start, atol=1e-12)
+        np.testing.assert_allclose(pos[-1], start + np.array([0.0, 0.0, climb]), atol=1e-9)
+        np.testing.assert_allclose(helix.end_position, start + np.array([0.0, 0.0, climb]))
+
+    def test_cruise_runs_at_the_stated_horizontal_speed_and_climb_rate(self):
+        from udaan.utils.trajectory import HelixTrajectory
+
+        helix = HelixTrajectory(radius=0.8, speed=2.0, n_loops=2, climb=1.0)
+        climb_rate = 1.0 / (2 * np.pi * 2) * (2.0 / 0.8)  # dz/dφ · φ̇
+        for t in np.linspace(helix._t1 + helix._t_ramp, helix._t2 - helix._t_ramp, 7):
+            _, v, a = helix.get(t)
+            assert np.linalg.norm(v[:2]) == pytest.approx(2.0, abs=1e-9)
+            assert v[2] == pytest.approx(climb_rate, abs=1e-9)
+            assert a[2] == pytest.approx(0.0, abs=1e-9)
+            assert np.linalg.norm(a[:2]) == pytest.approx(2.0**2 / 0.8, abs=1e-9)
+
+    def test_is_the_spiral_with_its_axes_permuted(self):
+        """Every row through order 6 equals SpiralTrajectory's, components (y, z, x)."""
+        from udaan.utils.trajectory import HelixTrajectory, SpiralTrajectory
+
+        start = np.array([0.3, -0.2, 1.7])
+        kw = {"start": start, "radius": 0.6, "speed": 1.5, "n_loops": 3, "hold_time": 0.5}
+        kw["ramp_time"] = 1.0
+        helix = HelixTrajectory(climb=0.7, **kw)
+        spiral = SpiralTrajectory(advance=0.7, **kw)
+        for t in np.linspace(0.0, helix.duration, 211):
+            h, s = helix.get_jet(t, 6), spiral.get_jet(t, 6)
+            s[0] -= start
+            expected = s[:, [1, 2, 0]]
+            expected[0] += start
+            np.testing.assert_allclose(h, expected, atol=1e-12)
+        assert helix.duration == spiral.duration
+
+    def test_reference_is_continuous_through_its_sixth_derivative_at_every_boundary(self):
+        from udaan.utils.trajectory import HelixTrajectory
+
+        helix = HelixTrajectory()
+        for b in (helix._t1, helix._t1 + helix._t_ramp, helix._t2 - helix._t_ramp, helix._t2):
+            before, after = helix.get_jet(b - 1e-9, 6), helix.get_jet(b + 1e-9, 6)
+            near = [np.abs(helix.get_jet(b + d, 7)).max(axis=1) for d in (-1e-3, 1e-3)]
+            scale = np.maximum(1.0, np.maximum(*near))
+            for row in range(7):
+                # Row k changes by at most row k+1 times the 2e-9 window.
+                assert np.abs(before[row] - after[row]).max() <= 1e-8 * scale[min(row + 1, 7)]
+
+    def test_rejects_a_ramp_longer_than_the_loops(self):
+        from udaan.utils.trajectory import HelixTrajectory
+
+        with pytest.raises(ValueError, match="ramp_time"):
+            HelixTrajectory(radius=1.0, speed=2 * np.pi, n_loops=1, ramp_time=1.5)
+
+
 class TestStepSetpoint:
     def test_holds_then_steps_with_no_feedforward(self):
         from udaan.utils.trajectory import StepSetpoint

@@ -1,5 +1,6 @@
 from .figure8 import Figure8Trajectory as Figure8Trajectory
 from .flip import FlipTrajectory as FlipTrajectory
+from .flip import HelixTrajectory as HelixTrajectory
 from .flip import SpiralTrajectory as SpiralTrajectory
 from .trajectory import (
     CircularTraj as CircularTraj,
