@@ -26,7 +26,7 @@ FRONT_ROTOR_RGB = [0.85, 0.15, 0.15]
 #: would freeze. Every runtime asset cache hashes it into the generated
 #: filename, so a bump makes stale cached XML unreachable instead of silently
 #: reused by an upgraded ``udaan`` with a warm asset directory.
-MJCF_GENERATOR_VERSION = 6
+MJCF_GENERATOR_VERSION = 7
 
 # Per-geom masses of the rotor assembly emitted by ``create_quadrotor0`` at the
 # default total mass. A requested total scales all four geoms uniformly (see
@@ -624,11 +624,60 @@ class MujocoAssetCreator:
         return cable
 
     def create_flexible_cable_payload(
-        self, parent, name, pos, N=5, length=1, mass=0.15, payload_rgb=(0.0, 0.8, 0.2)
+        self,
+        parent,
+        name,
+        pos=None,
+        N=5,
+        length=1,
+        mass=0.15,
+        payload_rgb=(0.0, 0.8, 0.2),
+        cable_mass=0.01,
+        joint_damping=1e-3,
+        payload_joint_damping=1000.0,
+        payload_joint_stiffness=1000.0,
+        payload_radius=0.05,
+        link_radius=0.005,
     ):
-        """N-link cable + payload subtree. All child names are prefixed with `name`."""
+        """``N``-link cable + payload subtree. Child names are prefixed with ``name``.
+
+        Geometry.  Link ``i`` is a cylinder of length ``dl = length / N``
+        centred on its own body origin, hinged to its parent by a ball joint at
+        its **proximal** end; link 0's joint therefore sits exactly at
+        ``parent``'s origin, and the payload body sits at the distal end of
+        link ``N-1``.  The chain spans ``0.5 dl + (N-1) dl + 0.5 dl = length``
+        from the parent's origin to the payload centre.
+
+        The payload's own ball joint is anchored at its centre, so a
+        (rotationally isotropic) sphere spinning freely about it is exactly a
+        **point mass** — which is what the analytical models suspend.  Leave
+        ``payload_joint_damping``/``payload_joint_stiffness`` at their defaults
+        for a near-welded payload, or pass ``0.0`` for a genuine free point
+        mass.
+
+        Args:
+            parent: XML element to hang the chain from.
+            name: prefix for every emitted body/joint/geom name.
+            pos: accepted and ignored — link 0 is placed relative to ``parent``
+                by the chain geometry, not by a caller-chosen offset.  Present so
+                the signature matches the other subtree emitters.
+            N: number of links.
+            length: total cable length, in metres.
+            mass: payload mass, in kg.
+            payload_rgb: payload colour.
+            cable_mass: total mass of the cable itself, spread evenly over the
+                ``N`` cylinder geoms.
+            joint_damping: viscous damping on each cable ball joint.  Pass
+                ``0.0`` when the asset is to be compared against an analytical
+                model with no drag term — see
+                :func:`udaan.utils.assets.quad_flexcable`.
+            payload_joint_damping: viscous damping on the payload ball joint.
+            payload_joint_stiffness: stiffness of the payload ball joint.
+            payload_radius: radius of the payload sphere, in metres.
+            link_radius: radius of the link cylinders, in metres.
+        """
+        del pos  # documented as ignored; the chain geometry places link 0
         dl = length / N
-        cable_mass = 0.01
         dm = cable_mass / N
         cable = self.body(parent, f"{name}_link0", np.array([0.0, 0.0, -0.5 * dl]))
         self.joint(
@@ -636,13 +685,13 @@ class MujocoAssetCreator:
             f"{name}_joint0",
             "ball",
             pos=np.array([0.0, 0.0, 0.5 * dl]),
-            damping=1e-3,
+            damping=joint_damping,
             stiffness=0,
         )
         self.cylinder(
             cable,
             f"{name}_geom0",
-            radius=0.005,
+            radius=link_radius,
             length=dl,
             mass=dm,
             density=50,
@@ -655,13 +704,13 @@ class MujocoAssetCreator:
                 f"{name}_joint{i}",
                 "ball",
                 pos=np.array([0.0, 0.0, 0.5 * dl]),
-                damping=1e-3,
+                damping=joint_damping,
                 stiffness=0.0,
             )
             self.cylinder(
                 cable,
                 f"{name}_geom{i}",
-                radius=0.005,
+                radius=link_radius,
                 length=dl,
                 mass=dm,
                 density=50,
@@ -671,7 +720,7 @@ class MujocoAssetCreator:
         self.sphere(
             pyld,
             f"{name}_payload_geom",
-            radius=0.05,
+            radius=payload_radius,
             mass=mass,
             density=50,
             rgb=list(payload_rgb),
@@ -682,8 +731,8 @@ class MujocoAssetCreator:
             "ball",
             pos=np.array([0.0, 0.0, 0]),
             range=np.array([-0.001, 0.001]),
-            stiffness=1000,
-            damping=1000,
+            stiffness=payload_joint_stiffness,
+            damping=payload_joint_damping,
             armature=0.0,
         )
         return cable

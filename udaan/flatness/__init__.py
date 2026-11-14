@@ -27,6 +27,18 @@ free part of the split is the null space of the grasp map, resolved by a
 :class:`TensionDistributionPolicy` (:class:`RingTensionDistribution` by
 default) through the :class:`WrenchAllocation` primitive.
 
+:class:`QuadrotorFlexCable` — flat-to-state recovery for a quadrotor
+carrying a payload through a **flexible cable of ``n`` rigid links**, with
+flat output ``(x_L, ψ)``; it needs the payload trajectory to order
+``2n + 4``.  The chain half is the reusable primitive
+:func:`cable_chain_cascade`.
+
+Shared primitives
+-----------------
+:mod:`~udaan.flatness.derivatives` (Leibniz products, normalisation),
+:mod:`~udaan.flatness.cable` (cable direction and tension jets) and
+:mod:`~udaan.flatness.chain` (the tip-to-top link-chain cascade).
+
 Feasibility
 -----------
 :mod:`~udaan.flatness.feasibility` — whether a reference keeps every airframe
@@ -56,6 +68,9 @@ from .base import Flat2State as Flat2State
 from .cable import cable_direction_jet as cable_direction_jet
 from .cable import point_mass_cable_force as point_mass_cable_force
 from .cable import tension_direction_jet as tension_direction_jet
+from .chain import CableChain as CableChain
+from .chain import cable_chain_cascade as cable_chain_cascade
+from .chain import chain_jet_order as chain_jet_order
 from .derivatives import leibniz_dot as leibniz_dot
 from .derivatives import leibniz_matmul as leibniz_matmul
 from .derivatives import leibniz_product as leibniz_product
@@ -135,10 +150,23 @@ from .quadrotor_cspayload import (
 from .quadrotor_cspayload import (
     QuadrotorCsPayloadRefState as QuadrotorCsPayloadRefState,
 )
+from .quadrotor_flexcable import (
+    QuadrotorFlexCable as QuadrotorFlexCable,
+)
+from .quadrotor_flexcable import (
+    QuadrotorFlexCableFlats as QuadrotorFlexCableFlats,
+)
+from .quadrotor_flexcable import (
+    QuadrotorFlexCableInputs as QuadrotorFlexCableInputs,
+)
+from .quadrotor_flexcable import (
+    QuadrotorFlexCableRefState as QuadrotorFlexCableRefState,
+)
 
 __all__ = [
     "DEFAULT_MIN_TENSION",
     "AffineTensionSplit",
+    "CableChain",
     "FixedTensionDistribution",
     "Flat2State",
     "Jet",
@@ -157,6 +185,10 @@ __all__ = [
     "QuadrotorCsPayloadInputs",
     "QuadrotorCsPayloadRefState",
     "QuadrotorFlats",
+    "QuadrotorFlexCable",
+    "QuadrotorFlexCableFlats",
+    "QuadrotorFlexCableInputs",
+    "QuadrotorFlexCableRefState",
     "QuadrotorInputs",
     "QuadrotorRefState",
     "ReferenceFeasibility",
@@ -167,7 +199,9 @@ __all__ = [
     "TensionSplitPolicy",
     "WrenchAllocation",
     "WrenchAllocationError",
+    "cable_chain_cascade",
     "cable_direction_jet",
+    "chain_jet_order",
     "infeasible_intervals",
     "is_upright",
     "leibniz_dot",

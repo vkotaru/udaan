@@ -10,6 +10,7 @@ Submodules
    udaan.flatness.allocation
    udaan.flatness.base
    udaan.flatness.cable
+   udaan.flatness.chain
    udaan.flatness.derivatives
    udaan.flatness.feasibility
    udaan.flatness.jet
@@ -17,6 +18,7 @@ Submodules
    udaan.flatness.multi_quad_rigidbody
    udaan.flatness.quadrotor
    udaan.flatness.quadrotor_cspayload
+   udaan.flatness.quadrotor_flexcable
 
 Module contents
 ---------------

@@ -158,6 +158,21 @@ fixed by its MJCF, so `-c links` refuses any other value.
 The controller used is derived in {doc}`../theory/controllers/quadrotor-payload`; the
 underlying dynamics are covered in {doc}`../theory/dynamics/quadrotor-cspayload`.
 
+## Quadrotor with a payload on a flexible cable
+
+```bash
+udaan run quad-flexcable -m base -t 10              # analytical model, 3-link cable
+udaan run quad-flexcable -n 5 --no-render           # MuJoCo, 5-link cable
+udaan run quad-flexcable --traj lissajous --no-render
+```
+
+The payload is regulated through the whole link chain by an infinite-horizon
+LQR, with the flat map's reference state and wrench as feed-forward when the
+trajectory supplies derivatives to order `2n + 4` (`get_jet`). The controller
+is derived in {doc}`../theory/controllers/quadrotor-flexcable`, the dynamics
+in {doc}`../theory/dynamics/quadrotor-flexcable` and the flat map in
+{doc}`../theory/differential-flatness/quadrotor-flexcable`.
+
 ## Side-by-side fleets
 
 Two fleet commands exist for comparing controllers or gains:
