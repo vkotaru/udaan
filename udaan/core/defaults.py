@@ -140,7 +140,9 @@ DEFAULT_FORMATION_RADIUS = 0.5  # m
 
 #: Height of the quadrotor ring above the ground at spawn, in metres. The
 #: payload height is *derived* from this, the cable length and the formation
-#: radius so that the cables start taut — never chosen independently.
+#: radius so that the cables start taut — never chosen independently. In the
+#: generated M5 MJCF it is the airframe's height, and the payload spawns
+#: ``cable_length`` below it.
 DEFAULT_SPAWN_HEIGHT = 2.0  # m
 
 # =============================================================================
@@ -199,7 +201,7 @@ DEFAULT_FORMATION_CLEARANCE = 0.1  # m
 #: (:func:`udaan.utils.formation.default_spawn_height`).
 DEFAULT_PAYLOAD_SPAWN_HEIGHT = 1.0  # m
 
-#: Mass of the generated airframe, in kg: what the multi-vehicle generators pass
+#: Mass of the generated airframe, in kg: what the multi-vehicle and M5 generators pass
 #: :meth:`~udaan.utils.assets.mujoco_asset_creator.MujocoAssetCreator.create_quadrotor0`
 #: as its ``mass``.
 DEFAULT_GENERATED_QUAD_MASS = 0.9  # kg
@@ -344,3 +346,97 @@ RIGID_PAYLOAD_ATTITUDE_FREQUENCY_RATIO = 3.0
 #: null-space coordinate so that each cable's force along its hover direction
 #: stays at or above it.
 RIGID_MIN_CABLE_TENSION_FRACTION = 0.1
+
+# =============================================================================
+# Quadrotor with a payload on an n-link flexible cable (M5)
+# =============================================================================
+
+#: Number of rigid links the flexible cable is discretised into.
+#:
+#: Three, not more, because the chain's fastest internal mode grows roughly
+#: like ``n^{3/2}`` and udaan's ZOH-Euler integrator is only *conditionally*
+#: stable — see "Numerical stability" in
+#: :mod:`udaan.models.quadrotor_flexcable.base`. At the shared 1.25 ms substep
+#: this default leaves ~2x margin;
+#: :meth:`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableBase.natural_frequencies`
+#: is what to consult before raising it, and the analytical model's constructor
+#: warns when the combination of ``num_links`` and ``dt`` has left the stable
+#: region. The growth exponent rises steeply with the link count at fixed cable
+#: mass, so a long chain at this ``dt`` warns out of the constructor.
+DEFAULT_NUM_CABLE_LINKS = 3
+
+#: Total mass of the cable itself, in kg, spread evenly over its links.
+#:
+#: A tenth of the payload mass. The cable *could* be lighter — a real 1 m
+#: tether is nearer 10 g, which is what
+#: :meth:`~udaan.utils.assets.mujoco_asset_creator.MujocoAssetCreator.create_flexible_cable_payload`
+#: defaults to — but the fastest internal mode of a lumped-mass chain
+#: scales like ``sqrt(m_payload / m_link)``, so a 10 g cable at
+#: ``num_links = 3`` is already three times too fast for the 1.25 ms substep.
+#: Both the analytical model and :func:`udaan.utils.assets.quad_flexcable` read
+#: this constant, so they always describe the same cable whatever it is set to.
+DEFAULT_CABLE_MASS = 0.1  # kg
+
+#: MuJoCo integrator timestep written into the generated M5 MJCF, in seconds.
+#:
+#: It is the analytical model's *inner* substep (a 5 ms outer loop over four
+#: 1.25 ms substeps), so the two backends integrate at the same rate and 5 ms
+#: divides by it exactly: the MuJoCo backend takes ``round(dt / timestep)``
+#: substeps per :meth:`step`.
+DEFAULT_MJCF_TIMESTEP = 1.25e-3  # s
+
+#: Largest step of the flat map's reference airframe acceleration, in m/s², that
+#: :meth:`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableBase.simulate`
+#: accepts without a warning: a fifth of gravity, i.e. a step in the
+#: feed-forward thrust of a fifth of hover. The flat map needs the payload path
+#: continuous through order ``2n + 4``; a trajectory smooth to a lower order
+#: steps the reference where the discontinuity is, and a long cable magnifies
+#: the step.
+MAX_FLEXCABLE_REFERENCE_ACCEL_STEP = 0.2 * GRAVITY  # m/s^2
+
+# Flexible-cable payload LQR (M5).
+#
+# M5's published law is a linear-quadratic regulator rather than a geometric
+# cascade, so its "gains" are the weights of the cost
+#
+#     J = ∫ sᵀ Q s + duᵀ R du dt,
+#
+# not a PD pair: the gain matrix ``K = -R⁻¹ BᵀP`` is solved from these once, at
+# construction, by :class:`~udaan.control.quadrotor_flexcable.QuadrotorFlexCableController`.
+# The six ``Q`` entries weight the six blocks of the variational error state
+# ``s = [e_x, e_v, η, δΩ, ξ_i, δω_i]``; the two ``R`` entries weight the thrust
+# and the three body moments.
+#
+# The ``Q`` block values are the MATLAB reference implementation's
+# (``quadrotor-flexible-cables-payload/Control/sQnlink/sQ_nlink_control.m``,
+# ``odefun_riccati``: ``Q1 = blkdiag(0.5 I6, 0.75 I6, I_3n, 0.75 I_3n)``)
+# unchanged.
+#
+# ``R`` is **not**.  The reference weights all four inputs equally at
+# ``0.2 I4``, which ignores that the moment channel's input matrix is ``J⁻¹``
+# — spectral norm 207 for the default (generated) airframe — while the thrust
+# channel's is ``1/M₀₀``, order 1.  Equal weights therefore buy an attitude
+# loop a few hundred times faster than the thrust loop: its fastest
+# closed-loop pole lies at −400 rad/s, against a 200 Hz outer loop.
+#
+# The cost of that pole is **sampled-data phase loss**, not discrete-time
+# divergence: the *command* is frozen across the whole 5 ms hold, and the
+# hold's half-sample delay ``ω Δt / 2`` is about 1 rad of phase lag at
+# −400 rad/s.
+#
+# Weighting the moments at 20 brings the fastest pole to −40 rad/s (0.1 rad
+# of hold lag).  Being an *input* weight it leaves the chain modes nearly
+# alone, but "nearly" is n-dependent, and from n = 2 up it is in the *worse*
+# direction: the slowest closed-loop real part moves 9.1 % at n = 2, 22 % at
+# n = 3 and 43 % at n = 5 (pinned in
+# ``tests/test_quadrotor_flexcable_control.py``).  See the
+# damping-versus-tracking trade-off in
+# :mod:`udaan.control.quadrotor_flexcable.payload_controller`.
+DEFAULT_FLEXCABLE_LQR_Q_POSITION = 0.5
+DEFAULT_FLEXCABLE_LQR_Q_VELOCITY = 0.5
+DEFAULT_FLEXCABLE_LQR_Q_ATTITUDE = 0.75
+DEFAULT_FLEXCABLE_LQR_Q_ANGULAR_RATE = 0.75
+DEFAULT_FLEXCABLE_LQR_Q_LINK = 1.0
+DEFAULT_FLEXCABLE_LQR_Q_LINK_RATE = 0.75
+DEFAULT_FLEXCABLE_LQR_R_THRUST = 0.2
+DEFAULT_FLEXCABLE_LQR_R_MOMENT = 20.0

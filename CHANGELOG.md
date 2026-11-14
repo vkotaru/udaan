@@ -317,6 +317,51 @@
 - Docs: theory pages for the M4 dynamics and flat map. Example:
   `examples/multi_quad_rigidbody.py`.
 
+### Quadrotor with a payload on a flexible n-link cable (M5)
+
+#### Added
+
+- `udaan.models.quadrotor_flexcable`: `QuadrotorFlexCableBase`, one quadrotor
+  carrying a point-mass payload through a cable of `n` rigid links (lumped
+  masses at the distal joints), integrated by zero-order-hold Euler at four
+  1.25 ms substeps of the 5 ms step, and `QuadrotorFlexCableMujoco`, the same
+  machine as a MuJoCo ball-joint chain generated on demand into the user asset
+  cache. The MuJoCo backend reads the airframe's mass, its full inertia tensor
+  in the body frame, the link lengths and the link masses from the MJCF, reads
+  every link's direction and rate from the bodies at the current
+  configuration, and raises `RuntimeError` when MuJoCo reports a diverged
+  integration. `stability_growth_rate()` and the constructor's stiffness
+  warning describe the analytical model's Euler substep; the MuJoCo backend
+  does not warn. Both backends fly the generated airframe by default
+  (`DEFAULT_GENERATED_QUAD_MASS`, and `DEFAULT_GENERATED_QUAD_INERTIA` scaled
+  with the mass), and both clocks count physics substeps, so `k` steps read
+  `k · dt` and `simulate(tf)` takes `tf / dt` steps.
+- `udaan.control.quadrotor_flexcable.QuadrotorFlexCableController`: an
+  infinite-horizon LQR on the variational error state of the whole chain,
+  emitting a wrench, with the flat map's reference state and wrench as
+  feed-forward. Its cost weights are `DEFAULT_FLEXCABLE_LQR_*` in
+  `core/defaults.py`.
+- `udaan.control.solve_lqr_gain`: a checked continuous-time Riccati solve
+  (residual graded at `ARE_RESIDUAL_WARNING`, refused at
+  `ARE_RESIDUAL_TOLERANCE`, closed loop required strictly stable).
+- `udaan.flatness.QuadrotorFlexCable`: flat output `(x_L, ψ)`, payload jet to
+  order `2n + 4`, built on the shared `flatness/derivatives.py` and
+  `flatness/cable.py` and on `flatness/chain.py` (`cable_chain_cascade`,
+  `CableChain`, `chain_jet_order`).
+  `jet_discontinuities` finds the joints at which a trajectory's jet is
+  discontinuous below the map's order, and `QuadrotorFlexCable.reference_steps`
+  the steps they put into the reference airframe velocity and acceleration;
+  `simulate()` warns when a step exceeds `MAX_FLEXCABLE_REFERENCE_ACCEL_STEP`
+  (a fifth of gravity) and keeps them in `reference_steps`.
+- `udaan.utils.assets.quad_flexcable`, the M5 MJCF generator, cached in the
+  per-user generated-MJCF cache. `MujocoAssetCreator` gains
+  `create_flexible_cable_payload(cable_mass=, joint_damping=,
+  payload_joint_damping=, payload_joint_stiffness=, payload_radius=,
+  link_radius=)` (defaults 0.01 kg, 1e-3, 1000, 1000, 0.05 m and 0.005 m).
+- `udaan run quad-flexcable` (`-n` links, `-m base|mujoco`, `--traj
+  hover|lissajous`), `examples/quadrotor_flexcable.py`, and the dynamics,
+  controller and flat-map theory pages.
+
 ## v1.4.1 (2026-11-11)
 
 ### Fixed
