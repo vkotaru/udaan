@@ -6,6 +6,9 @@ acceleration in the xz-plane. Requires differential flatness feedforward.
 SpiralTrajectory: helical path with circular motion in yz-plane
 and linear advance along x.
 
+HelixTrajectory: the same helix with its axes permuted, so the circle lies in
+the horizontal xy-plane and the advance is a vertical climb along z.
+
 All derivatives up to snap (4th order) are analytic.
 """
 
@@ -525,3 +528,72 @@ class SpiralTrajectory(Trajectory):
     @property
     def end_position(self):
         return self._end_pos.copy()
+
+
+class HelixTrajectory(SpiralTrajectory):
+    r"""Horizontal helix: circle in the xy-plane while climbing along z.
+
+    :class:`SpiralTrajectory` with its axes permuted cyclically,
+    :math:`(x, y, z) \leftarrow (y, z, x)`, so that the circle is horizontal
+    and the advance is vertical:
+
+    .. math::
+
+        p(\varphi) = x_0 + \Bigl[r\sin\varphi,\; r(1 - \cos\varphi),\;
+            \tfrac{c}{2\pi n}\varphi\Bigr]
+
+    a circle of radius :math:`r` centred at :math:`x_0 + (0, r, 0)`, traversed
+    counter-clockwise seen from above, climbing :math:`c` over :math:`n`
+    loops. The phase :math:`\varphi(t)`, its holds and its degree-11
+    smoothstep ramps are :class:`SpiralTrajectory`'s, unchanged, so the
+    horizontal speed ramps from rest to ``speed`` and back, and every row of
+    the jet is exact to any order. :meth:`get`, :meth:`get_full` and
+    :meth:`get_jet` are inherited, so flatness feed-forward engages.
+
+    The permutation is a proper rotation, so the jet is
+    :class:`SpiralTrajectory`'s jet with its components reordered. Positions
+    are in metres, ``speed`` in m/s, times in seconds; :math:`z` is up.
+
+    Args:
+        start: starting hover position [x, y, z] (metres).
+        radius: radius of the horizontal circle (metres).
+        speed: horizontal tangential speed at cruise (m/s).
+        n_loops: number of full loops.
+        climb: total z-distance climbed over all loops (metres); negative
+            descends.
+        hold_time: hover duration before and after the manoeuvre (seconds).
+        ramp_time: duration of each of the ramp-in and ramp-out (seconds).
+
+    Raises:
+        ValueError: if ``ramp_time`` is negative, or longer than the loops take
+            at full speed (``2π n_loops r / speed``).
+    """
+
+    def __init__(
+        self,
+        start=np.array([0.0, 0.0, 1.5]),
+        radius=0.8,
+        speed=2.0,
+        n_loops=2,
+        climb=1.0,
+        hold_time=1.0,
+        ramp_time=2.0,
+    ):
+        super().__init__(
+            start=start,
+            radius=radius,
+            speed=speed,
+            n_loops=n_loops,
+            advance=climb,
+            hold_time=hold_time,
+            ramp_time=ramp_time,
+        )
+        self._end_pos = self._start + np.array([0.0, 0.0, climb])
+
+    def _spiral_jet(self, tp, order):
+        """``(order + 1, 3)``: :class:`SpiralTrajectory`'s jet, axes permuted."""
+        jet = super()._spiral_jet(tp, order)
+        jet[0] -= self._start
+        jet = jet[:, [1, 2, 0]]
+        jet[0] += self._start
+        return jet

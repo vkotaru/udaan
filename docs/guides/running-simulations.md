@@ -135,9 +135,25 @@ flat map, whose world-frame heading convention is singular on a pitch loop. See
 ## Quadrotor with cable-suspended payload
 
 ```bash
-udaan run quad-payload -c tendon        # spatial-tendon cable model
-udaan run quad-payload -c links         # 10-link chain cable model
+udaan run quad-payload -c tendon                    # spatial-tendon cable model, hover
+udaan run quad-payload -c links                     # 10-link chain cable model, hover
+udaan run quad-payload --traj circle                # payload on a 1 m circle at 1 m/s
+udaan run quad-payload --traj spiral                # payload on a horizontal helix
+udaan run quad-payload --traj spiral --cable-length 2 -m base
 ```
+
+`--traj` takes `hover` (the default: the payload starts at `-p`, default
+`-1,2,0.5`, and flies to the controller's own setpoint), `circle` and `spiral`.
+`circle` (`CircularTraj`) is a 1 m circle at 1 m/s in the horizontal plane
+centred on `-p`; `spiral` is a {py:class}`~udaan.utils.trajectory.HelixTrajectory`
+starting at `-p`: a 0.8 m horizontal circle at 2 m/s, two loops, climbing 1 m,
+with smooth ramps in and out, and it sets the run's duration itself. Both
+default `-p` to `0,0,1.5` and start the payload on its reference; both carry
+jerk and snap, so the cable and airframe feed-forwards engage.
+
+`--cable-length` sets the cable length in metres (default: the model's own,
+1 m) and rebuilds the default controllers for it. The link chain's length is
+fixed by its MJCF, so `-c links` refuses any other value.
 
 The controller used is derived in {doc}`../theory/controllers/quadrotor-payload`; the
 underlying dynamics are covered in {doc}`../theory/dynamics/quadrotor-cspayload`.
