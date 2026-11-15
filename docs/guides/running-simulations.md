@@ -144,8 +144,8 @@ udaan run quad-payload --traj spiral --cable-length 2 -m base
 
 `--traj` takes `hover` (the default: the payload starts at `-p`, default
 `-1,2,0.5`, and flies to the controller's own setpoint), `circle` and `spiral`.
-`circle` (`CircularTraj`) is a 1 m circle at 1 m/s in the horizontal plane
-centred on `-p`; `spiral` is a {py:class}`~udaan.utils.trajectory.HelixTrajectory`
+`circle` (`CircularTraj`) is a 1 m circle in the horizontal plane centred on
+`-p`, starting from rest and reaching 1 m/s over a 2 s smooth ramp; `spiral` is a {py:class}`~udaan.utils.trajectory.HelixTrajectory`
 starting at `-p`: a 0.8 m horizontal circle at 2 m/s, two loops, climbing 1 m,
 with smooth ramps in and out, and it sets the run's duration itself. Both
 default `-p` to `0,0,1.5` and start the payload on its reference; both carry

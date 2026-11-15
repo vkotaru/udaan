@@ -75,6 +75,11 @@ class TestTrajectory:
         np.testing.assert_allclose(np.linalg.norm(pts[:, :2] - [1.0, 2.0], axis=1), 1.0)
         np.testing.assert_allclose(pts[:, 2], 3.0)
 
+    def test_circle_starts_from_rest_and_reaches_one_metre_per_second(self, recorded):
+        _run("-m", "base", "--traj", "circle", "-t", "6")
+        np.testing.assert_allclose(recorded["setpoint"](0.0)[1], 0.0, atol=1e-12)
+        assert np.linalg.norm(recorded["setpoint"](3.0)[1]) == pytest.approx(1.0)
+
     def test_unknown_trajectory_lists_the_choices(self):
         result = _invoke("-m", "base", "--traj", "nope")
         assert result.exit_code == 1
@@ -86,8 +91,8 @@ class TestTrajectory:
         result = _run("-m", "base", "--traj", traj, "-t", "2")
         assert f"base, {traj}" in result.output
 
-    def test_helix_tracks_the_payload_to_a_centimetre(self, monkeypatch):
-        """The real closed loop on the default helix (2 m/s, 0.8 m, 1 m climb)."""
+    @staticmethod
+    def _payload_errors(monkeypatch):
         errors = []
         step = QuadrotorCsPayloadBase.step
 
@@ -97,6 +102,21 @@ class TestTrajectory:
             return step(self, u, **kwargs)
 
         monkeypatch.setattr(QuadrotorCsPayloadBase, "step", logged)
+        return errors
+
+    def test_circle_has_no_start_up_transient(self, monkeypatch):
+        """The real closed loop on the circle, judged over the whole run from t = 0.
+
+        Measured max 0.055 cm on the analytical model; the bound is 0.25 cm.
+        """
+        errors = self._payload_errors(monkeypatch)
+        _run("-m", "base", "--traj", "circle", "-t", "10")
+        assert len(errors) == 2000
+        assert max(errors) < 0.0025
+
+    def test_helix_tracks_the_payload_to_a_centimetre(self, monkeypatch):
+        """The real closed loop on the default helix (2 m/s, 0.8 m, 1 m climb)."""
+        errors = self._payload_errors(monkeypatch)
         _run("-m", "base", "--traj", "spiral")
         assert len(errors) > 1500  # the whole 9 s manoeuvre
         assert np.sqrt(np.mean(np.square(errors))) < 0.01

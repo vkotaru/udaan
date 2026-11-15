@@ -11,8 +11,13 @@
   xy-plane and the advance is a climb along z (defaults: start `(0, 0, 1.5)`,
   radius 0.8 m, 2 m/s, two loops, 1 m climb, 1 s holds, 2 s ramps). It has
   `get`, `get_full` and `get_jet`, so flatness feed-forward engages.
+- `CircularTraj(ramp_time=...)`: with `ramp_time > 0` the circle starts from
+  rest and its angular rate ramps to `speed/radius` through the degree-11
+  smoothstep `SpiralTrajectory` uses; `get_jet` stays exact. The default, 0,
+  is the unramped circle.
 - `udaan run quad-payload --traj {hover,circle,spiral}` (default `hover`):
-  `circle` is a 1 m circle at 1 m/s centred on `-p`, `spiral` the default
+  `circle` is a 1 m circle centred on `-p` that starts from rest and reaches
+  1 m/s over a 2 s ramp, `spiral` the default
   `HelixTrajectory` starting at `-p`; both default `-p` to `0,0,1.5`.
   `--cable-length` sets the cable length in metres and rebuilds the default
   controllers for it; the link chain refuses any length but its MJCF's.

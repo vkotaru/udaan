@@ -138,6 +138,68 @@ class TestCircularTraj:
             CircularTraj().get_jet(0.0, -1)
 
 
+class TestCircularTrajRamp:
+    """``ramp_time > 0``: the circle starts from rest and its rate ramps to ω."""
+
+    @staticmethod
+    def _traj():
+        return CircularTraj(
+            center=np.array([0.5, -1.0, 2.0]), radius=1.5, speed=2.0, th0=0.3, ramp_time=2.0
+        )
+
+    def test_starts_at_rest_on_th0(self):
+        traj = self._traj()
+        jet = traj.get_jet(0.0, 6)
+        np.testing.assert_allclose(jet[0], [0.5 + 1.5 * np.cos(0.3), -1.0 + 1.5 * np.sin(0.3), 2])
+        np.testing.assert_allclose(jet[1:], 0.0, atol=1e-12)
+        np.testing.assert_allclose(traj.get(0.0)[1], 0.0, atol=1e-12)
+
+    @pytest.mark.parametrize("t", [0.1, 0.5, 1.0, 1.5, 1.9, 2.5, 4.0])
+    def test_jet_rows_are_finite_differences_of_each_other(self, t):
+        traj, h = self._traj(), 1e-5
+        jet = traj.get_jet(t, 6)
+        for k in range(1, 7):
+            fd = (traj.get_jet(t + h, k - 1)[k - 1] - traj.get_jet(t - h, k - 1)[k - 1]) / (2 * h)
+            scale = max(1.0, np.abs(jet[k]).max())
+            np.testing.assert_allclose(jet[k], fd, atol=1e-5 * scale)
+        np.testing.assert_allclose(np.array(traj.get_full(t)), jet[:5], atol=1e-12)
+        np.testing.assert_allclose(np.array(traj.get(t)), jet[:3], atol=1e-12)
+
+    def test_reaches_the_stated_speed_and_stays_on_the_circle(self):
+        traj = self._traj()
+        for t in np.linspace(0.0, 6.0, 61):
+            p, v, _ = traj.get(t)
+            assert np.linalg.norm(p[:2] - [0.5, -1.0]) == pytest.approx(1.5, abs=1e-12)
+            assert np.linalg.norm(v) <= 2.0 + 1e-12
+        for t in (2.0, 3.0, 6.0):
+            assert np.linalg.norm(traj.get(t)[1]) == pytest.approx(2.0, abs=1e-12)
+
+    def test_jet_is_continuous_through_its_sixth_derivative_at_both_ends_of_the_ramp(self):
+        traj = self._traj()
+        for b in (0.0, 2.0):
+            before, after = traj.get_jet(b - 1e-9, 6), traj.get_jet(b + 1e-9, 6)
+            near = [np.abs(traj.get_jet(b + d, 7)).max(axis=1) for d in (-1e-3, 1e-3)]
+            scale = np.maximum(1.0, np.maximum(*near))
+            for row in range(7):
+                # Row k changes by at most row k+1 times the 2e-9 window.
+                assert np.abs(before[row] - after[row]).max() <= 1e-8 * scale[min(row + 1, 7)]
+
+    def test_zero_ramp_is_the_unramped_circle(self):
+        a = CircularTraj(center=np.array([1.0, 2.0, 3.0]), radius=0.7, speed=1.3, th0=0.4)
+        b = CircularTraj(
+            center=np.array([1.0, 2.0, 3.0]), radius=0.7, speed=1.3, th0=0.4, ramp_time=0.0
+        )
+        for t in (0.0, 0.8, 3.1):
+            np.testing.assert_array_equal(a.get_jet(t, 6), b.get_jet(t, 6))
+            for ra, rb in zip(a.get(t), b.get(t), strict=True):
+                np.testing.assert_array_equal(ra, rb)
+        assert np.linalg.norm(a.get(0.0)[1]) == pytest.approx(1.3)
+
+    def test_rejects_a_negative_ramp(self):
+        with pytest.raises(ValueError, match="ramp_time"):
+            CircularTraj(ramp_time=-1.0)
+
+
 class TestCrazyTrajectory:
     def test_returns_three_arrays(self):
         traj = CrazyTrajectory()

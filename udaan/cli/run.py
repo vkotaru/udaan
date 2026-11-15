@@ -224,8 +224,8 @@ def quad_payload(
         "hover",
         "--trajectory",
         "--traj",
-        help="Payload trajectory: hover, circle (1 m radius, 1 m/s), spiral (horizontal "
-        "helix: 0.8 m radius, 2 m/s, two loops climbing 1 m).",
+        help="Payload trajectory: hover, circle (1 m radius, 1 m/s after a 2 s ramp from "
+        "rest), spiral (horizontal helix: 0.8 m radius, 2 m/s, two loops climbing 1 m).",
     ),
     cable_length: float | None = typer.Option(
         None,
@@ -298,7 +298,8 @@ def quad_payload(
     if trajectory == "circle":
         from udaan.utils.trajectory import CircularTraj
 
-        circle = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time)
+        # From rest, the speed ramping up over 2 s (SpiralTrajectory's ramp).
+        circle = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time, ramp_time=2.0)
         mdl.payload_controller.setpoint = circle.get_full
         x0 = circle.get(0.0)[0]
     elif trajectory == "spiral":
