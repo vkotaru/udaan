@@ -216,15 +216,42 @@ class PolyTraj5(SmoothTraj):
 
 
 class CircularTraj(Trajectory):
-    """Circular trajectory in the XY plane."""
+    r"""Circular trajectory in the XY plane.
 
-    def __init__(self, center=np.zeros(3), radius=1, speed=1, th0=0, tf=10.0):
+    ``center + radius·(cos θ, sin θ, 0)`` with ``θ = th0 + φ(t)``. By default
+    ``φ = ωt`` with ``ω = speed/radius``: the reference moves at ``speed`` from
+    ``t = 0``.
+
+    With ``ramp_time`` :math:`T_r > 0` the circle starts from rest: the rate
+    :math:`\dot\varphi = \omega S(t/T_r)` ramps from 0 to :math:`\omega` over
+    :math:`T_r` through :class:`~udaan.utils.trajectory.SpiralTrajectory`'s
+    degree-11 smoothstep :math:`S`, whose first five derivatives vanish at both
+    ends, and holds :math:`\omega` after it. The ramp covers
+    :math:`\omega T_r/2` of phase. For ``t <= 0`` the reference is at rest at
+    ``θ = th0``. Every row of :meth:`get_jet` is exact.
+
+    Args:
+        center: circle centre [x, y, z] (metres).
+        radius: radius (metres).
+        speed: tangential speed at full rate (m/s).
+        th0: initial angle (radians).
+        tf: nominal duration (seconds).
+        ramp_time: duration of the speed ramp from rest (seconds); 0 for none.
+
+    Raises:
+        ValueError: if ``ramp_time`` is negative.
+    """
+
+    def __init__(self, center=np.zeros(3), radius=1, speed=1, th0=0, tf=10.0, ramp_time=0.0):
         self._center = center
         self._radius = radius
         self._speed = speed
         self._tf = tf
         self._w = self._speed / self._radius
         self._th0 = th0
+        if ramp_time < 0:
+            raise ValueError(f"ramp_time must be >= 0, got {ramp_time}")
+        self._t_ramp = float(ramp_time)
         self._compute_params()
 
     def _compute_params(self):
@@ -250,11 +277,42 @@ class CircularTraj(Trajectory):
         )
 
     def get(self, t):
+        if self._t_ramp > 0:
+            return tuple(self.get_jet(t, 2))
         return self._x(t), self._dx(t), self._d2x(t)
 
     def get_full(self, t):
         """Return (position, velocity, acceleration, jerk, snap) at time t."""
         return tuple(self.get_jet(t, 4))
+
+    def _ramped_jet(self, t, order):
+        """The jet with the speed ramp: Faà di Bruno on ``g = e^{iθ}``.
+
+        ``ġ = iθ̇ g``, so ``g⁽ⁿ⁾ = Σₖ C(n−1, k) (iθ)⁽ᵏ⁺¹⁾ g⁽ⁿ⁻¹⁻ᵏ⁾``; then
+        ``x = r Re g`` and ``y = r Im g``.
+        """
+        from .flip import _ramp_up
+
+        Tr = self._t_ramp
+        if t <= 0:
+            phi = np.zeros(order + 1)
+        elif t < Tr:
+            phi = _ramp_up(t / Tr, self._w, Tr, order)
+        else:
+            phi = np.zeros(order + 1)
+            phi[0] = 0.5 * self._w * Tr + self._w * (t - Tr)
+            if order >= 1:
+                phi[1] = self._w
+        phi[0] += self._th0
+        g = np.empty(order + 1, dtype=complex)
+        g[0] = np.exp(1j * phi[0])
+        for n in range(1, order + 1):
+            g[n] = sum(math.comb(n - 1, k) * 1j * phi[k + 1] * g[n - 1 - k] for k in range(n))
+        jet = np.zeros((order + 1, 3))
+        jet[:, 0] = self._radius * g.real
+        jet[:, 1] = self._radius * g.imag
+        jet[0] += self._center
+        return jet
 
     def get_jet(self, t, order):
         """Return the position jet ``(order + 1, 3)``, every row in closed form.
@@ -276,6 +334,8 @@ class CircularTraj(Trajectory):
         """
         if order < 0:
             raise ValueError(f"order must be >= 0, got {order}")
+        if self._t_ramp > 0:
+            return self._ramped_jet(t, order)
         k = np.arange(order + 1)
         phase = self._th0 + self._w * t + k * np.pi / 2
         jet = np.zeros((order + 1, 3))
