@@ -5,6 +5,9 @@ from .xml_model_generator import (
     multi_quad_cspayload as multi_quad_cspayload,
 )
 from .xml_model_generator import (
+    multi_quad_hose as multi_quad_hose,
+)
+from .xml_model_generator import (
     multi_quad_pointmass as multi_quad_pointmass,
 )
 from .xml_model_generator import (
@@ -26,6 +29,7 @@ from .xml_model_generator import (
 __all__ = [
     "MJCF_GENERATOR_VERSION",
     "multi_quad_cspayload",
+    "multi_quad_hose",
     "multi_quad_pointmass",
     "multi_quad_rigidbody",
     "payload_height",

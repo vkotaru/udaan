@@ -362,6 +362,49 @@
   hover|lissajous`), `examples/quadrotor_flexcable.py`, and the dynamics,
   controller and flat-map theory pages.
 
+### Several quadrotors carrying one flexible hose (M6)
+
+#### Added
+
+- `udaan.models.multi_quad_hose`: `MultiQuadHoseBase`, `nQ` quadrotors bolted
+  to chosen vertices of one hose of `n` rigid links (lumped vertex masses,
+  ball-jointed links), integrated by zero-order-hold Euler at four 1.25 ms
+  substeps of the 5 ms step, and `MultiQuadHoseMujoco`, the same machine as a
+  MuJoCo ball-joint tree generated on demand into the user asset cache, each
+  airframe on a ball joint at its own centre of mass. The MuJoCo backend reads
+  the airframe masses, each airframe's full inertia tensor in its body frame,
+  the vertex masses and the link lengths from the MJCF, reads every link and
+  airframe at the current configuration, honours every `reset()` keyword the
+  analytical model takes, and raises `RuntimeError` when MuJoCo reports a
+  diverged integration. `stability_growth_rate()` and the constructor's
+  stiffness warning describe the analytical model's Euler substep; the MuJoCo
+  backend does not warn.
+- `udaan.control.multi_quad_hose.MultiQuadHoseController`: an infinite-horizon
+  LQR on the variational error state of the whole hose and every airframe,
+  solved at the static catenary trim about the root setpoint, emitting one
+  wrench per vehicle, with the flat map's reference state and wrenches as
+  feed-forward. It exists when a vehicle sits at the last vertex. Its cost
+  weights are `DEFAULT_HOSE_LQR_*` in `core/defaults.py`.
+- `MultiQuadHoseBase` counts physics substeps for its clock on both backends
+  (`simulate(tf)` takes `tf/dt` steps) and defaults to the generated MJCF's
+  airframe (`DEFAULT_GENERATED_QUAD_MASS/INERTIA`, the inertia scaled with the
+  mass). `MultiQuadHose.reference_steps` finds the joints where a root
+  trajectory's jet is discontinuous below the flat map's order (M5's
+  `jet_discontinuities`) and the step each puts into the airframes' reference
+  acceleration; `simulate()` warns above `MAX_HOSE_REFERENCE_ACCEL_STEP` (0.2 g)
+  and keeps them in `reference_steps`.
+- `udaan.flatness.MultiQuadHose`: flat output `(x_0, {𝛕_a}, {ψ_k})`, the root
+  jet to order `2n + 4` and one vector tension per vehicle but the last;
+  `NotFlatError` when no vehicle sits at the last vertex.
+- `udaan.utils.hose` (attachment validation and the taut spawn shape) and
+  `udaan.utils.assets.multi_quad_hose`, the M6 MJCF generator.
+  `MujocoAssetCreator.sphere` writes `pos` when it is not the body origin; its
+  default emits the XML it emitted before.
+- `udaan run hose` and `udaan generate-xml hose` (`-n` links, `-a`
+  attachments, `-m base|mujoco`, `--controller lqr|station`, `--traj
+  hover|lissajous`), `examples/multi_quad_hose.py`, and the dynamics,
+  controller and flat-map theory pages.
+
 ## v1.4.1 (2026-11-11)
 
 ### Fixed

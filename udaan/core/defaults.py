@@ -440,3 +440,103 @@ DEFAULT_FLEXCABLE_LQR_Q_LINK = 1.0
 DEFAULT_FLEXCABLE_LQR_Q_LINK_RATE = 0.75
 DEFAULT_FLEXCABLE_LQR_R_THRUST = 0.2
 DEFAULT_FLEXCABLE_LQR_R_MOMENT = 20.0
+
+# =============================================================================
+# Default flexible-hose parameters (M6)
+# =============================================================================
+#
+# M6 is one flexible hose — a serial chain of ``n`` rigid links joined by ideal
+# spherical joints — with quadrotors bolted to some of its ``n + 1`` vertices.
+# It is M5's chain with the single airframe at the top replaced by an arbitrary
+# attachment pattern, so the constants below are the chain constants again,
+# sized for a *carried* hose rather than a hanging tether.
+
+#: Number of rigid links the hose is discretised into.
+#:
+#: Sized on the same criterion as :data:`DEFAULT_NUM_CABLE_LINKS`: the
+#: ZOH-Euler loop is only conditionally stable, and
+#: :meth:`~udaan.models.multi_quad_hose.MultiQuadHoseBase.stability_growth_rate`
+#: is the number that says where the limit is. The growth exponent rises with
+#: the link count, so a long hose warns straight out of the constructor; the
+#: limit also depends on the attachment pattern, so the default pattern (a
+#: vehicle at each end) is not the envelope, and a non-default pattern should
+#: be checked with ``stability_growth_rate`` before it is flown.
+DEFAULT_NUM_HOSE_LINKS = 4
+
+#: Total length of the hose, in metres, split evenly over its links.
+DEFAULT_HOSE_LENGTH = 2.0  # m
+
+#: Total mass of the hose itself, in kg, lumped evenly onto its ``n + 1``
+#: vertices. The quadrotor masses are *added* to the vertices they sit on, so
+#: the mass that enters the dynamics at vertex ``j`` is ``m_j + m_{Q_j}``.
+#:
+#: 0.25 kg/m over the default 2 m — a real layflat hose of that bore. It is
+#: also about the lightest the ZOH-Euler loop tolerates: the fastest internal
+#: mode of a lumped chain scales like the square root of the heavy/light vertex
+#: mass ratio, so a lighter hose against a 0.9 kg airframe at each end pushes
+#: :data:`DEFAULT_NUM_HOSE_LINKS` links past the warning threshold.
+DEFAULT_HOSE_MASS = 0.5  # kg
+
+#: Horizontal span of each hose segment at spawn, as a fraction of that
+#: segment's own length.
+#:
+#: 1.0 would be a straight, perfectly taut segment between two quadrotors and
+#: 0 would stack them on top of each other; 0.8 leaves a visible sag while
+#: keeping every link taut. See :func:`udaan.utils.hose.hose_spawn_directions`
+#: for the triangle this closes and the feasibility condition it has to meet.
+DEFAULT_HOSE_SAG_RATIO = 0.8
+
+#: Radius of each hose vertex's mass sphere in the generated M6 MJCF, in metres.
+#: The sphere carries ``2/5 m r^2`` of rotational inertia that the analytical
+#: model, whose vertices are point masses, does not have.
+DEFAULT_HOSE_VERTEX_RADIUS = 0.02  # m
+
+#: Radius of the (massless) link cylinders in the generated M6 MJCF, in metres
+#: (geometry only).
+DEFAULT_HOSE_LINK_RADIUS = 0.008  # m
+
+#: Smallest tension, in N, the M6 flat map and controller accept on a hose link
+#: before refusing the reference as slack. A link tension is a norm, so it never
+#: goes negative; this floor keeps the refusal away from the slack boundary,
+#: where the link direction is undefined.
+DEFAULT_HOSE_MIN_TENSION = 1e-6  # N
+
+# ── M6: multi-quadrotor flexible hose, LQR cost weights ────────────────
+#
+# The published weights (``matlab/examples/example1.m`` L68-72) are
+# ``Q = blkdiag(0.5 I_6, 0.75 I_{6n}, I_{3nQ}, 0.75 I_{3nQ})`` and
+# ``R = 0.2 I_{4nQ}``, and the six ``Q`` blocks below are those, read as the
+# *intent* rather than as the literal diagonal.  They are not the same thing:
+# the reference's own error vector is ``[e_x; xi; e_v; delta-omega; eta;
+# delta-Omega]`` (``error.m`` L47) while that ``blkdiag`` groups ``[x, v]``
+# first and the hose second, so on the reference's own ordering the ``0.5``
+# block lands on ``e_x`` *and the first link's* ``xi``, and ``e_v`` picks up
+# ``0.75``.  The blocks here follow the intent — one weight per physical
+# block — rather than that literal diagonal.
+DEFAULT_HOSE_LQR_Q_ROOT_POSITION = 0.5
+DEFAULT_HOSE_LQR_Q_ROOT_VELOCITY = 0.5
+DEFAULT_HOSE_LQR_Q_LINK = 0.75
+DEFAULT_HOSE_LQR_Q_LINK_RATE = 0.75
+DEFAULT_HOSE_LQR_Q_ATTITUDE = 1.0
+DEFAULT_HOSE_LQR_Q_ANGULAR_RATE = 0.75
+DEFAULT_HOSE_LQR_R_THRUST = 0.2
+
+# M5's input-weighting problem applies to M6 as well.  The
+# published ``R = 0.2 I`` weights a thrust and a moment equally, though a
+# newton of thrust and a newton-metre of moment do very different things: the
+# thrust column of ``B`` scales as ``1/M00`` and the moment column as
+# ``||J^-1||``.  The largest moment column is ``||J^-1|| = 207`` (the generated
+# airframe) whatever the hose, while the thrust columns run 0.435 to 2.83 over
+# the attachment patterns tabulated in that module, so the ratio is 70 to 500
+# rather than one number.  The resulting attitude pole lies near -400 rad/s,
+# about 57° of half-sample lag at udaan's 200 Hz zero-order hold.
+# See :mod:`udaan.control.multi_quad_hose.hose_controller` for what the
+# moment weight costs the hose modes in return.
+DEFAULT_HOSE_LQR_R_MOMENT = 20.0
+
+#: Largest step of an airframe's reference acceleration, in m/s², that
+#: :meth:`~udaan.models.multi_quad_hose.MultiQuadHoseBase.simulate` accepts
+#: without a warning: M5's threshold, a fifth of gravity. The M6 flat map needs
+#: the root path continuous through order ``2n + 4``; a trajectory smooth to a
+#: lower order steps every airframe's reference where the discontinuity is.
+MAX_HOSE_REFERENCE_ACCEL_STEP = MAX_FLEXCABLE_REFERENCE_ACCEL_STEP  # m/s^2

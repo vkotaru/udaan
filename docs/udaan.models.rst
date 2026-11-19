@@ -11,6 +11,7 @@ Subpackages
    udaan.models.mujoco
    udaan.models.multi_quad_cspayload
    udaan.models.multi_quad_rigidbody
+   udaan.models.multi_quad_hose
    udaan.models.quadrotor
    udaan.models.quadrotor_cspayload
    udaan.models.quadrotor_flexcable

@@ -94,6 +94,7 @@ quadrotor-cspayload
 multi-quad-cspayload
 multi-quad-rigidbody
 quadrotor-flexcable
+multi-quad-hose
 ```
 
 ## References

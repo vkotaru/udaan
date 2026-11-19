@@ -236,3 +236,18 @@ def test_quad_flexcable_generator_front_rotors_are_front_colour(tmp_path, num_li
 
     path = quad_flexcable(num_links=num_links, filename=str(tmp_path / "m5.xml"), verbose=False)
     _assert_generated_rotor_colours(mujoco, path, 1)
+
+
+@pytest.mark.mujoco
+@pytest.mark.parametrize(("num_links", "attachments"), [(4, None), (4, (0, 2, 4))])
+def test_multi_quad_hose_generator_front_rotors_are_front_colour(tmp_path, num_links, attachments):
+    mujoco = pytest.importorskip("mujoco")
+    from udaan.utils.assets.xml_model_generator import multi_quad_hose
+
+    path = multi_quad_hose(
+        num_links=num_links,
+        attachments=attachments,
+        filename=str(tmp_path / "m6.xml"),
+        verbose=False,
+    )
+    _assert_generated_rotor_colours(mujoco, path, 2 if attachments is None else len(attachments))

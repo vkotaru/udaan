@@ -298,6 +298,11 @@ class MujocoAssetCreator:
         geom.attrib["name"] = name
         geom.attrib["type"] = "sphere"
         geom.attrib["size"] = "%g" % (radius)
+        # `pos` places the sphere inside its body (M6 puts a hose vertex's mass
+        # at its link's distal end). A sphere at the body origin carries no
+        # `pos` attribute, which is MJCF's own default.
+        if np.any(np.asarray(pos, dtype=float) != 0.0):
+            geom.attrib["pos"] = " ".join([str(x) for x in pos])
         geom.attrib["mass"] = str(mass)
         geom.attrib["density"] = str(density)
         geom.attrib["rgba"] = " ".join([str(x) for x in rgb + [alpha]])
