@@ -80,8 +80,11 @@ def solve_lqr_gain(A, B, Q, R, *, describe: str = "the system"):
     in the sign convention ``\delta u = K s``, and the eigenvalues of the
     closed loop ``A + BK``, sorted by real part with the most positive first.
 
+    Both LQR controllers in this package (M5's
     :class:`~udaan.control.quadrotor_flexcable.QuadrotorFlexCableController`
-    accepts caller-supplied masses, lengths and inertias spanning orders of magnitude,
+    and M6's
+    :class:`~udaan.control.multi_quad_hose.MultiQuadHoseController`) accept
+    caller-supplied masses, lengths and inertias spanning orders of magnitude,
     and :func:`scipy.linalg.solve_continuous_are` does **not** refuse every
     pair it cannot usefully solve.  On the badly scaled ones it can return,
     without complaint, a ``P`` of enormous norm whose residual is many times
@@ -170,6 +173,7 @@ def solve_lqr_gain(A, B, Q, R, *, describe: str = "the system"):
     return gain, poles
 
 
+from . import multi_quad_hose as multi_quad_hose  # noqa: E402
 from . import multi_quad_rigidbody as multi_quad_rigidbody  # noqa: E402
 from . import quadrotor as quadrotor  # noqa: E402
 from . import quadrotor_cspayload as quadrotor_cspayload  # noqa: E402
@@ -181,6 +185,7 @@ __all__ = [
     "Gains",
     "Controller",
     "PDController",
+    "multi_quad_hose",
     "multi_quad_rigidbody",
     "solve_lqr_gain",
     "quadrotor",

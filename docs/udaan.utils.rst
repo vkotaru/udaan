@@ -21,6 +21,7 @@ Submodules
    udaan.utils.formation
    udaan.utils.geometry
    udaan.utils.grasp
+   udaan.utils.hose
    udaan.utils.logging
    udaan.utils.resize_gif
 

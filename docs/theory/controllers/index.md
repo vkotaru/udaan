@@ -9,6 +9,7 @@ arguments behind them.
 quadrotor-se3
 quadrotor-payload
 quadrotor-flexcable
+multi-quad-hose
 geometric-l1
 multi-quad-payload
 ```

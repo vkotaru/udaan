@@ -16,6 +16,7 @@ Submodules
    udaan.flatness.jet
    udaan.flatness.multi_quad_cspayload
    udaan.flatness.multi_quad_rigidbody
+   udaan.flatness.multi_quad_hose
    udaan.flatness.quadrotor
    udaan.flatness.quadrotor_cspayload
    udaan.flatness.quadrotor_flexcable

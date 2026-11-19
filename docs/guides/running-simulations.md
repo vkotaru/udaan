@@ -173,6 +173,25 @@ is derived in {doc}`../theory/controllers/quadrotor-flexcable`, the dynamics
 in {doc}`../theory/dynamics/quadrotor-flexcable` and the flat map in
 {doc}`../theory/differential-flatness/quadrotor-flexcable`.
 
+## Several quadrotors carrying one flexible hose
+
+```bash
+udaan run hose -m base -t 10                        # analytical model, 4 links, a vehicle at each end
+udaan run hose -n 4 -a 0,2,4 --no-render            # MuJoCo, three vehicles
+udaan run hose --traj lissajous --no-render
+udaan generate-xml hose -n 4 -a 0,2,4 -o hose.xml
+```
+
+The hose is a chain of `n` rigid links with a quadrotor bolted to chosen
+vertices (`-a`, default both ends). The whole hose is regulated by one
+infinite-horizon LQR about the static trim at the root setpoint, with the flat
+map's reference state and wrenches as feed-forward when the trajectory supplies
+derivatives to order `2n + 4` (`get_jet`). The LQR needs a vehicle at the last
+vertex; `--controller station` flies any pattern with per-vehicle PDs instead.
+The controller is derived in {doc}`../theory/controllers/multi-quad-hose`, the
+dynamics in {doc}`../theory/dynamics/multi-quad-hose` and the flat map in
+{doc}`../theory/differential-flatness/multi-quad-hose`.
+
 ## Side-by-side fleets
 
 Two fleet commands exist for comparing controllers or gains:
