@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### MuJoCo assets
+
+#### Changed
+
+- Every quadrotor marks its heading in a render: the rotor discs on the +x
+  (forward, `b1`) side of the airframe are red (`FRONT_ROTOR_RGB`,
+  `0.85 0.15 0.15`) and the other rotors carry the vehicle's colour. This
+  covers every packaged MJCF and `MujocoAssetCreator.create_quadrotor0` (two
+  front rotors in the X layout, one in the `+` layout). The change touches
+  only `rgba`.
+- Red is reserved for the front rotors; no other vehicle geom and no fleet
+  palette entry lies in the red-to-pink hue band. The comparison plant's
+  rotors are blue (`0.2 0.4 0.9`) and the reference ghost's cyan
+  (`0.1 0.8 0.8`); the rear rotors of `quadrotor.xml`, `quadrotor_payload.xml`
+  and the two-quad assets are orange (`0.95 0.45 0.1`, the generator's
+  default); the generator's unmodelled-mass box is yellow and its
+  `cylinder` default is grey. The fleet palette is blue, green, orange,
+  purple (`0.5 0.25 0.85`), cyan, white, olive, navy.
+- Generated fleet and multi-quad MJCF is cached under a name that does not
+  encode colours: delete cached `fleet_*`, `cspayload_fleet_*` and
+  `multi_quad_pointmass_*q` files in `udaan/models/assets/mjcf/` to pick up
+  the colours.
+
 ### Quadrotor with cable-suspended payload (M2)
 
 #### Added

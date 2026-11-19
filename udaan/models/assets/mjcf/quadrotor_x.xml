@@ -40,8 +40,8 @@ Front: Along body X-axis
             <site name="motor_back_right" type="cylinder" pos="-.1 -.1 .0075" size=".01 .0025" quat="1 0 0 0" rgba=".3 .8 .3 1"/>
             <site name="motor_back_left" type="cylinder" pos="-.1  .1 .0075" size=".01 .0025" quat="1 0 0 0" rgba=".3 .8 .3 1"/>
 
-            <geom name="thruster_front_left" type="cylinder" pos=".1 .1 .0075" size=".05 .0025" quat="1 0 0 0" rgba=".3 .8 .3 0.6" mass=".025"/>
-            <geom name="thruster_front_right" type="cylinder" pos=".1 -.1 .0075" size=".05 .0025" quat="1 0 0 0" rgba=".3 .8 .3 0.6" mass=".025"/>
+            <geom name="thruster_front_left" type="cylinder" pos=".1 .1 .0075" size=".05 .0025" quat="1 0 0 0" rgba="0.85 0.15 0.15 0.6" mass=".025"/>
+            <geom name="thruster_front_right" type="cylinder" pos=".1 -.1 .0075" size=".05 .0025" quat="1 0 0 0" rgba="0.85 0.15 0.15 0.6" mass=".025"/>
             <geom name="thruster_back_right" type="cylinder" pos="-.1 -.1 .0075" size=".05 .0025" quat="1 0 0 0" rgba=".3 .8 .3 0.6" mass=".025"/>
             <geom name="thruster_back_left" type="cylinder" pos="-.1 .1 .0075" size=".05 .0025" quat="1 0 0 0" rgba=".3 .8 .3 0.6" mass=".025"/>
 
