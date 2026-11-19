@@ -21,14 +21,14 @@ _MJCF_DIR = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf")
 
 # Distinct colors for up to 8 quadrotors (ADHD-friendly, high contrast)
 _FLEET_COLORS = [
-    ([0.90, 0.20, 0.20], "red"),
     ([0.20, 0.50, 0.90], "blue"),
     ([0.20, 0.80, 0.40], "green"),
     ([0.90, 0.55, 0.10], "orange"),
-    ([0.65, 0.30, 0.85], "purple"),
+    ([0.50, 0.25, 0.85], "purple"),
     ([0.10, 0.80, 0.80], "cyan"),
-    ([0.85, 0.20, 0.60], "pink"),
+    ([0.92, 0.92, 0.92], "white"),
     ([0.60, 0.60, 0.20], "olive"),
+    ([0.15, 0.25, 0.65], "navy"),
 ]
 
 

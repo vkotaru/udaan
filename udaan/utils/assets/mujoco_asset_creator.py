@@ -10,6 +10,12 @@ from ..logging import get_logger
 
 _logger = get_logger(__name__)
 
+#: RGB of the rotor discs on the +x (forward, b1) side of the airframe. The other
+#: rotors keep the vehicle's own colour, so the heading is visible in a render. Red is
+#: reserved for this: no other vehicle geom in the MuJoCo assets, and no fleet palette
+#: entry, lies in the red-to-pink hue band.
+FRONT_ROTOR_RGB = [0.85, 0.15, 0.15]
+
 
 class MujocoAssetCreator:
     """Adapted from IsaacGymEnvs
@@ -184,7 +190,7 @@ class MujocoAssetCreator:
         radius=0.1,
         length=0.1,
         alpha=1.0,
-        rgb=[0.5, 0.1, 0.1],
+        rgb=[0.4, 0.4, 0.45],
     ):
         geom = ET.SubElement(parent, "geom")
         geom.attrib["name"] = name
@@ -363,6 +369,7 @@ class MujocoAssetCreator:
                 alpha=alpha,
                 rgb=[0.4, 0.4, 0.45],
             )
+            is_front = rotor_prop_pos[0] > 1e-9
             self.cylinder(
                 chassis,
                 name + "_rotor_prop_geom_%d" % i,
@@ -370,7 +377,7 @@ class MujocoAssetCreator:
                 radius=0.1,
                 length=0.01,
                 mass=0.05,
-                rgb=rgb,
+                rgb=FRONT_ROTOR_RGB if is_front else rgb,
                 alpha=alpha,
             )
 
@@ -382,7 +389,7 @@ class MujocoAssetCreator:
                 mass=unmodeled_mass,
                 density=1000,
                 alpha=alpha,
-                rgb=[0.85, 0.2, 0.2],
+                rgb=[0.95, 0.85, 0.1],
                 pos=unmodeled_mass_loc,
             )
 

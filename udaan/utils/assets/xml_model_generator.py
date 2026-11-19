@@ -59,7 +59,7 @@ def quadrotor_comparison(**kwargs):
             mjcWriter.worldbody,
             "plant",
             np.array([0.0, 0, 0.4]),
-            rgb=[1.0, 0.0, 0.0],
+            rgb=[0.2, 0.4, 0.9],
             unmodeled_mass=unmodeled_mass,
             unmodeled_mass_loc=unmodeled_mass_loc,
         )
@@ -67,7 +67,7 @@ def quadrotor_comparison(**kwargs):
             mjcWriter.worldbody,
             "reference",
             np.array([0.0, 0, 0.4]),
-            rgb=[1.0, 0.0, 0.4],
+            rgb=[0.1, 0.8, 0.8],
             alpha=0.25,
             unmodeled_mass=unmodeled_mass,
             unmodeled_mass_loc=unmodeled_mass_loc,
@@ -78,13 +78,13 @@ def quadrotor_comparison(**kwargs):
             mjcWriter.worldbody,
             "plant",
             np.array([0.0, 0, 0.4]),
-            rgb=[1.0, 0.0, 0.0],
+            rgb=[0.2, 0.4, 0.9],
         )
         mjcWriter.create_quadrotor0(
             mjcWriter.worldbody,
             "reference",
             np.array([0.0, 0, 0.4]),
-            rgb=[1.0, 0.0, 0.4],
+            rgb=[0.1, 0.8, 0.8],
             alpha=0.25,
         )
     mjcWriter.exclude_contact("plant", "reference")

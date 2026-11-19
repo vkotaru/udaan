@@ -24,13 +24,13 @@
         quat="-0.92388 0 0 0.382683" size="0.2 0.01 0.01" mass="0.01" rgba="0.4 0.4 0.45 1"/>
       <!-- Propellers -->
       <geom name="quadrotor_rotor_prop_geom_0" type="cylinder" size="0.1 0.005"
-        pos="0.1414213562 0.1414213562 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
+        pos="0.1414213562 0.1414213562 0" mass="0.05" rgba="0.85 0.15 0.15 1"/>
       <geom name="quadrotor_rotor_prop_geom_1" type="cylinder" size="0.1 0.005"
         pos="-0.1414213562 0.1414213562 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
       <geom name="quadrotor_rotor_prop_geom_2" type="cylinder" size="0.1 0.005"
         pos="-0.1414213562 -0.1414213562 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
       <geom name="quadrotor_rotor_prop_geom_3" type="cylinder" size="0.1 0.005"
-        pos="0.1414213562 -0.1414213562 0" mass="0.05" rgba="0.95 0.45 0.1 1"/>
+        pos="0.1414213562 -0.1414213562 0" mass="0.05" rgba="0.85 0.15 0.15 1"/>
       <!-- Actuator sites (invisible) -->
       <site name="site0" pos="0.1414213562 0.1414213562 0" size="0.005" rgba="0 0 0 0"/>
       <site name="site1" pos="-0.1414213562 0.1414213562 0" size="0.005" rgba="0 0 0 0"/>
