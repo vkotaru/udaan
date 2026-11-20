@@ -13,6 +13,7 @@ Subpackages
    udaan.control.quadrotor
    udaan.control.quadrotor_cspayload
    udaan.control.quadrotor_flexcable
+   udaan.control.tethered_hose
 
 Module contents
 ---------------

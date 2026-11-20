@@ -63,13 +63,18 @@ the whole hose vertically and therefore stacks the airframes.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
-from ..core.defaults import DEFAULT_HOSE_SAG_RATIO
+from ..core.defaults import DEFAULT_HOSE_SAG_RATIO, GRAVITY
 
 __all__ = [
+    "TetheredTrim",
     "hose_spawn_directions",
     "hose_vertex_positions",
+    "tethered_trim",
+    "tethered_vehicle_positions",
     "validate_attachments",
 ]
 
@@ -229,3 +234,211 @@ def hose_vertex_positions(root_position, link_lengths, directions) -> np.ndarray
     for i in range(lengths.shape[0]):
         out[i + 1] = out[i] + lengths[i] * q[i]
     return out
+
+
+# ─── A hose pinned to a ground anchor (M7 / M8) ───────────────────────
+
+#: Residual, in metres, below which a pinned-pinned segment solve is accepted.
+_SEGMENT_TOL = 1e-9
+
+#: Starting tension scales, as multiples of a segment's own weight, tried in
+#: turn by :func:`tethered_trim`'s root solve.
+_SEGMENT_TENSION_STARTS = (1.0, 0.1, 10.0, 100.0, 0.01)
+
+
+@dataclass
+class TetheredTrim:
+    """A steady state of a hose pinned at vertex 0, from :func:`tethered_trim`.
+
+    ``tensions[i]`` is ``𝛕_i``, the force link ``i`` exerts on its lower vertex
+    ``i``; it points along ``q_i``, up the hose.  ``flat_tensions`` is the
+    tethered flat output's force part: ``𝛕_0`` (the anchor link) followed by
+    ``𝛕_a`` at every vehicle vertex but the top one.
+    """
+
+    #: ``(n, 3)`` link directions ``q_i``, vertex ``i`` to vertex ``i + 1``.
+    directions: np.ndarray
+    #: ``(n, 3)`` link force vectors ``𝛕_i``.
+    tensions: np.ndarray
+    #: ``(n + 1, 3)`` vertex positions; row 0 is the anchor.
+    vertex_positions: np.ndarray
+    #: ``(nQ, 3)`` thrust vectors ``f_k R_k e_3``.
+    thrust_vectors: np.ndarray
+    #: ``(nQ, 3)`` ``[𝛕_0, 𝛕_{a_1}, …, 𝛕_{a_{nQ-1}}]``.
+    flat_tensions: np.ndarray
+    #: ``(3,)`` force the anchor exerts on the hose.
+    anchor_force: np.ndarray
+
+    @property
+    def ground_clearance(self) -> float:
+        """Height of the lowest vertex but the anchor, in metres; the ground is ``z = 0``.
+
+        Negative where the hose would pass below the ground plane.
+        """
+        return float(np.min(self.vertex_positions[1:, 2]))
+
+
+def tethered_vehicle_positions(top_position, num_quadrotors: int, anchor) -> np.ndarray:
+    """Vehicle positions evenly spaced on the line from ``anchor`` to ``top_position``.
+
+    Vehicle ``k`` (``k = 0 … nQ − 1``) sits at ``anchor + (k + 1)/nQ ·
+    (top − anchor)``, so the last one is at ``top_position``.  Returns
+    ``(nQ, 3)``.
+    """
+    top = np.asarray(top_position, dtype=float).reshape(3)
+    base = np.asarray(anchor, dtype=float).reshape(3)
+    fractions = (np.arange(int(num_quadrotors)) + 1.0) / float(num_quadrotors)
+    return np.asarray(base[None, :] + fractions[:, None] * (top - base)[None, :])
+
+
+def _sweep_segment(tau_start, start, lengths, interior_masses, accel, gravity):
+    """Walk one segment up from its lower held vertex.
+
+    Returns the link forces, the vertex positions (both ends included) and the
+    force of the segment's last link, or ``None`` if a link goes slack.
+    """
+    e3 = np.array([0.0, 0.0, gravity])
+    tau = np.asarray(tau_start, dtype=float)
+    x = np.asarray(start, dtype=float)
+    forces = []
+    points = [x]
+    for i, length in enumerate(lengths):
+        norm = float(np.linalg.norm(tau))
+        if norm <= 0.0:
+            return None
+        forces.append(tau)
+        x = x + length * tau / norm
+        points.append(x)
+        if i < len(lengths) - 1:
+            tau = tau + interior_masses[i] * (accel(x) + e3)
+    return np.array(forces), np.array(points)
+
+
+def _solve_segment(start, end, lengths, interior_masses, accel, gravity):
+    """``𝛕`` on a segment's first link that carries it from ``start`` to ``end``."""
+    from scipy.optimize import fsolve
+
+    chord = np.asarray(end, dtype=float) - np.asarray(start, dtype=float)
+    total = float(np.sum(lengths))
+    distance = float(np.linalg.norm(chord))
+    if distance >= total:
+        raise ValueError(
+            f"two held points {distance:.6g} m apart cannot be joined by {total:.6g} m of hose"
+        )
+    if distance <= 0.0:
+        raise ValueError("two held points coincide; the hose between them has no taut state")
+
+    def residual(tau):
+        swept = _sweep_segment(tau, start, lengths, interior_masses, accel, gravity)
+        if swept is None:
+            return np.full(3, total)
+        return swept[1][-1] - np.asarray(end, dtype=float)
+
+    weight = gravity * float(np.sum(interior_masses)) + gravity * 1e-3
+    direction = chord / distance
+    for scale in _SEGMENT_TENSION_STARTS:
+        guess = scale * weight * direction - 0.5 * gravity * float(
+            np.sum(interior_masses)
+        ) * np.array([0.0, 0.0, 1.0])
+        tau, _, ier, _ = fsolve(residual, guess, full_output=True, xtol=1e-13)
+        if ier == 1 and float(np.max(np.abs(residual(tau)))) < _SEGMENT_TOL * max(1.0, total):
+            return np.asarray(tau, dtype=float)
+    raise ValueError(
+        f"no taut state joins {np.asarray(start).tolist()} to {np.asarray(end).tolist()} "
+        f"with {len(lengths)} link(s) of total length {total:.6g} m"
+    )
+
+
+def tethered_trim(
+    link_lengths,
+    vertex_total_masses,
+    attachments,
+    positions,
+    *,
+    anchor,
+    gravity: float = GRAVITY,
+    whirl_rate: float = 0.0,
+) -> TetheredTrim:
+    r"""The steady state of a hose pinned at vertex 0 with its vehicles held at ``positions``.
+
+    Each segment between two held points (the anchor and vehicle 1, vehicle 1
+    and vehicle 2, …) is a pinned-pinned discrete catenary: the force on its
+    first link is the root of a three-equation solve, and the sweep up the
+    segment is M6's vertex balance
+
+    .. math::
+
+        𝛕_j = 𝛕_{j-1} + \bar m_j (a_j + g e_3), \qquad
+        q_j = 𝛕_j / \|𝛕_j\| ,
+
+    at every bare vertex.  At a vehicle vertex ``v`` the thrust is
+    ``u_v = \bar m_v(a_v + g e_3) + 𝛕_{v-1} - 𝛕_v`` with ``𝛕_n = 0``, and the
+    anchor's force on the hose is ``\bar m_0 g e_3 - 𝛕_0``.
+
+    With ``whirl_rate`` ``Ω ≠ 0`` the state is a rigid rotation about the
+    vertical axis through the anchor: every vertex carries the centripetal
+    acceleration ``a_j = -Ω^2 (x_j - x_{anchor})_{xy}``, and the result is
+    the configuration at the instant it passes through ``positions``.
+
+    Args:
+        link_lengths: ``(n,)``.
+        vertex_total_masses: ``(n + 1,)`` hose plus airframe mass at each
+            vertex; entry 0 is carried by the anchor.
+        attachments: strictly increasing vehicle vertices, all ``>= 1``, the
+            last ``== n``.
+        positions: ``(nQ, 3)`` where each vehicle is held.
+        anchor: ``(3,)`` position of vertex 0.
+        gravity: ``g``.
+        whirl_rate: ``Ω``, in rad/s.
+
+    Raises:
+        ValueError: for an attachment pattern the pinned hose does not allow,
+            two held points the hose between them cannot reach, or a segment
+            with no taut solution.
+    """
+    lengths = np.asarray(link_lengths, dtype=float).reshape(-1)
+    n = lengths.shape[0]
+    mbar = np.asarray(vertex_total_masses, dtype=float).reshape(n + 1)
+    indices = validate_attachments(attachments, n)
+    if indices[0] < 1 or indices[-1] != n:
+        raise ValueError(
+            f"a hose pinned at vertex 0 needs its vehicles in [1, {n}] with one at vertex {n}; "
+            f"got {indices}"
+        )
+    held = np.asarray(positions, dtype=float).reshape(len(indices), 3)
+    base = np.asarray(anchor, dtype=float).reshape(3)
+    rate_sq = float(whirl_rate) ** 2
+
+    def accel(x):
+        offset = np.asarray(x, dtype=float) - base
+        return -rate_sq * np.array([offset[0], offset[1], 0.0])
+
+    tensions = np.zeros((n, 3))
+    points = np.zeros((n + 1, 3))
+    points[0] = base
+    flat = np.zeros((len(indices), 3))
+    starts = [0, *indices[:-1]]
+    ends = list(indices)
+    anchors = [base, *held[:-1]]
+    for k, (a, b) in enumerate(zip(starts, ends, strict=True)):
+        tau = _solve_segment(anchors[k], held[k], lengths[a:b], mbar[a + 1 : b], accel, gravity)
+        swept = _sweep_segment(tau, anchors[k], lengths[a:b], mbar[a + 1 : b], accel, gravity)
+        assert swept is not None  # the solve rejects a slack sweep
+        tensions[a:b] = swept[0]
+        points[a + 1 : b + 1] = swept[1][1:]
+        flat[k] = tau
+
+    e3 = np.array([0.0, 0.0, gravity])
+    thrusts = np.zeros((len(indices), 3))
+    for k, v in enumerate(indices):
+        above = tensions[v] if v < n else np.zeros(3)
+        thrusts[k] = mbar[v] * (accel(points[v]) + e3) + tensions[v - 1] - above
+    directions = tensions / np.linalg.norm(tensions, axis=1)[:, None]
+    return TetheredTrim(
+        directions=directions,
+        tensions=tensions,
+        vertex_positions=points,
+        thrust_vectors=thrusts,
+        flat_tensions=flat,
+        anchor_force=mbar[0] * e3 - tensions[0],
+    )

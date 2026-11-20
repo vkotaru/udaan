@@ -192,6 +192,29 @@ The controller is derived in {doc}`../theory/controllers/multi-quad-hose`, the
 dynamics in {doc}`../theory/dynamics/multi-quad-hose` and the flat map in
 {doc}`../theory/differential-flatness/multi-quad-hose`.
 
+## Quadrotors on a hose pinned to a ground anchor
+
+```bash
+udaan run tethered-quad -m base -t 10                 # M7: one quadrotor, 2 m tether, 4 links
+udaan run tethered-quad --traj circle --no-render     # circle about the anchor, from rest
+udaan run tethered-hose -q 3 --traj climb --no-render # M8: three quadrotors on a 3 m hose
+udaan generate-xml tethered-hose -n 6 -a 2,4,6 -o tethered.xml
+```
+
+M7 is one quadrotor at the top of an `n`-link tether whose bottom end is pinned
+to an anchor on the ground; M8 is several quadrotors in series on one such hose,
+placed evenly on the line from the anchor to the top vehicle. Both are M6 with
+the root vertex held still, flown by M6's hose LQR re-linearised at the pinned
+trim and carried round the anchor by its rotational symmetry. A trajectory is
+planned in the anchor-link force (the flat output), so the vehicle paths are
+outputs: `hold` is the static trim at `--standoff` and `--height` (fractions of
+the hose length), `circle` turns the formation about the anchor after a 6 s ramp
+from rest, and `climb` blends to a higher, closer station over 6 s. Contacts are
+off, and `simulate()` warns when a reference takes the hose below the ground. The
+dynamics are in {doc}`../theory/dynamics/tethered-hose`, the controller in
+{doc}`../theory/controllers/tethered-hose` and the flat map in
+{doc}`../theory/differential-flatness/tethered-hose`.
+
 ## Side-by-side fleets
 
 Two fleet commands exist for comparing controllers or gains:
