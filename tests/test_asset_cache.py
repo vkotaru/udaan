@@ -66,6 +66,7 @@ class TestCacheLocation:
                     "multi_quad_rigidbody_",
                     "multi_quad_hose_",
                     "quad_flexcable_",
+                    "tethered_hose_",
                 )
             )
         ]

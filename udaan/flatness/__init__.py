@@ -43,6 +43,13 @@ when a vehicle sits at the last vertex — :class:`NotFlatError` otherwise.
 It reuses :func:`cable_chain_cascade` on the reversed chain, through the
 ``link_forces`` hook.
 
+:class:`TetheredHose` — M7 / M8, quadrotors on a hose **pinned to a ground
+anchor** at vertex 0, with flat output ``(𝛕_0, {𝛕_a}, {ψ_k})``: the anchor
+link's force takes the root position's place.  It is :class:`MultiQuadHose`
+with the anchor as a vehicle at vertex 0 and a constant root jet.  The
+:class:`TetherHold`, :class:`TetherBlend` and :class:`TetherCircle`
+references produce its flat output.
+
 Shared primitives
 -----------------
 :mod:`~udaan.flatness.derivatives` (Leibniz products, normalisation),
@@ -190,6 +197,27 @@ from .quadrotor_flexcable import (
 from .quadrotor_flexcable import (
     QuadrotorFlexCableRefState as QuadrotorFlexCableRefState,
 )
+from .tethered_hose import (
+    TetherBlend as TetherBlend,
+)
+from .tethered_hose import (
+    TetherCircle as TetherCircle,
+)
+from .tethered_hose import (
+    TetheredHose as TetheredHose,
+)
+from .tethered_hose import (
+    TetheredHoseFlats as TetheredHoseFlats,
+)
+from .tethered_hose import (
+    TetheredHoseInputs as TetheredHoseInputs,
+)
+from .tethered_hose import (
+    TetherHold as TetherHold,
+)
+from .tethered_hose import (
+    TetherReference as TetherReference,
+)
 
 __all__ = [
     "DEFAULT_MIN_TENSION",
@@ -228,6 +256,13 @@ __all__ = [
     "ReferenceFeasibility",
     "RingTensionDistribution",
     "RingTensionSplit",
+    "TetherBlend",
+    "TetherCircle",
+    "TetherHold",
+    "TetherReference",
+    "TetheredHose",
+    "TetheredHoseFlats",
+    "TetheredHoseInputs",
     "TensionDistributionPolicy",
     "TensionSplitContractError",
     "TensionSplitPolicy",

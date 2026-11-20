@@ -27,6 +27,10 @@ from ...core.defaults import (
     DEFAULT_RIGID_PAYLOAD_MASS,
     DEFAULT_SPAWN_HEIGHT,
     DEFAULT_TENDON_LIMIT_TIMESTEPS,
+    DEFAULT_TETHER_ANCHOR_HEIGHT,
+    DEFAULT_TETHER_LENGTH,
+    DEFAULT_TETHER_LINEAR_DENSITY,
+    DEFAULT_TETHER_NUM_LINKS,
 )
 from ..formation import check_formation, default_formation_radius, default_spawn_height
 from ..grasp import (
@@ -614,9 +618,6 @@ def multi_quad_hose(
         ValueError: for a non-positive link count, length or mass, an invalid
             attachment list, or a spawn geometry with no solution.
     """
-    from scipy.spatial.transform import Rotation as sp_rot
-
-    from ...manif import SO3
     from ..hose import hose_spawn_directions, validate_attachments
 
     if num_links < 1:
@@ -632,8 +633,120 @@ def multi_quad_hose(
     n = int(num_links)
     indices = validate_attachments((0, n) if attachments is None else attachments, n)
     lengths = np.full(n, float(hose_length) / n)
-    vertex_mass = float(hose_mass) / (n + 1)
     directions = hose_spawn_directions(lengths, indices, sag_ratio)
+    return _write_hose(
+        "MultiQuadHose",
+        filename,
+        lengths=lengths,
+        indices=indices,
+        vertex_mass=float(hose_mass) / (n + 1),
+        directions=directions,
+        quad_mass=quad_mass,
+        root_position=np.array([0.0, 0.0, float(spawn_height)]),
+        root_joint=True,
+        link_radius=link_radius,
+        vertex_radius=vertex_radius,
+        verbose=verbose,
+    )
+
+
+def tethered_hose(
+    num_links: int = DEFAULT_TETHER_NUM_LINKS,
+    attachments=None,
+    filename: str = "./assets/tethered_hose.xml",
+    hose_length: float = DEFAULT_TETHER_LENGTH,
+    hose_mass: float | None = None,
+    quad_mass: float = DEFAULT_GENERATED_QUAD_MASS,
+    anchor_height: float = DEFAULT_TETHER_ANCHOR_HEIGHT,
+    link_radius: float = DEFAULT_HOSE_LINK_RADIUS,
+    vertex_radius: float = DEFAULT_HOSE_VERTEX_RADIUS,
+    verbose: bool = True,
+) -> str:
+    """Write the MJCF for quadrotors on an ``n``-link hose pinned to a ground anchor (M7 / M8).
+
+    :func:`multi_quad_hose`'s body tree with **no root joint**: ``hose_vertex0``
+    is welded to the world at ``(0, 0, anchor_height)``, so vertex 0 is the
+    anchor exactly (no soft equality constraint, no drift) and ``hose_joint0``
+    is the first ball joint.  The tree spawns standing straight up from the
+    anchor, every ``q_i = +e_3``; the backend's ``reset()`` writes the trim it
+    flies into the ball joints.  A thin massless plate under the anchor marks
+    it.  Contacts and damping are off, as in :func:`multi_quad_hose`.
+
+    Args:
+        num_links: number of rigid links, >= 1.
+        attachments: strictly increasing vehicle vertices, all >= 1, the last
+            ``num_links``; ``None`` puts one vehicle at the top.
+        filename: path to write the MJCF to.
+        hose_length: total length, in metres, split evenly over the links.
+        hose_mass: total hose mass, in kg, lumped evenly onto the ``n + 1``
+            vertices (vertex 0's share sits on the welded anchor body);
+            default 0.25 kg per metre of hose.
+        quad_mass: mass of each quadrotor, in kg.
+        anchor_height: height of the anchor, in metres.
+        link_radius, vertex_radius: geometry, as in :func:`multi_quad_hose`.
+        verbose: log the generated XML.
+
+    Raises:
+        ValueError: for a non-positive count, length or mass, or an attachment
+            pattern with a vehicle at vertex 0 or none at the top.
+    """
+    from ..hose import validate_attachments
+
+    if num_links < 1:
+        raise ValueError(f"num_links must be >= 1, got {num_links}")
+    if hose_length <= 0.0:
+        raise ValueError(f"hose_length must be positive, got {hose_length}")
+    if hose_mass is None:
+        hose_mass = DEFAULT_TETHER_LINEAR_DENSITY * float(hose_length)
+    if hose_mass <= 0.0:
+        raise ValueError(f"hose_mass must be strictly positive, got {hose_mass}")
+    n = int(num_links)
+    indices = validate_attachments((n,) if attachments is None else attachments, n)
+    if indices[0] < 1 or indices[-1] != n:
+        raise ValueError(
+            f"a tethered hose needs every vehicle at a vertex in [1, {n}] and one at vertex {n}; "
+            f"got {indices}"
+        )
+    lengths = np.full(n, float(hose_length) / n)
+    return _write_hose(
+        "TetheredHose",
+        filename,
+        lengths=lengths,
+        indices=indices,
+        vertex_mass=float(hose_mass) / (n + 1),
+        directions=np.tile(np.array([0.0, 0.0, 1.0]), (n, 1)),
+        quad_mass=quad_mass,
+        root_position=np.array([0.0, 0.0, float(anchor_height)]),
+        root_joint=False,
+        link_radius=link_radius,
+        vertex_radius=vertex_radius,
+        verbose=verbose,
+    )
+
+
+def _write_hose(
+    model_name: str,
+    filename: str,
+    *,
+    lengths: np.ndarray,
+    indices: tuple[int, ...],
+    vertex_mass: float,
+    directions: np.ndarray,
+    quad_mass: float,
+    root_position: np.ndarray,
+    root_joint: bool,
+    link_radius: float,
+    vertex_radius: float,
+    verbose: bool,
+) -> str:
+    """Emit the hose's body tree: the shared writer of :func:`multi_quad_hose` and
+    :func:`tethered_hose`.  ``root_joint`` gives ``hose_vertex0`` a free joint;
+    without it the root body is welded to the world."""
+    from scipy.spatial.transform import Rotation as sp_rot
+
+    from ...manif import SO3
+
+    n = int(lengths.shape[0])
 
     def _quat(rotation: np.ndarray) -> np.ndarray:
         """3x3 rotation -> ``(x, y, z, w)``, the order ``body()`` expects."""
@@ -657,7 +770,7 @@ def multi_quad_hose(
     ]
     identity = np.eye(3)
 
-    writer = MujocoAssetCreator("MultiQuadHose")
+    writer = MujocoAssetCreator(model_name)
     writer.option(timestep=DEFAULT_MJCF_TIMESTEP, contact=False)
 
     def _attach_quadrotor(parent, vertex: int, pos, parent_frame):
@@ -680,13 +793,22 @@ def multi_quad_hose(
         for motor in actuator.iter("motor"):
             motor.attrib.setdefault("name", motor.attrib["site"])
 
-    root = writer.body(
-        writer.worldbody, "hose_vertex0", pos=np.array([0.0, 0.0, float(spawn_height)])
-    )
+    root = writer.body(writer.worldbody, "hose_vertex0", pos=np.asarray(root_position, dtype=float))
     writer.sphere(
         root, "hose_vertex_geom0", radius=vertex_radius, mass=vertex_mass, rgb=[0.15, 0.35, 0.7]
     )
-    writer.joint(root, "hose_root_joint", "free", damping=0.0)
+    if root_joint:
+        writer.joint(root, "hose_root_joint", "free", damping=0.0)
+    else:
+        writer.cylinder(
+            root,
+            "hose_anchor_plate",
+            radius=4.0 * vertex_radius,
+            length=0.01,
+            mass=0.0,
+            density=0.0,
+            rgb=[0.3, 0.3, 0.3],
+        )
     _attach_quadrotor(root, 0, np.zeros(3), identity)
 
     parent = root

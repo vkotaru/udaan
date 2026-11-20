@@ -183,6 +183,54 @@ def hose(
     typer.echo(f"Written to {output}")
 
 
+@generate_app.command("tethered-hose")
+def tethered_hose(
+    num_links: int = typer.Option(4, "--num-links", "-n", help="Links the hose is split into."),
+    output: str = typer.Option("tethered_hose.xml", "--output", "-o", help="Output file."),
+    attachments: str | None = typer.Option(
+        None,
+        "--attachments",
+        "-a",
+        help="Vehicle vertices, all >= 1 and ending at n, e.g. '2,4'. Default: one at the top.",
+    ),
+    hose_length: float | None = typer.Option(None, "--length", "-l", help="Hose length in m."),
+    hose_mass: float | None = typer.Option(None, "--hose-mass", help="Hose mass in kg."),
+    quad_mass: float | None = typer.Option(None, "--quad-mass", help="Mass of each quadrotor."),
+    anchor_height: float | None = typer.Option(
+        None, "--anchor-height", help="Height of the anchor (vertex 0) in metres."
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Generate MJCF XML for quadrotors on a hose pinned to a ground anchor (M7 / M8).
+
+    The anchor body has no joint, so MuJoCo welds it to the world; the hose
+    spawns straight up from it.
+    """
+    import udaan as U
+
+    kwargs: dict[str, Any] = {
+        "hose_length": hose_length,
+        "hose_mass": hose_mass,
+        "quad_mass": quad_mass,
+        "anchor_height": anchor_height,
+    }
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+    if attachments is not None:
+        try:
+            kwargs["attachments"] = tuple(int(v) for v in attachments.split(","))
+        except ValueError:
+            typer.echo(f"Invalid attachments: '{attachments}'. Expected e.g. '2,4'.", err=True)
+            raise typer.Exit(1) from None
+    try:
+        U.utils.xml_model_generator.tethered_hose(
+            num_links=num_links, filename=output, verbose=verbose, **kwargs
+        )
+    except ValueError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
+    typer.echo(f"Written to {output}")
+
+
 @generate_app.command("comparison")
 def comparison(
     output: str = typer.Option("quadrotor_comparison.xml", "--output", "-o", help="Output file."),

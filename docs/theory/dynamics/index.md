@@ -11,4 +11,5 @@ multi-quad-cspointmass
 multi-quad-rigidbody
 quadrotor-flexcable
 multi-quad-hose
+tethered-hose
 ```
