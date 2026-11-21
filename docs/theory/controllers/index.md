@@ -10,6 +10,7 @@ quadrotor-se3
 quadrotor-payload
 quadrotor-flexcable
 multi-quad-hose
+tethered-hose
 geometric-l1
 multi-quad-payload
 ```

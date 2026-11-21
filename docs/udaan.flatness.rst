@@ -20,6 +20,7 @@ Submodules
    udaan.flatness.quadrotor
    udaan.flatness.quadrotor_cspayload
    udaan.flatness.quadrotor_flexcable
+   udaan.flatness.tethered_hose
 
 Module contents
 ---------------

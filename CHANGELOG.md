@@ -405,6 +405,51 @@
   hover|lissajous`), `examples/multi_quad_hose.py`, and the dynamics,
   controller and flat-map theory pages.
 
+### Quadrotors on a hose pinned to a ground anchor (M7 / M8)
+
+#### Added
+
+- `udaan.models.tethered_hose`: `TetheredHoseBase` (M8, `nQ` quadrotors in
+  series on one `n`-link hose whose vertex 0 is pinned to an anchor at
+  `(0, 0, anchor_height)`) and `TetheredQuadrotorBase` (M7, one quadrotor at the
+  top of the tether), subclasses of M6's model whose reduced solve deletes the
+  root coordinate (`α = g e₃`) and returns the anchor's force on the hose; and
+  `TetheredHoseMujoco` / `TetheredQuadrotorMujoco`, M6's MuJoCo backend on a
+  tree whose root body has no joint. Defaults: M7 2 m at 0.25 kg/m over 4
+  links, M8 3 m with three quadrotors two links apart. `reset()` places the
+  system in the reference at `t = 0` and refuses the root coordinates.
+  `stability_growth_rate()` is the analytical loop's sampled closed-loop growth
+  rate at the trim (the LQR held over the forward-Euler substeps, four by default), and the
+  constructor warns when it is positive (`TETHER_MAX_CLOSED_LOOP_GROWTH_RATE`).
+  `simulate()` checks the reference before flight and warns when its lowest
+  vertex is below the ground plane or its thrust or moments exceed the
+  actuator limits; a step whose reference the flat map refuses runs against
+  the last reference recovered (`feedforward_drops` counts them).
+- `udaan.control.tethered_hose.TetheredHoseController`: M6's hose LQR on the
+  pinned error state (no root blocks), linearised at the static trim with the
+  vehicles evenly on the line from the anchor to the setpoint, using M6's cost
+  weights without the root ones, and applied round the anchor by the rotational
+  symmetry (link errors by `R_z(−Δθ)`, each airframe's attitude and rate errors
+  by `Y_kᵀ` and its moment by `Y_k`, `Y_k = R_kᵈᵀ R_z(Δθ) R_k⁰`).
+  `sampled_growth_rate()` gives the gate's number. Assigning a new
+  `setpoint` re-solves the gain at its trim; `default_top_position` gives the
+  default station.
+- `udaan.flatness.TetheredHose`: flat output `(𝛕_0, {𝛕_a}, {ψ_k})`, M6's map
+  with the anchor as a vehicle at vertex 0 and a constant root jet; the
+  references `TetherHold`, `TetherBlend` (flat tensions blended between two
+  static trims) and `TetherCircle` (a circle about the anchor from rest, ending
+  on the steady whirl); `smoothstep_jet` (a `C^m` step evaluated without its
+  monomial form) and `circle_rate_bound` (the rate whose steady circle asks
+  at most `TETHER_CIRCLE_THRUST_FRACTION` = 0.95 of the thrust limit).
+- `udaan.utils.hose.tethered_trim` (the pinned-pinned segment solve, static or
+  whirling) and `tethered_vehicle_positions`.
+- `xml_model_generator.tethered_hose`, and `udaan generate-xml tethered-hose`;
+  `multi_quad_hose` and `tethered_hose` write through one body-tree writer.
+- `udaan run tethered-quad` and `udaan run tethered-hose` (`--traj hold`,
+  `circle`, `climb`, `--ramp`); `hose_mass` defaults to 0.25 kg per metre in
+  the model, controller, flat map and generator; `DEFAULT_TETHER_*` and `DEFAULT_TETHERED_HOSE_*` in
+  `core/defaults.py`.
+
 ## v1.4.1 (2026-11-11)
 
 ### Fixed

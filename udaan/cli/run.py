@@ -587,6 +587,209 @@ def hose(
     _hold_viewer(mdl)
 
 
+def _tethered(
+    *,
+    system: str,
+    time: float,
+    model: str,
+    render: bool,
+    opts: dict[str, Any],
+    standoff: float | None,
+    height: float | None,
+    trajectory: str,
+    rate: float | None,
+    ramp: float | None,
+    record: str | None,
+) -> None:
+    """Shared body of ``tethered-quad`` (M7) and ``tethered-hose`` (M8)."""
+    import numpy as np
+
+    from udaan.flatness.tethered_hose import (
+        TetherBlend,
+        TetherCircle,
+        TetherHold,
+        TetherReference,
+        circle_rate_bound,
+    )
+    from udaan.models.tethered_hose import TetheredHoseBase, TetheredQuadrotorBase
+
+    _check_model(model, ("base", "mujoco"))
+    if trajectory not in ("hold", "circle", "climb"):
+        typer.echo(
+            f"Unknown trajectory '{trajectory}'. Expected 'hold', 'circle' or 'climb'.", err=True
+        )
+        raise typer.Exit(1)
+    opts = {k: v for k, v in opts.items() if v is not None}
+    Model: type[TetheredHoseBase]
+    if model == "mujoco":
+        from udaan.models.tethered_hose import TetheredHoseMujoco, TetheredQuadrotorMujoco
+
+        Model = TetheredQuadrotorMujoco if system == "m7" else TetheredHoseMujoco
+    else:
+        Model = TetheredQuadrotorBase if system == "m7" else TetheredHoseBase
+        render = False
+    try:
+        mdl = Model(render=render, **opts)
+    except (ValueError, RuntimeError) as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
+
+    from udaan.control.tethered_hose import default_top_position
+
+    L = mdl.hose_length
+    top = default_top_position(L, mdl.anchor_height)
+    if standoff is not None:
+        top[0] = standoff * L
+    if height is not None:
+        top[2] = mdl.anchor_height + height * L
+    from udaan.core.defaults import DEFAULT_TETHER_RAMP_TIME
+
+    ramp = DEFAULT_TETHER_RAMP_TIME if ramp is None else ramp
+    fm = mdl.hose_controller.flat_map
+    ref: TetherReference
+    try:
+        if trajectory == "hold":
+            ref = TetherHold(fm, top)
+        elif trajectory == "circle":
+            w = circle_rate_bound(fm, top) if rate is None else rate
+            ref = TetherCircle(fm, top, rate=w, ramp_time=ramp)
+            typer.echo(f"  circle about the anchor at {w:.3f} rad/s, {ramp:g} s ramp from rest")
+        else:
+            # to 0.1 L closer and 0.08 L higher, starting at 1 s
+            ref = TetherBlend(fm, top, top + np.array([-0.1 * L, 0.0, 0.08 * L]), ramp, 1.0)
+    except ValueError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
+    mdl.hose_controller.setpoint = ref.get
+
+    _setup_recording(mdl, record)
+    typer.echo(
+        f"Running {'tethered-quad' if system == 'm7' else 'tethered-hose'} ({model}, "
+        f"{mdl.num_links} links, {mdl.num_quadrotors} quads at {mdl.attachments}, "
+        f"{trajectory}) for {time}s ..."
+    )
+    try:
+        mdl.simulate(tf=time)
+    except RuntimeError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(1) from err
+    target = ref.get(mdl.t)[0]
+    typer.echo(
+        f"  top vehicle error {np.linalg.norm(np.asarray(mdl.state.positions[-1]) - target):.4f} m"
+        f"  (lowest reference vertex {mdl.reference_ground_clearance:.3f} m above the ground)"
+    )
+    _hold_viewer(mdl)
+
+
+@run_app.command("tethered-quad")
+def tethered_quad(
+    time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
+    model: str = typer.Option("mujoco", "--model", "-m", help="Backend: 'mujoco' or 'base'."),
+    render: bool = typer.Option(True, help="Enable visualization."),
+    num_links: int | None = typer.Option(None, "--num-links", "-n", help="Tether links."),
+    length: float | None = typer.Option(None, "--length", "-l", help="Tether length, m."),
+    tether_mass: float | None = typer.Option(None, "--tether-mass", help="Tether mass, kg."),
+    anchor_height: float | None = typer.Option(None, "--anchor-height", help="Anchor height, m."),
+    standoff: float | None = typer.Option(
+        None, "--standoff", help="Horizontal distance from the anchor, as a fraction of the length."
+    ),
+    height: float | None = typer.Option(
+        None, "--height", help="Height above the anchor, as a fraction of the length."
+    ),
+    trajectory: str = typer.Option(
+        "hold", "--trajectory", "--traj", help="'hold', 'circle' (about the anchor) or 'climb'."
+    ),
+    rate: float | None = typer.Option(
+        None, "--rate", help="Circle rate, rad/s. Default: the largest the rule allows."
+    ),
+    ramp: float | None = typer.Option(
+        None, "--ramp", help="Circle ramp / climb blend duration, s (default 6)."
+    ),
+    record: str | None = _record_option,
+):
+    """Simulate one quadrotor tethered to a ground anchor by an n-link cable (M7).
+
+    The hose LQR holds the vehicle and the tether at the static trim with the
+    vehicle at the given standoff and height ('hold'), flies a circle about the
+    anchor started from rest by a 6 s ramp ('circle'), or blends to a higher,
+    closer station over 6 s ('climb'), with the flat map's feed-forward.
+    """
+    _tethered(
+        system="m7",
+        time=time,
+        model=model,
+        render=render,
+        opts={
+            "num_links": num_links,
+            "hose_length": length,
+            "hose_mass": tether_mass,
+            "anchor_height": anchor_height,
+        },
+        standoff=standoff,
+        height=height,
+        trajectory=trajectory,
+        rate=rate,
+        ramp=ramp,
+        record=record,
+    )
+
+
+@run_app.command("tethered-hose")
+def tethered_hose(
+    time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
+    model: str = typer.Option("mujoco", "--model", "-m", help="Backend: 'mujoco' or 'base'."),
+    render: bool = typer.Option(True, help="Enable visualization."),
+    num_quadrotors: int | None = typer.Option(None, "--quads", "-q", help="Vehicles on the hose."),
+    num_links: int | None = typer.Option(
+        None, "--num-links", "-n", help="Hose links (default two per vehicle)."
+    ),
+    length: float | None = typer.Option(None, "--length", "-l", help="Hose length, m."),
+    hose_mass: float | None = typer.Option(None, "--hose-mass", help="Hose mass, kg."),
+    anchor_height: float | None = typer.Option(None, "--anchor-height", help="Anchor height, m."),
+    standoff: float | None = typer.Option(
+        None, "--standoff", help="Top vehicle's distance from the anchor, fraction of the length."
+    ),
+    height: float | None = typer.Option(
+        None, "--height", help="Top vehicle's height above the anchor, fraction of the length."
+    ),
+    trajectory: str = typer.Option(
+        "hold", "--trajectory", "--traj", help="'hold', 'circle' (about the anchor) or 'climb'."
+    ),
+    rate: float | None = typer.Option(
+        None, "--rate", help="Circle rate, rad/s. Default: the largest the rule allows."
+    ),
+    ramp: float | None = typer.Option(
+        None, "--ramp", help="Circle ramp / climb blend duration, s (default 6)."
+    ),
+    record: str | None = _record_option,
+):
+    """Simulate several quadrotors in series on one hose pinned to a ground anchor (M8).
+
+    The vehicles sit evenly on the line from the anchor to the top vehicle; the
+    hose LQR holds them there ('hold'), flies the formation round the anchor
+    ('circle') or blends it to a higher, closer station ('climb').
+    """
+    _tethered(
+        system="m8",
+        time=time,
+        model=model,
+        render=render,
+        opts={
+            "num_quadrotors": num_quadrotors,
+            "num_links": num_links,
+            "hose_length": length,
+            "hose_mass": hose_mass,
+            "anchor_height": anchor_height,
+        },
+        standoff=standoff,
+        height=height,
+        trajectory=trajectory,
+        rate=rate,
+        ramp=ramp,
+        record=record,
+    )
+
+
 @run_app.command("multi-quad")
 def multi_quad(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),

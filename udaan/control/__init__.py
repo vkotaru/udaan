@@ -178,6 +178,7 @@ from . import multi_quad_rigidbody as multi_quad_rigidbody  # noqa: E402
 from . import quadrotor as quadrotor  # noqa: E402
 from . import quadrotor_cspayload as quadrotor_cspayload  # noqa: E402
 from . import quadrotor_flexcable as quadrotor_flexcable  # noqa: E402
+from . import tethered_hose as tethered_hose  # noqa: E402
 
 __all__ = [
     "ARE_RESIDUAL_TOLERANCE",
@@ -191,4 +192,5 @@ __all__ = [
     "quadrotor",
     "quadrotor_cspayload",
     "quadrotor_flexcable",
+    "tethered_hose",
 ]

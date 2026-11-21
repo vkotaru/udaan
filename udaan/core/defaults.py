@@ -540,3 +540,61 @@ DEFAULT_HOSE_LQR_R_MOMENT = 20.0
 #: the root path continuous through order ``2n + 4``; a trajectory smooth to a
 #: lower order steps every airframe's reference where the discontinuity is.
 MAX_HOSE_REFERENCE_ACCEL_STEP = MAX_FLEXCABLE_REFERENCE_ACCEL_STEP  # m/s^2
+
+# ── M7 / M8: quadrotors on a hose pinned to a ground anchor ────────────
+#
+# M7 is one quadrotor at the top of an n-link tether; M8 is several quadrotors
+# in series on one hose.  Both are ``udaan.models.tethered_hose``, M7 being the
+# one-vehicle case, and both use M6's hose LQR weights without the two root
+# blocks (the pinned vertex has no position or velocity to weight).
+
+#: M7's tether length, in metres.
+DEFAULT_TETHER_LENGTH = 2.0  # m
+
+#: Links M7's tether is split into.  At the default station the analytical
+#: model's ZOH-Euler loop decays at four links (−0.51 1/s) and six (−0.13 1/s)
+#: and grows at eight (+0.25 1/s), although the continuous loop decays.  Four
+#: keeps the most margin of the even link counts that decay (see
+#: :meth:`~udaan.models.tethered_hose.TetheredHoseBase.stability_growth_rate`).
+DEFAULT_TETHER_NUM_LINKS = 4
+
+#: Mass per metre of the tether and of M8's hose, in kg/m: M6's hose
+#: (0.5 kg over 2 m), so M7 is M8 with one vehicle.
+DEFAULT_TETHER_LINEAR_DENSITY = 0.25  # kg/m
+
+#: M8's hose length, in metres.
+DEFAULT_TETHERED_HOSE_LENGTH = 3.0  # m
+
+#: Vehicles on M8's hose.
+DEFAULT_TETHERED_HOSE_NUM_QUADROTORS = 3
+
+#: Links between consecutive M8 vehicles (and between the anchor and the
+#: first).  Two keeps every segment a foldable chain (a one-link segment has a
+#: static solution only when its two ends are exactly one link apart) and keeps
+#: the analytical loop's sampled closed loop decaying at the default M8 machine.
+DEFAULT_TETHERED_HOSE_LINKS_PER_SEGMENT = 2
+
+#: Height of the anchor above the ground plane ``z = 0``, in metres.
+DEFAULT_TETHER_ANCHOR_HEIGHT = 0.0  # m
+
+#: Default station of the top vehicle: horizontal distance from the anchor and
+#: height above it, as fractions of the hose length.  Inside the band where the
+#: hose stays above the anchor's height (the anchor link pulls upwards).
+DEFAULT_TETHER_STANDOFF_RATIO = 0.5
+DEFAULT_TETHER_HEIGHT_RATIO = 0.8
+
+#: Ramp of ``udaan run tethered-quad/tethered-hose --traj circle`` and blend of
+#: ``--traj climb``, in seconds.  A long hose needs longer: the flat map reads
+#: the anchor force through order ``2n + 2``, so pre-flight the reference.
+DEFAULT_TETHER_RAMP_TIME = 6.0  # s
+
+#: Fraction of an airframe's thrust limit the steady circle about the anchor
+#: may ask of any vehicle (:func:`~udaan.flatness.tethered_hose.circle_rate_bound`):
+#: 0.95 leaves 1 N of the 20 N for the controller's corrections.
+TETHER_CIRCLE_THRUST_FRACTION = 0.95
+
+#: Largest growth rate, in 1/s, of the analytical model's sampled closed loop
+#: (the 5 ms zero-order hold over the forward-Euler substeps, four by default, with the LQR, at
+#: the trim) that the constructor accepts without a warning.  Zero: above it a
+#: perturbation grows.
+TETHER_MAX_CLOSED_LOOP_GROWTH_RATE = 0.0  # 1/s

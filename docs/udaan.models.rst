@@ -15,6 +15,7 @@ Subpackages
    udaan.models.quadrotor
    udaan.models.quadrotor_cspayload
    udaan.models.quadrotor_flexcable
+   udaan.models.tethered_hose
 
 Module contents
 ---------------
