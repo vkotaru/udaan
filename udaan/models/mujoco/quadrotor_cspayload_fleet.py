@@ -9,22 +9,20 @@ written once per step.
 import copy
 import hashlib
 import json
-import os
 
 import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
-from ... import _FOLDER_PATH
 from ...manif import S2, SO3, TS2, TSO3
+from ...utils.assets.cache import ensure_generated, generated_mjcf_dir
+from ...utils.assets.mujoco_asset_creator import MJCF_GENERATOR_VERSION
 from ...utils.logging import get_logger
 from .. import base
 from ..quadrotor_cspayload import QuadrotorCsPayloadBase
 from . import MujocoModel
 
 _logger = get_logger(__name__)
-
-_MJCF_DIR = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf")
 
 # X-spacing between adjacent agents, used both at XML-generation time
 # (per-agent spawn offset) and at runtime (per-agent lane offsets).
@@ -99,14 +97,20 @@ class QuadrotorCsPayloadFleet(base.BaseModel):
         from ...utils.assets.mujoco_asset_creator import MujocoAssetCreator
 
         config_key = json.dumps(
-            {"nQ": nQ, "N": cable_links, "L": cable_length, "m": payload_mass},
+            {
+                "v": MJCF_GENERATOR_VERSION,
+                "nQ": nQ,
+                "N": cable_links,
+                "L": cable_length,
+                "m": payload_mass,
+            },
             sort_keys=True,
         )
         config_hash = hashlib.md5(config_key.encode()).hexdigest()[:8]
         filename = f"cspayload_fleet_{nQ}q_{config_hash}.xml"
-        filepath = os.path.join(_MJCF_DIR, filename)
-        if os.path.exists(filepath):
-            return filename
+        cached = generated_mjcf_dir() / filename
+        if cached.exists():
+            return str(cached)
 
         _logger.info("Generating cspayload fleet MJCF for %d agents", nQ)
         writer = MujocoAssetCreator(f"CsPayloadFleet{nQ}")
@@ -149,8 +153,7 @@ class QuadrotorCsPayloadFleet(base.BaseModel):
                     for bj in bodies_j:
                         writer.exclude_contact(bi, bj)
 
-        writer.save_to(filepath, verbose=False)
-        return filename
+        return ensure_generated(filename, lambda path: writer.save_to(path, verbose=False))
 
     # ─── Index / address resolution after MuJoCo load ─────────────────
 
