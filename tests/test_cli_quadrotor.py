@@ -47,6 +47,12 @@ def test_vehicle_starts_on_its_reference(recorded, traj):
     np.testing.assert_allclose(recorded["start"], recorded["setpoint"](0.0)[0], atol=1e-9)
 
 
+def test_circle_starts_from_rest_and_reaches_one_metre_per_second(recorded):
+    _run("circle")
+    np.testing.assert_allclose(recorded["setpoint"](0.0)[1], 0.0, atol=1e-12)
+    assert np.linalg.norm(recorded["setpoint"](3.0)[1]) == pytest.approx(1.0)
+
+
 @pytest.mark.parametrize("traj", ["step", "figure8"])
 def test_step_and_figure8_stay_clear_of_the_ground(recorded, traj):
     _run(traj)

@@ -184,7 +184,8 @@ def quadrotor(
     elif trajectory == "circle":
         from udaan.utils.trajectory import CircularTraj
 
-        circle = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time)
+        # From rest, the speed ramping up over 2 s, as on `quad-payload`.
+        circle = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time, ramp_time=2.0)
         mdl._pos_controller.setpoint = circle.get
         x0 = circle.get(0.0)[0]
     elif trajectory == "lissajous":
@@ -834,7 +835,8 @@ def fleet(
 ) -> Scenario:
     """``QuadrotorFleet``: independent quadrotors side by side, each with its own controllers.
 
-    Without ``demo`` every quadrotor flies to ``(0, 0, 2)``. A demo
+    Without ``demo`` every quadrotor holds 2 m up in its own x-lane,
+    ``(offset_i, 0, 2)``. A demo
     (``l1-comparison``, ``gain-sweep``) fixes the count, the controllers and
     any disturbances. ``position`` (default ``(0, 0, 1)``) is the first
     quadrotor's start; the rest are offset along x.
@@ -856,10 +858,11 @@ def fleet(
         entry["configure"](f)
         label = f"demo '{demo}', {f.nQ} quads"
     else:
+        from .demos import lane_setpoints
+
         f = U.models.mujoco.QuadrotorFleet(num_quadrotors=num_quadrotors, render=render)
-        target = np.array([0.0, 0.0, 2.0])
-        for q in f.quadrotors:
-            q.position_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
+        for q, setpoint in zip(f.quadrotors, lane_setpoints(f, [0.0, 0.0, 2.0]), strict=True):
+            q.position_controller.setpoint = setpoint
         label = f"{f.nQ} quads"
     return Scenario(
         model=f,
@@ -884,8 +887,8 @@ def cspayload_fleet(
 ) -> Scenario:
     """``QuadrotorCsPayloadFleet``: quadrotor-payload agents side by side on link-chain cables.
 
-    Without ``demo`` every payload starts at ``(±1, ±1, 0.5)`` and flies to
-    ``(0, 0, 1.5)``. A demo (``same-gains``, ``gain-sweep``) fixes the agent
+    Without ``demo`` each payload starts half a metre off its lane's target,
+    at ``(offset_i ± 0.5, ±0.5, 0.5)``, and flies to ``(offset_i, 0, 1.5)``. A demo (``same-gains``, ``gain-sweep``) fixes the agent
     count, gains and per-lane manoeuvre; ``same_start`` puts every agent on
     one absolute start (demo only).
     """
@@ -903,14 +906,18 @@ def cspayload_fleet(
         starts = entry["configure"](f, same_start=same_start)
         label = demo
     else:
+        from .demos import lane_setpoints
+
         nQ = num_agents
-        target = np.array([0.0, 0.0, 1.5])
-        starts = [np.array([(-1.0) ** i * 1.0, (-1.0) ** i * 1.0, 0.5]) for i in range(nQ)]
         f = U.models.mujoco.QuadrotorCsPayloadFleet(
             num_agents=nQ, render=render, cable_links=cable_links
         )
-        for i in range(nQ):
-            f[i]._payload_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
+        starts = [
+            np.array([dx + 0.5 * (-1.0) ** i, 0.5 * (-1.0) ** i, 0.5])
+            for i, dx in enumerate(f._offsets)
+        ]
+        for i, setpoint in enumerate(lane_setpoints(f, [0.0, 0.0, 1.5])):
+            f[i]._payload_controller.setpoint = setpoint
         label = f"{nQ} agents"
     return Scenario(
         model=f,
