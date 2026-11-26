@@ -69,9 +69,10 @@ Across the package:
   earlier results.
 - `udaan run multi-quad-payload` (and `multi-quad`) and the MCP
   `multi-quad-payload` system fly the payload from its start to the
-  controller's setpoint along a 3.5 s rest-to-rest quintic
-  (`MULTI_QUAD_START_BLEND_TIME`), with the flatness feed-forward, instead of
-  stepping the setpoint.
+  controller's setpoint along a straight line with a 2.5 s smooth step in time
+  (`MULTI_QUAD_START_BLEND_TIME`, `udaan.cli.scenarios.SmoothMove`: zero
+  velocity through snap at both ends), with the flatness feed-forward, instead
+  of stepping the setpoint.
 
 ### CLI and demos
 

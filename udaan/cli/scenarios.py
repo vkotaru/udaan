@@ -320,6 +320,40 @@ def quad_payload(
 # ─── M3: nQ quadrotors, one point-mass payload ───────────────────────
 
 
+class SmoothMove:
+    """A rest-to-rest move from ``start`` to ``end`` along a straight line.
+
+    ``p(t) = start + s(t) (end − start)`` with ``s`` the smooth step of
+    :func:`~udaan.flatness.tethered_hose.smoothstep_jet` at smoothness 4, so
+    velocity, acceleration, jerk and snap are zero at both ends and continuous
+    through them: the flatness feed-forward, which reads the reference through
+    snap, sees no jump when the move starts or ends. Before ``t = 0`` the
+    reference is ``start``, after ``duration`` it is ``end``.
+    """
+
+    #: Derivatives of the step that vanish at both ends.
+    SMOOTHNESS = 4
+
+    def __init__(self, start, end, duration: float):
+        if not float(duration) > 0.0:
+            raise ValueError(f"duration must be positive; got {duration}")
+        self.start = np.asarray(start, dtype=float)
+        self.end = np.asarray(end, dtype=float)
+        self.duration = float(duration)
+
+    def get_full(self, t: float) -> tuple[np.ndarray, ...]:
+        """``(p, v, a, jerk, snap)`` at time ``t``."""
+        from udaan.flatness.tethered_hose import smoothstep_jet
+
+        jet = smoothstep_jet(t, self.duration, 4, self.SMOOTHNESS)
+        delta = self.end - self.start
+        return (self.start + jet[0] * delta, *(jet[k] * delta for k in range(1, 5)))
+
+    def get(self, t: float) -> tuple[np.ndarray, ...]:
+        """``(p, v, a)`` at time ``t``."""
+        return self.get_full(t)[:3]
+
+
 def multi_quad_payload(
     *,
     backend: str = "mujoco",
@@ -334,13 +368,13 @@ def multi_quad_payload(
     """M3: ``nQ`` quadrotors carrying one point-mass payload, payload at ``position``.
 
     The payload starts at rest at ``position`` (default ``(-1, 2, 0.5)``) and is
-    flown to the payload controller's own setpoint along a rest-to-rest quintic
-    lasting :data:`~udaan.core.defaults.MULTI_QUAD_START_BLEND_TIME`, bound
-    through its ``get_full`` so the flatness feed-forward engages; the payload
-    then holds the setpoint.
+    flown to the payload controller's own setpoint along a straight line, with a
+    smooth step in time lasting
+    :data:`~udaan.core.defaults.MULTI_QUAD_START_BLEND_TIME` (:class:`SmoothMove`),
+    bound through its ``get_full`` so the flatness feed-forward engages; the
+    payload then holds the setpoint.
     """
     from udaan.core import defaults
-    from udaan.utils.trajectory import PolyTraj5
 
     _check_choice("model", backend, BACKENDS)
     x0 = _vec(position, [-1.0, 2.0, 0.5])
@@ -362,7 +396,7 @@ def multi_quad_payload(
 
         mdl = _construct(MultiQuadCsPayloadBase, num_quadrotors=num_quadrotors, **opts)
     target = np.asarray(mdl.payload_controller.setpoint(0.0)[0], dtype=float)
-    blend = PolyTraj5(x0, target, defaults.MULTI_QUAD_START_BLEND_TIME)
+    blend = SmoothMove(x0, target, defaults.MULTI_QUAD_START_BLEND_TIME)
     mdl.payload_controller.setpoint = blend.get_full
     return Scenario(
         model=mdl,

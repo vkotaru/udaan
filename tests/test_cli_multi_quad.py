@@ -78,8 +78,8 @@ def test_the_catalog_lists_the_alias_as_its_target(alias, target):
 
 
 def test_the_m3_hover_blends_the_setpoint_from_the_start():
-    """The payload setpoint moves from the start to the target along a rest-to-rest
-    quintic, bound through ``get_full``, rather than stepping there."""
+    """The payload setpoint moves from the start to the target along a smooth
+    rest-to-rest step, bound through ``get_full``, rather than stepping there."""
     from udaan.cli import scenarios as sc
     from udaan.core.defaults import MULTI_QUAD_START_BLEND_TIME
 
@@ -92,7 +92,16 @@ def test_the_m3_hover_blends_the_setpoint_from_the_start():
     mid = setpoint(0.5 * MULTI_QUAD_START_BLEND_TIME)
     np.testing.assert_allclose(mid[0], 0.5 * (start + np.array([0.0, 0.0, 1.0])))
     for t in (0.0, MULTI_QUAD_START_BLEND_TIME):
-        np.testing.assert_allclose(setpoint(t)[1], 0.0, atol=1e-12)
+        for derivative in setpoint(t)[1:]:
+            np.testing.assert_allclose(derivative, 0.0, atol=1e-12)
+    # Continuous through snap where the move meets the holds: the cable loop reads
+    # the reference through snap, so a jerk or snap that jumps at an end steps the
+    # commanded attitude there.
+    eps = 1e-3
+    for t in (eps, MULTI_QUAD_START_BLEND_TIME - eps):
+        jerk, snap = setpoint(t)[3:5]
+        assert np.linalg.norm(jerk) < 1e-3
+        assert np.linalg.norm(snap) < 1.0
 
 
 def test_the_m3_hover_keeps_every_cable_taut():
