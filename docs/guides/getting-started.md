@@ -23,11 +23,12 @@ mdl = QuadrotorMujoco(render=True)
 mdl.simulate(tf=10.0, position=[1.0, 1.0, 0.0])
 ```
 
-This spawns a single quadrotor in a MuJoCo viewer and commands it to hover at
-the origin starting from `[1, 1, 0]`. The default controller is the geometric
+This spawns a single quadrotor in a MuJoCo viewer at `[1, 1, 0]` and flies it
+to its default setpoint, a hover at `[0, 0, 1]`. The default controller is the geometric
 SE(3) controller described in {doc}`../theory/controllers/quadrotor-se3`.
 
 ## Next steps
 
-- {doc}`running-simulations` — CLI reference and scripted runs.
+- {doc}`running-simulations` — the eight systems, the CLI and scripted runs.
+- {doc}`controllers` — the controller each system ships with, and how to swap it.
 - {doc}`../theory/dynamics/quadrotor` — equations of motion behind the model.

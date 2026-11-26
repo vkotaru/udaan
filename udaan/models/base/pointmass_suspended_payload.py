@@ -8,9 +8,8 @@ from ..base import BaseModel
 class PointmassSuspendedPayload(BaseModel):
     """Single pointmass quadrotor with cable-suspended payload.
 
-    State: payload_position (3), payload_velocity (3),
-           cable_attitude (3, S2), cable_ang_velocity (3)
-    -> n_state=12, n_action=3
+    State: payload_position (3), payload_velocity (3), cable_attitude (3, S2),
+    cable_ang_velocity (3); ``n_state = 12``, ``n_action = 3``.
     """
 
     class State:

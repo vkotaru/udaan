@@ -8,98 +8,44 @@ This page summarises the CLI and scripted entry points. Every command accepts
 Each model ships with several backends and input modes. The table below shows
 what each supports — use it to pick the right entry point for your task.
 
-| Model | `base` (dynamics only) | `vfx` (VPython) | `mujoco` (MuJoCo) | Fleet |
-|---|:---:|:---:|:---:|:---:|
-| {py:class}`~udaan.models.quadrotor.QuadrotorBase` | ✓ | ✓ | ✓ | ✓ (via `fleet`) |
-| {py:class}`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadBase` | ✓ | ✓ | ✓ (tendon / links) | ✓ (via `cspayload-fleet`) |
-| {py:class}`~udaan.models.mujoco.MultiQuadrotorCSPointmass` | — | — | ✓ | — |
-| {py:class}`~udaan.models.mujoco.MultiQuadRigidbody` | — | — | ✓ | — |
+| | Model | `base` (dynamics only) | `vfx` (VPython) | `mujoco` (MuJoCo) | CLI |
+|---|---|:---:|:---:|:---:|---|
+| M1 | {py:class}`~udaan.models.quadrotor.QuadrotorBase` | ✓ | ✓ (library only) | ✓ | `quadrotor` |
+| M2 | {py:class}`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadBase` | ✓ | ✓ (library only) | ✓ (tendon / links) | `quad-payload` |
+| M3 | {py:class}`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase` | ✓ | — | ✓ | `multi-quad-payload` (MuJoCo) |
+| M4 | {py:class}`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase` | ✓ | — | ✓ | `multi-quad-rigidbody` (MuJoCo) |
+| M5 | {py:class}`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableBase` | ✓ | — | ✓ | `quad-flexcable` |
+| M6 | {py:class}`~udaan.models.multi_quad_hose.MultiQuadHoseBase` | ✓ | — | ✓ | `hose` |
+| M7 | {py:class}`~udaan.models.tethered_hose.TetheredQuadrotorBase` | ✓ | — | ✓ | `tethered-quad` |
+| M8 | {py:class}`~udaan.models.tethered_hose.TetheredHoseBase` | ✓ | — | ✓ | `tethered-hose` |
+
+Each MuJoCo backend is the `...Mujoco` class beside its `...Base` in the same
+package. The VPython backends (`QuadrotorVfx`, `QuadrotorCsPayloadVfx`) are
+importable but not offered on the CLI, because VPython blocks while it opens
+its browser scene.
+
+Comparison and earlier models, all MuJoCo:
+
+| Model | What it runs | CLI |
+|---|---|---|
+| {py:class}`~udaan.models.mujoco.QuadrotorFleet` | `N` M1 quadrotors side by side, each with its own controllers and optional unmodelled mass | `fleet` |
+| {py:class}`~udaan.models.mujoco.QuadrotorCsPayloadFleet` | `N` M2 quadrotor-payload agents side by side on link-chain cables | `cspayload-fleet` |
+| {py:class}`~udaan.models.mujoco.QuadrotorComparison` | a plant and a reference quadrotor in one scene, stepped by the caller | — |
+| {py:class}`~udaan.models.mujoco.MultiQuadrotorCSPointmass` | the earlier `nQ`-quadrotor point-mass payload model | `multi-quad` |
+| {py:class}`~udaan.models.mujoco.MultiQuadRigidbody` | the earlier four-quadrotor rigid-body payload model | `multi-quad-rigid` |
+
+{py:mod}`udaan.models.base` holds analytical point-mass models
+(`FloatingPointmass`, `S2Pendulum`, `PointmassSuspendedPayload`,
+`MultiPointmassSuspendedPayload`) that are stepped by the caller and have no
+`simulate()`.
+
+Short flags are per command: `-n` is the number of quadrotors on `multi-quad-*`
+and `fleet` but the number of links on `quad-flexcable`, `hose` and
+`tethered-*`; `-c` is the cable model on `quad-payload` but the controller on
+`hose`; `-a` is the attachment vertices on `hose` but the attachment radius on
+`multi-quad-rigidbody`. `udaan run <command> --help` lists them.
 
 See {doc}`controllers` for the controllers shipped with each model and how to swap them.
-
-### Input and force types
-
-`QuadrotorBase` and `QuadrotorCsPayloadBase` accept several input
-repackagings, chosen at construction time via the `input=...` kwarg:
-
-| Input type | Controller produces | Integrator consumes | Use when |
-|---|---|---|---|
-| `acceleration` (default) | 3-vec desired thrust force | wrench via geometric attitude controller | high-level trajectory tracking |
-| `wrench` | 4-vec `[f, M_x, M_y, M_z]` | wrench directly | custom attitude laws, SysID |
-| `prop_forces` | 4-vec per-rotor forces | allocated wrench | motor-level experiments |
-
-On `QuadrotorBase`, `simulate()` flies all three paths with the same position
-controller, the same attitude controller and the same flatness feedforward, and
-every path closes the attitude loop inside `step()` at the same rate on both
-backends; only how its wrench reaches the integrator differs.
-
-### Loop rates (M1 quadrotor)
-
-M1 runs two loops over its physics, each at its own rate, all three constructor
-keywords:
-
-| loop | computes | rate | keyword (default) |
-|---|---|---|---|
-| position (outer) | the thrust vector, whose direction is the desired `b₃` and so the desired attitude | once per `step()` | `dt` (5 ms, 200 Hz) |
-| attitude (inner) | thrust and torques from that thrust vector and the attitude reference | `k` times per `step()` | `attitude_rate_hz` (800 Hz) |
-| physics | integrates the rigid body | `N` substeps per `step()` | `physics_rate_hz` (1600 Hz) |
-
-The defaults are 200 / 800 / 1600 Hz. The position loop and the feedforward reference are held across the
-attitude updates; each attitude update is held across `N/k` physics substeps.
-
-```python
-QuadrotorMujoco(attitude_rate_hz=400)  # 200, 400, 800 or 1600 Hz at the defaults
-QuadrotorMujoco(attitude_rate_hz=None)  # once per step, 200 Hz
-QuadrotorBase(dt=0.01, physics_rate_hz=1000, attitude_rate_hz=500)  # 100 / 500 / 1000 Hz
-```
-
-`attitude_rate_hz` must be `k/dt` for a whole `k` that divides the `N` physics
-substeps per step (eight 0.625 ms substeps by default); anything else raises
-`ValueError`. The clock counts whole substeps, so `model.t` after `k` steps is
-`k · dt` to the last bit at every valid rate.
-
-### Physics rate (M1 quadrotor)
-
-The physics integrates at `physics_rate_hz` (default 1600 Hz) on both backends:
-each `step()` takes `N = physics_rate_hz · dt` substeps of `h = dt / N` — ZOH
-substeps on `QuadrotorBase`, MuJoCo steps on `QuadrotorMujoco`, which writes `h`
-into the MuJoCo model's timestep after loading `quadrotor_mj.xml` (the MJCF's own
-timestep is overwritten). Nothing is rounded, so a step always advances
-exactly `dt`.
-
-```python
-QuadrotorMujoco(physics_rate_hz=800)  # N = 4 substeps of 1.25 ms
-QuadrotorBase(physics_rate_hz=1000, attitude_rate_hz=1000)  # N = 5 substeps of 1 ms
-```
-
-The rate must lie in 500–2000 Hz and make `N` a whole number, otherwise
-`ValueError` lists the valid rates for that `dt`: at the default 5 ms, 600, 800,
-1000, …, 2000 Hz. 500 Hz needs a `dt` that is a multiple of 2 ms.
-`attitude_rate_hz` is then validated against the resulting `N`, the default 800 Hz
-included: it divides `N = 4` and `8` (800 and 1600 Hz at 5 ms) but not
-`N = 5`, so `physics_rate_hz=1000` alone raises and names the default; pass an
-`attitude_rate_hz` that divides it (200 or 1000 Hz, or `None`).
-
-### Rotor layout and limits (M1 quadrotor)
-
-The allocation matrix is built from constructor keywords: `arm_length` (0.2 m),
-`rotor_angles` (π/4, 3π/4, 5π/4, 7π/4), `spin_directions` (−1, 1, −1, 1),
-`force_constant` and `torque_constant` (`k_F`, `k_M`; only `c = k_M/k_F`
-enters), and the per-rotor limits `prop_min_force` / `prop_max_force` (0, 10 N),
-each validated. `QuadrotorBase(arm_length=0.25)` is a different airframe; on
-`QuadrotorMujoco` the MJCF is the source of all of them (rotor sites, yaw-gear
-signs and size, `ctrlrange`), and a passed value that disagrees with it raises
-`ValueError`. `DirectPropellerForceController.from_model(mdl)` allocates through
-the model's own matrix.
-So a trajectory bound to `position_controller.setpoint` (and a `yaw_setpoint`)
-is flown on every path.
-
-### Cable models (payload only)
-
-| `cable_model` | MuJoCo backend | Captures slack? | Notes |
-|---|---|:---:|---|
-| `tendon` (default) | massless spatial tendon with a length limit | ✓ | holds its length; carries no force when slack |
-| `links` | 10-link chain of ball joints | ✓ | carries the cable's own 10 g |
 
 ## Quadrotor
 
@@ -157,6 +103,32 @@ fixed by its MJCF, so `-c links` refuses any other value.
 
 The controller used is derived in {doc}`../theory/controllers/quadrotor-payload`; the
 underlying dynamics are covered in {doc}`../theory/dynamics/quadrotor-cspayload`.
+
+## Several quadrotors carrying one payload
+
+```bash
+udaan run multi-quad-payload -n 3 --no-render       # M3: three quadrotors, point-mass payload
+udaan run multi-quad-payload -n 4 -l 1.5 --radius 0.8
+udaan run multi-quad-rigidbody -n 4 --no-render     # M4: four quadrotors, rigid-body payload
+udaan generate-xml multi-quad-rigidbody -n 6 -o rigid.xml
+```
+
+In M3 each quadrotor hangs the shared point-mass payload from its own taut
+cable, in a ring of radius `--radius`. The payload controller computes the net
+force on the payload and splits it into cable tensions with a
+`TensionSplitPolicy`; every cable and airframe then runs its own loop. In M4 the
+payload is a rigid body with cables at a ring of attachment points, and the
+controller tracks its position and attitude by allocating a payload wrench to
+the cables; at least three quadrotors are needed to command a non-level
+attitude. Both commands run the MuJoCo backend and generate their MJCF from the
+options; the analytical models are
+{py:class}`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase` and
+{py:class}`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase`. The
+dynamics are in {doc}`../theory/dynamics/multi-quad-cspointmass` and
+{doc}`../theory/dynamics/multi-quad-rigidbody`, the M3 controller in
+{doc}`../theory/controllers/multi-quad-payload`, and the flat maps in
+{doc}`../theory/differential-flatness/multi-quad-cspayload` and
+{doc}`../theory/differential-flatness/multi-quad-rigidbody`.
 
 ## Quadrotor with a payload on a flexible cable
 
@@ -217,19 +189,128 @@ dynamics are in {doc}`../theory/dynamics/tethered-hose`, the controller in
 
 ## Side-by-side fleets
 
-Two fleet commands exist for comparing controllers or gains:
+Two fleet commands compare controllers or gains, every vehicle in its own lane
+along x:
 
 ```bash
-udaan run fleet --demo l1-comparison           # N quadrotors, L1 vs PD
-udaan run cspayload-fleet --demo gain-sweep    # N quad+payload, gain sweep
+udaan run fleet --demo l1-comparison           # PD (clean), PD (disturbed), L1 (disturbed)
+udaan run fleet --demo gain-sweep              # four PD gain scales
+udaan run fleet -n 4 --trail                   # four quadrotors, default controllers
+udaan run cspayload-fleet --demo same-gains    # two quadrotor-payload agents, default gains
+udaan run cspayload-fleet --demo gain-sweep    # cable gains × 0.5, 1, 1.5, 2
 ```
+
+In `l1-comparison` two of the three quadrotors carry an unmodelled 0.25 kg mass
+off their centre; the PD one drifts and the L1 one holds its setpoint.
+
+## Input paths, loop rates and rotor layout
+
+These settings are constructor keywords; the defaults suit every command above.
+
+### Input and force types
+
+`QuadrotorBase`, `QuadrotorCsPayloadBase`, `MultiQuadCsPayloadBase` and
+`MultiQuadRigidbodyBase` accept several input repackagings, chosen at construction time via the `input=...` kwarg:
+
+| Input type | Controller produces | Integrator consumes | Use when |
+|---|---|---|---|
+| `acceleration` (default) | 3-vec desired thrust force | wrench via geometric attitude controller | high-level trajectory tracking |
+| `wrench` | 4-vec `[f, M_x, M_y, M_z]` | wrench directly | custom attitude laws, SysID |
+| `prop_forces` | 4-vec per-rotor forces | allocated wrench | motor-level experiments |
+
+On `QuadrotorBase`, `simulate()` flies all three paths with the same position
+controller, the same attitude controller and the same flatness feedforward, and
+every path closes the attitude loop inside `step()` at the same rate on both
+backends; only how its wrench reaches the integrator differs. So a trajectory
+bound to `position_controller.setpoint` (and a `yaw_setpoint`) is flown on every
+path.
+
+### Loop rates (M1 quadrotor)
+
+M1 runs two loops over its physics, each at its own rate, all three constructor
+keywords:
+
+| loop | computes | rate | keyword (default) |
+|---|---|---|---|
+| position (outer) | the thrust vector, whose direction is the desired `b₃` and so the desired attitude | once per `step()` | `dt` (5 ms, 200 Hz) |
+| attitude (inner) | thrust and torques from that thrust vector and the attitude reference | `k` times per `step()` | `attitude_rate_hz` (800 Hz) |
+| physics | integrates the rigid body | `N` substeps per `step()` | `physics_rate_hz` (1600 Hz) |
+
+The defaults are 200 / 800 / 1600 Hz. The position loop and the feedforward reference are held across the
+attitude updates; each attitude update is held across `N/k` physics substeps.
+
+```python
+QuadrotorMujoco(attitude_rate_hz=400)  # 200, 400, 800 or 1600 Hz at the defaults
+QuadrotorMujoco(attitude_rate_hz=None)  # once per step, 200 Hz
+QuadrotorBase(dt=0.01, physics_rate_hz=1000, attitude_rate_hz=500)  # 100 / 500 / 1000 Hz
+```
+
+`attitude_rate_hz` must be `k/dt` for a whole `k` that divides the `N` physics
+substeps per step (eight 0.625 ms substeps by default); anything else raises
+`ValueError`. The clock counts whole substeps, so `model.t` after `k` steps is
+`k · dt` to the last bit at every valid rate.
+
+### Physics rate (M1 quadrotor)
+
+The physics integrates at `physics_rate_hz` (default 1600 Hz) on both backends:
+each `step()` takes `N = physics_rate_hz · dt` substeps of `h = dt / N` — ZOH
+substeps on `QuadrotorBase`, MuJoCo steps on `QuadrotorMujoco`, which writes `h`
+into the MuJoCo model's timestep after loading `quadrotor_mj.xml` (the MJCF's own
+timestep is overwritten). Nothing is rounded, so a step always advances
+exactly `dt`.
+
+```python
+QuadrotorMujoco(physics_rate_hz=800)  # N = 4 substeps of 1.25 ms
+QuadrotorBase(physics_rate_hz=1000, attitude_rate_hz=1000)  # N = 5 substeps of 1 ms
+```
+
+The rate must lie in 500–2000 Hz and make `N` a whole number, otherwise
+`ValueError` lists the valid rates for that `dt`: at the default 5 ms, 600, 800,
+1000, …, 2000 Hz. 500 Hz needs a `dt` that is a multiple of 2 ms.
+`attitude_rate_hz` is then validated against the resulting `N`, the default 800 Hz
+included: it divides `N = 4` and `8` (800 and 1600 Hz at 5 ms) but not
+`N = 5`, so `physics_rate_hz=1000` alone raises and names the default; pass an
+`attitude_rate_hz` that divides it (200 or 1000 Hz, or `None`).
+
+### Rotor layout and limits (M1 quadrotor)
+
+The allocation matrix is built from constructor keywords: `arm_length` (0.2 m),
+`rotor_angles` (π/4, 3π/4, 5π/4, 7π/4), `spin_directions` (−1, 1, −1, 1),
+`force_constant` and `torque_constant` (`k_F`, `k_M`; only `c = k_M/k_F`
+enters), and the per-rotor limits `prop_min_force` / `prop_max_force` (0, 10 N),
+each validated. `QuadrotorBase(arm_length=0.25)` is a different airframe; on
+`QuadrotorMujoco` the MJCF is the source of all of them (rotor sites, yaw-gear
+signs and size, `ctrlrange`), and a passed value that disagrees with it raises
+`ValueError`. `DirectPropellerForceController.from_model(mdl)` allocates through
+the model's own matrix.
+
+### Cable models (payload only)
+
+| `cable_model` | MuJoCo backend | Captures slack? | Notes |
+|---|---|:---:|---|
+| `tendon` (default) | massless spatial tendon with a length limit | ✓ | holds its length; carries no force when slack |
+| `links` | 10-link chain of ball joints | ✓ | carries the cable's own 10 g |
 
 ## Scripted (Python)
 
+A setpoint is any callable `t -> (position, velocity, acceleration)`, each a
+3-vector. A trajectory object whose `get` is bound also exposes higher
+derivatives (`get_full`, `get_jet`), which turns on the flatness feed-forward:
+
 ```python
+import numpy as np
+
 from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadMujoco
+from udaan.utils.trajectory import CircularTraj
 
 mdl = QuadrotorCsPayloadMujoco(render=True, cable_model="links")
-mdl._payload_controller.setpoint = lambda t: ([0, 0, 1], [0, 0, 0], [0, 0, 0])
+
+# A fixed target ...
+mdl.payload_controller.setpoint = lambda t: (np.array([0.0, 0.0, 1.0]), np.zeros(3), np.zeros(3))
 mdl.simulate(tf=8.0, payload_position=[1, 1, 0.5])
+
+# ... or a trajectory with feed-forward: a 1 m radius circle from rest.
+circle = CircularTraj(center=np.array([0.0, 0.0, 1.5]), radius=1.0, speed=1.0, ramp_time=2.0)
+mdl.payload_controller.setpoint = circle.get_full
+mdl.simulate(tf=12.0, payload_position=circle.get(0.0)[0])
 ```
