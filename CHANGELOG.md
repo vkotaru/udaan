@@ -475,7 +475,8 @@ Across the package:
   masses at the distal joints), integrated by zero-order-hold Euler at four
   1.25 ms substeps of the 5 ms step, and `QuadrotorFlexCableMujoco`, the same
   machine as a MuJoCo ball-joint chain generated on demand into the user asset
-  cache. The MuJoCo backend reads the airframe's mass, its full inertia tensor
+  cache, its link cylinders massless and each link's mass in a sphere at its
+  distal joint, where the analytical model lumps it. The MuJoCo backend reads the airframe's mass, its full inertia tensor
   in the body frame, the link lengths and the link masses from the MJCF, reads
   every link's direction and rate from the bodies at the current
   configuration, and raises `RuntimeError` when MuJoCo reports a diverged
@@ -506,7 +507,10 @@ Across the package:
   per-user generated-MJCF cache. `MujocoAssetCreator` gains
   `create_flexible_cable_payload(cable_mass=, joint_damping=,
   payload_joint_damping=, payload_joint_stiffness=, payload_radius=,
-  link_radius=)` (defaults 0.01 kg, 1e-3, 1000, 1000, 0.05 m and 0.005 m).
+  link_radius=, vertex_masses=, vertex_radius=)` (defaults 0.01 kg, 1e-3,
+  1000, 1000, 0.05 m, 0.005 m, `False` and 0.01 m); `vertex_masses=True`, which
+  the M5 generator passes, makes the cylinders massless and puts each link's
+  mass in a sphere at its distal end.
 - `udaan run quad-flexcable` (`-n` links, `-m base|mujoco`, `--traj
   hover|lissajous`), `examples/quadrotor_flexcable.py`, and the dynamics,
   controller and flat-map theory pages.

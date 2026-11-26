@@ -99,26 +99,16 @@ class QuadrotorFlexCableMujoco(QuadrotorFlexCableBase):
 
     Where the two backends genuinely differ, and it is not integration:
 
-    * **Mass distribution.**  MuJoCo's links are cylinders with their mass
-      spread along their length and a rotational inertia of their own; the
-      analytical model lumps a point mass at each joint.
-      :meth:`_read_params_from_mjcf` reads each cylinder's mass onto that
-      link's *distal* end, which keeps the total mass exact and the map
-      between MJCF bodies and model parameters one-to-one, but is only first
-      order in ``l_i`` (a consistent half-lumping would be second order).  At
-      the default 0.1 kg cable over three links that shifts ~17 g per joint
-      against a 0.2 kg payload; it is a *physics*
-      difference between the backends, not an integration one, and it is why a
-      base-vs-MuJoCo comparison here is a qualitative agreement rather than the
-      near-exact one M4's tendons allow.
-
-      Half-lumping (``mu_i/2`` onto both ends of each cylinder, link 0's
-      proximal half landing on the airframe) would tighten backend agreement,
-      but distal lumping is what makes the ``n = 1`` case reduce to M2
-      *exactly*: half-lumping moves mass onto the airframe, which M2 has no
-      term for, and the reduction — the strongest validation this model has
-      (``TestDynamics::test_reduction_to_m2_at_one_link``) — would become
-      approximate.
+    The masses are where the analytical model puts them.  Each link body
+    carries a massless cylinder and a small sphere holding the link's mass at
+    its *distal* end (the last one concentric with the payload), and
+    :meth:`_read_params_from_mjcf` reads each link body's mass onto that end,
+    so the total is exact and every model parameter maps to exactly one MJCF
+    body.  What remains is each sphere's own rotational inertia,
+    ``(2/5) m r²`` at ``r`` = 1 cm, against the ``m l²`` the link swings
+    with.  Distal lumping is also what makes the ``n = 1`` case reduce to M2
+    *exactly* (``TestDynamics::test_reduction_to_m2_at_one_link``): no cable
+    mass lands on the airframe, which M2 has no term for.
 
     ``mass`` and ``inertia`` are read back from the file and their setters
     write into it, because MuJoCo is the authority on them: a body's mass is
@@ -128,9 +118,9 @@ class QuadrotorFlexCableMujoco(QuadrotorFlexCableBase):
     ``R`` from ``body_iquat``; with ``inertiafromgeom`` MuJoCo orders the
     principal axes of this airframe so that ``R`` is not the identity.  ``link_masses`` and ``link_lengths``
     are read back too, but assigning them afterwards changes only the
-    *analytical* parameters — the cable's mass and geometry live in cylinder
-    geoms with no one-to-one map to a lumped joint mass, so regenerate the
-    model with a different ``cable_mass``/``cable_length`` instead.
+    *analytical* parameters — the cable's mass and geometry live in the
+    generated body tree, so regenerate the model with a different
+    ``cable_mass``/``cable_length`` instead.
     """
 
     def __init__(self, **kwargs):
@@ -295,30 +285,31 @@ class QuadrotorFlexCableMujoco(QuadrotorFlexCableBase):
     def _read_params_from_mjcf(self):
         """Adopt the file's masses, inertia and link lengths.
 
-        The link lengths come from the cylinder geoms' half-lengths and are
-        *checked* against the declared ones — a mismatch means the analytical
-        model and the physics are describing different cables.  Each cylinder's
-        mass is then read onto that link's **distal** end, and the payload
-        body's mass is added to the last one, so the total is exact and every
-        model parameter maps to exactly one MJCF body.  See the class docstring
-        for what that costs relative to a consistent half-lumping.
+        The link lengths come from the ball joints' anchors and are *checked*
+        against the declared ones — a mismatch means the analytical model and
+        the physics are describing different cables.  Each link body's mass
+        (its vertex sphere's; the cylinder is massless) is then read onto that
+        link's **distal** end, where the sphere sits, and the payload body's
+        mass is added to the last one, so the total is exact and every model
+        parameter maps to exactly one MJCF body.
         """
         model = self._mjMdl.model
         n = self._num_links
 
         lengths = np.zeros(n)
-        cyl_masses = np.zeros(n)
+        link_body_masses = np.zeros(n)
         for i in range(n):
             body_id = int(self._link_body_id[i])
-            if int(model.body_geomnum[body_id]) != 1:
+            if int(model.body_geomnum[body_id]) != 2:
                 raise RuntimeError(
-                    f"link body {i} carries {int(model.body_geomnum[body_id])} geoms, expected 1"
+                    f"link body {i} carries {int(model.body_geomnum[body_id])} geoms, expected "
+                    "2 (the massless link and its vertex mass)"
                 )
             # The ball joint sits half a link above the body's own origin, so
             # the link's length is twice that offset. Read from the joint, not
             # the geom — see _GEOMETRY_TOL.
             lengths[i] = 2.0 * abs(float(model.jnt_pos[int(self._link_jnt_id[i]), 2]))
-            cyl_masses[i] = float(model.body_mass[body_id])
+            link_body_masses[i] = float(model.body_mass[body_id])
 
         if not np.allclose(lengths, self._link_lengths, rtol=0.0, atol=_GEOMETRY_TOL):
             raise RuntimeError(
@@ -328,7 +319,7 @@ class QuadrotorFlexCableMujoco(QuadrotorFlexCableBase):
             )
         self.link_lengths = lengths
 
-        lumped = cyl_masses.copy()
+        lumped = link_body_masses.copy()
         lumped[-1] += float(model.body_mass[self._payload_body_id])
         self.link_masses = lumped
 
@@ -379,9 +370,9 @@ class QuadrotorFlexCableMujoco(QuadrotorFlexCableBase):
             self._mjMdl.model.body_iquat[self._quad_body_id] = quat
 
     # `link_masses` and `link_lengths` deliberately keep the base setters: they
-    # change the analytical parameters only. Pushing a lumped joint mass or a
-    # link length back into the file would mean re-deriving the cylinder geoms
-    # (and, for a length change, the whole body tree), which is the generator's
+    # change the analytical parameters only. Pushing a joint mass or a link
+    # length back into the file would mean re-deriving the vertex spheres (and,
+    # for a length change, the whole body tree), which is the generator's
     # job — regenerate with a different cable_mass/cable_length instead.
 
     # ─── Reset ─────────────────────────────────────────────────────
