@@ -28,8 +28,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      # OSMesa is a software OpenGL, so the MCP render_video test draws frames on a
+      # runner with no GPU and no EGL; the test fails on CI if it cannot render.
+      - run: sudo apt-get update && sudo apt-get install -y libosmesa6-dev
       - run: pip install -e ".[dev,mcp]"
       - run: pytest tests/ -v
+        env:
+          MUJOCO_GL: osmesa
+          PYOPENGL_PLATFORM: osmesa
 
   build:
     runs-on: ubuntu-latest

@@ -126,6 +126,10 @@ Across the package:
   parameter. A run that reaches its budget returns partial metrics with
   `stop_reason: wall_budget`; a child still running 30 s later is killed. No
   window is opened, and the VPython backend is not offered.
+- The CI test job installs OSMesa and runs with `MUJOCO_GL=osmesa`, so the
+  `render_video` test records a clip there. It skips when offscreen rendering
+  is unavailable only where neither `CI` is set nor `MUJOCO_GL=osmesa` is asked
+  for, and fails otherwise.
 - `udaan.mcp.catalog` and `udaan.mcp.runner` import without the MCP SDK.
   `udaan.mcp.MCP_AVAILABLE` says whether the server can start.
 - `skills/udaan/SKILL.md`: an Agent Skill covering installation, server
