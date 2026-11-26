@@ -465,9 +465,14 @@ def quad_flexcable(
     to get wrong.  The chain spawns hanging straight down, and the payload ends
     up at ``spawn_height - cable_length``.
 
-    Three choices make this asset and
+    Four choices make this asset and
     :class:`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableBase` the same
     machine rather than merely similar ones:
+
+    * **Each link's mass at its distal vertex** — the link cylinders are
+      massless and each link's ``cable_mass / num_links`` sits in a small
+      sphere at its lower end, the last one concentric with the payload, which
+      is where the analytical model lumps it.
 
     * **No damping anywhere** — not on the airframe's free joint, not on the
       cable's ball joints, not on the payload's.  ``MujocoAssetCreator.joint``
@@ -531,6 +536,7 @@ def quad_flexcable(
         payload_joint_damping=0.0,
         payload_joint_stiffness=0.0,
         payload_radius=DEFAULT_PAYLOAD_RADIUS,
+        vertex_masses=True,
     )
     writer.save_to(filename, verbose=verbose)
     return filename

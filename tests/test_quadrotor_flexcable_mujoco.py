@@ -13,12 +13,12 @@ exactly zero on the first query and is first order thereafter.  Here every
 link's direction comes out of its body frame and every rate out of
 ``mj_objectVelocity``, so a ``reset()`` round-trips to machine precision.
 
-:class:`TestBackendAgreement` compares against the analytical model.  It is a
-*qualitative* agreement, not the near-exact one M4's tendons allow: MuJoCo's
-links are cylinders with distributed mass and the analytical model lumps a
-point mass at each joint, which is a physics difference and not an integration
-one.  The agreement is centimetres over a 1 s free swing from a tilted chain
-1 m long; the horizon is load-bearing there, as that test's docstring explains.
+:class:`TestBackendAgreement` compares against the analytical model.  Both put
+each link's mass at its distal joint (the MJCF's link cylinders are massless and
+a sphere at the lower end carries the mass), so what separates them is
+integration; the agreement is millimetres over a 1 s free swing from a tilted
+chain 1 m long, growing with the link count; the horizon is load-bearing there,
+as that test's docstring explains.
 
 :class:`TestResetRepairsOffManifoldInput` is the other cross-backend contract:
 both backends normalise a link direction and project a link rate onto its
@@ -48,11 +48,12 @@ LINK_COUNTS = [1, 2, 3, 5]
 
 _E3 = np.array([0.0, 0.0, 1.0])
 
-#: Horizon and bound of :meth:`TestBackendAgreement.test_free_swing_agrees`.
-#: The two are pinned together — see that method's docstring for why the bound
-#: holds only on this horizon.
+#: Horizon and per-link-count bounds of
+#: :meth:`TestBackendAgreement.test_free_swing_agrees`. The two are pinned
+#: together — see that method's docstring for why the bound holds only on this
+#: horizon. Measured peak gaps over it: 1.8 mm, 6.5 mm and 12.8 mm.
 _AGREEMENT_HORIZON = 1.0  # s
-_AGREEMENT_BOUND = 5e-2  # m
+_AGREEMENT_BOUND = {1: 5e-3, 2: 1e-2, 3: 2e-2}  # m
 
 
 @pytest.fixture
@@ -110,13 +111,31 @@ class TestMujocoSetup:
         model = mdl._mjMdl.model
         quad_mass = float(model.body_mass[mdl._quad_body_id])
         assert mdl.mass == pytest.approx(quad_mass)
-        # Every cylinder's mass lands on its own link; the payload sphere is
+        # Every link body's mass lands on its own link; the payload sphere is
         # added to the last. Total mass is therefore exact.
         bodies = sum(
             float(model.body_mass[i])
             for i in (mdl._quad_body_id, *mdl._link_body_id, mdl._payload_body_id)
         )
         assert mdl.total_mass == pytest.approx(bodies, abs=TOL_TIGHT)
+
+    @pytest.mark.parametrize("n", LINK_COUNTS)
+    def test_each_link_mass_sits_at_its_distal_joint(self, n):
+        """Where the analytical model lumps it: the link cylinder carries none.
+
+        Each link body holds the massless cylinder and a sphere at its lower
+        end; its mass being exactly ``cable_mass / n`` with its centre of mass
+        half a link below the body origin is what says so.
+        """
+        mdl = QuadrotorFlexCableMujoco(render=False, num_links=n)
+        model = mdl._mjMdl.model
+        base = QuadrotorFlexCableBase(num_links=n)
+        for i in range(n):
+            body_id = int(mdl._link_body_id[i])
+            assert int(model.body_geomnum[body_id]) == 2
+            half = 0.5 * float(mdl.link_lengths[i])
+            np.testing.assert_allclose(model.body_ipos[body_id], [0.0, 0.0, -half], atol=TOL_TIGHT)
+        np.testing.assert_allclose(mdl.link_masses, base.link_masses, atol=TOL_TIGHT)
 
     def test_inertia_comes_from_the_file(self, mdl):
         """The airframe's tensor in its own body frame, read from the MJCF file.
@@ -479,9 +498,10 @@ class TestBackendAgreement:
     def test_free_swing_agrees(self, n):
         """A free swing under the hover wrench, tracked in both backends.
 
-        The tolerance absorbs a real physics difference (distributed cylinder
-        mass against lumped joint masses) on top of the integration one, so it
-        is centimetres rather than the sub-millimetre M4 manages.
+        Both backends put each link's mass at its distal joint, so what is
+        left is integration — two first-order schemes on a chain whose fastest
+        mode quickens with every link — and each vertex sphere's own
+        rotational inertia; the bound therefore grows with ``n``.
 
         **The horizon is part of the claim.**  Two models this close but not
         identical separate at an accelerating rate, so no single bound survives
@@ -512,8 +532,8 @@ class TestBackendAgreement:
                     np.linalg.norm(backend.state.payload_position - analytic.state.payload_position)
                 ),
             )
-        assert peak_quad < _AGREEMENT_BOUND
-        assert peak_payload < _AGREEMENT_BOUND
+        assert peak_quad < _AGREEMENT_BOUND[n]
+        assert peak_payload < _AGREEMENT_BOUND[n]
 
 
 #: The off-manifold ``reset()`` input both backends have to repair identically:

@@ -26,7 +26,7 @@ FRONT_ROTOR_RGB = [0.85, 0.15, 0.15]
 #: would freeze. Every runtime asset cache hashes it into the generated
 #: filename, so a bump makes stale cached XML unreachable instead of silently
 #: reused by an upgraded ``udaan`` with a warm asset directory.
-MJCF_GENERATOR_VERSION = 7
+MJCF_GENERATOR_VERSION = 8
 
 # Per-geom masses of the rotor assembly emitted by ``create_quadrotor0`` at the
 # default total mass. A requested total scales all four geoms uniformly (see
@@ -643,6 +643,8 @@ class MujocoAssetCreator:
         payload_joint_stiffness=1000.0,
         payload_radius=0.05,
         link_radius=0.005,
+        vertex_masses=False,
+        vertex_radius=0.01,
     ):
         """``N``-link cable + payload subtree. Child names are prefixed with ``name``.
 
@@ -660,6 +662,12 @@ class MujocoAssetCreator:
         for a near-welded payload, or pass ``0.0`` for a genuine free point
         mass.
 
+        Mass.  By default each link's mass is spread along its cylinder.  With
+        ``vertex_masses`` the cylinders are massless and each link's mass sits
+        in a sphere ``{name}_vertex{i+1}`` at its distal end, so the chain is
+        point masses on massless links, as a lumped-mass model describes it;
+        the last link's sphere is concentric with the payload.
+
         Args:
             parent: XML element to hang the chain from.
             name: prefix for every emitted body/joint/geom name.
@@ -670,8 +678,8 @@ class MujocoAssetCreator:
             length: total cable length, in metres.
             mass: payload mass, in kg.
             payload_rgb: payload colour.
-            cable_mass: total mass of the cable itself, spread evenly over the
-                ``N`` cylinder geoms.
+            cable_mass: total mass of the cable itself, split evenly over the
+                ``N`` links.
             joint_damping: viscous damping on each cable ball joint.  Pass
                 ``0.0`` when the asset is to be compared against an analytical
                 model with no drag term — see
@@ -680,47 +688,44 @@ class MujocoAssetCreator:
             payload_joint_stiffness: stiffness of the payload ball joint.
             payload_radius: radius of the payload sphere, in metres.
             link_radius: radius of the link cylinders, in metres.
+            vertex_masses: put each link's mass in a sphere at its distal end
+                and make the cylinders massless.
+            vertex_radius: radius of those spheres, in metres.
         """
         del pos  # documented as ignored; the chain geometry places link 0
         dl = length / N
         dm = cable_mass / N
-        cable = self.body(parent, f"{name}_link0", np.array([0.0, 0.0, -0.5 * dl]))
-        self.joint(
-            cable,
-            f"{name}_joint0",
-            "ball",
-            pos=np.array([0.0, 0.0, 0.5 * dl]),
-            damping=joint_damping,
-            stiffness=0,
-        )
-        self.cylinder(
-            cable,
-            f"{name}_geom0",
-            radius=link_radius,
-            length=dl,
-            mass=dm,
-            density=50,
-            rgb=[0.2, 0.2, 0.2],
-        )
-        for i in range(1, N):
-            cable = self.body(cable, f"{name}_link{i}", np.array([0.0, 0.0, -dl]))
+        cable = parent
+        for i in range(N):
+            offset = -0.5 * dl if i == 0 else -dl
+            cable = self.body(cable, f"{name}_link{i}", np.array([0.0, 0.0, offset]))
             self.joint(
                 cable,
                 f"{name}_joint{i}",
                 "ball",
                 pos=np.array([0.0, 0.0, 0.5 * dl]),
                 damping=joint_damping,
-                stiffness=0.0,
+                stiffness=0 if i == 0 else 0.0,
             )
             self.cylinder(
                 cable,
                 f"{name}_geom{i}",
                 radius=link_radius,
                 length=dl,
-                mass=dm,
-                density=50,
+                mass=0.0 if vertex_masses else dm,
+                density=0.0 if vertex_masses else 50,
                 rgb=[0.2, 0.2, 0.2],
             )
+            if vertex_masses:
+                self.sphere(
+                    cable,
+                    f"{name}_vertex{i + 1}",
+                    pos=np.array([0.0, 0.0, -0.5 * dl]),
+                    radius=vertex_radius,
+                    mass=dm,
+                    density=0.0,
+                    rgb=[0.2, 0.2, 0.2],
+                )
         pyld = self.body(cable, f"{name}_payload", pos=np.array([0.0, 0.0, -0.5 * dl]))
         self.sphere(
             pyld,
