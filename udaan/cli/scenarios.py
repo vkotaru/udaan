@@ -333,9 +333,15 @@ def multi_quad_payload(
 ) -> Scenario:
     """M3: ``nQ`` quadrotors carrying one point-mass payload, payload at ``position``.
 
-    The payload starts at ``position`` (default ``(-1, 2, 0.5)``) and is flown
-    to the payload controller's own setpoint.
+    The payload starts at rest at ``position`` (default ``(-1, 2, 0.5)``) and is
+    flown to the payload controller's own setpoint along a rest-to-rest quintic
+    lasting :data:`~udaan.core.defaults.MULTI_QUAD_START_BLEND_TIME`, bound
+    through its ``get_full`` so the flatness feed-forward engages; the payload
+    then holds the setpoint.
     """
+    from udaan.core import defaults
+    from udaan.utils.trajectory import PolyTraj5
+
     _check_choice("model", backend, BACKENDS)
     x0 = _vec(position, [-1.0, 2.0, 0.5])
     opts = _drop_none(
@@ -355,6 +361,9 @@ def multi_quad_payload(
         from udaan.models.multi_quad_cspayload import MultiQuadCsPayloadBase
 
         mdl = _construct(MultiQuadCsPayloadBase, num_quadrotors=num_quadrotors, **opts)
+    target = np.asarray(mdl.payload_controller.setpoint(0.0)[0], dtype=float)
+    blend = PolyTraj5(x0, target, defaults.MULTI_QUAD_START_BLEND_TIME)
+    mdl.payload_controller.setpoint = blend.get_full
     return Scenario(
         model=mdl,
         tf=duration,

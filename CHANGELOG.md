@@ -61,6 +61,17 @@ Across the package:
 - `udaan run quadrotor --traj circle` flies `CircularTraj(ramp_time=2.0)`: the
   circle starts from rest and reaches 1 m/s over 2 s, as on
   `udaan run quad-payload`.
+- M3 has new default payload gains: `MultiQuadCsPayloadController` places the
+  payload's lateral loop at `ω_p = min_i ω_c,i / MULTI_PAYLOAD_LOOP_RATIO`
+  (3.5) instead of `/ CABLE_CASCADE_LOOP_RATIO` (5), with `ζ = 0.7` and the
+  vertical, cable and attitude loops unchanged; `multi_cable_cascade_gains`
+  takes `payload_ratio`. Simulations of M3 with default gains do not reproduce
+  earlier results.
+- `udaan run multi-quad-payload` (and `multi-quad`) and the MCP
+  `multi-quad-payload` system fly the payload from its start to the
+  controller's setpoint along a 3.5 s rest-to-rest quintic
+  (`MULTI_QUAD_START_BLEND_TIME`), with the flatness feed-forward, instead of
+  stepping the setpoint.
 
 ### CLI and demos
 

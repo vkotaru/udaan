@@ -229,7 +229,11 @@ SYSTEMS: dict[str, System] = {
                 ),
                 _position("Payload start as [x, y, z] in m; default [-1, 2, 0.5]."),
             ),
-            notes=("'hover' flies the payload to the controller's own setpoint [0, 0, 1].",),
+            notes=(
+                "'hover' flies the payload from its start to the controller's own setpoint "
+                f"[0, 0, 1] along a {D.MULTI_QUAD_START_BLEND_TIME:g} s rest-to-rest quintic, "
+                "then holds it.",
+            ),
         ),
         System(
             id="multi-quad-rigidbody",

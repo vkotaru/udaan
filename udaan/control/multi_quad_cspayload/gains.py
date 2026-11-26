@@ -7,13 +7,15 @@ damping ``ζ``, the frequencies separated by a ratio ``r``::
 
     ω_a     = CABLE_CASCADE_ATTITUDE_BANDWIDTH
     ω_c,i   = min(c √(g/l_i), ω_a / r)          (cable i)
-    ω_p     = min_i ω_c,i / r                   (payload x, y)
+    ω_p     = min_i ω_c,i / r_p                 (payload x, y)
     ω_z     = ω_a / r²                          (payload z)
+
+with ``r_p = MULTI_PAYLOAD_LOOP_RATIO``.
 
 M3's payload and cable loops are written in acceleration units (the payload PD
 commands ``a_L^d``; the cable PD is multiplied by ``m_i l_i`` inside the
 controller), so their gains are ``ω²`` and ``2ζω`` with no mass. The payload
-loop is placed below the slowest cable, the longest one. The attitude gains are
+loop is placed a ratio ``r_p`` below the slowest cable, the longest one. The attitude gains are
 moments: ``k_R = J_ii ω_a²``, ``k_Ω = 2ζ J_ii ω_a`` on roll and pitch, and the
 quadrotor's default yaw gains, per airframe.
 """
@@ -28,6 +30,7 @@ from ...core.defaults import (
     CABLE_CASCADE_DAMPING,
     DEFAULT_ATT_KD,
     DEFAULT_ATT_KP,
+    MULTI_PAYLOAD_LOOP_RATIO,
 )
 from ...core.validation import check_positive
 from ..quadrotor_cspayload.gains import LoopFrequencies, loop_frequencies
@@ -61,6 +64,7 @@ def multi_cable_cascade_gains(
     inertias,
     *,
     damping: float = CABLE_CASCADE_DAMPING,
+    payload_ratio: float = MULTI_PAYLOAD_LOOP_RATIO,
     **frequency_kwargs,
 ) -> MultiCableCascadeGains:
     """The M3 cascade's gains for cables ``cable_lengths`` and airframes ``inertias``.
@@ -70,23 +74,25 @@ def multi_cable_cascade_gains(
         inertias: ``(nQ, 3, 3)`` airframe inertias, in kg·m²; the roll and pitch
             gains use each diagonal.
         damping: ``ζ`` of every loop.
+        payload_ratio: ``r_p``, the ratio between the slowest cable loop and the
+            payload's lateral loop, ``ω_p = min_i ω_c,i / r_p``.
         **frequency_kwargs: passed to
             :func:`~udaan.control.quadrotor_cspayload.gains.loop_frequencies`.
     """
     check_positive(damping, "damping")
+    check_positive(payload_ratio, "payload_ratio")
     lengths = np.atleast_1d(np.asarray(cable_lengths, dtype=float))
     J = np.asarray(inertias, dtype=float)
     if J.shape != (lengths.size, 3, 3):
         raise ValueError(f"inertias must be ({lengths.size}, 3, 3); got {J.shape}")
     per_cable = [loop_frequencies(float(l_i), **frequency_kwargs) for l_i in lengths]
     slowest = min(per_cable, key=lambda w: w.cable)
+    w_p = slowest.cable / payload_ratio
     shared = [
-        LoopFrequencies(
-            attitude=w.attitude, cable=w.cable, payload=slowest.payload, vertical=w.vertical
-        )
+        LoopFrequencies(attitude=w.attitude, cable=w.cable, payload=w_p, vertical=w.vertical)
         for w in per_cable
     ]
-    w_xyz = np.array([slowest.payload, slowest.payload, slowest.vertical])
+    w_xyz = np.array([w_p, w_p, slowest.vertical])
     w_c = np.array([w.cable for w in per_cable])
     w_a = np.array([w.attitude for w in per_cable])
     Jd = np.array([np.diag(J_i) for J_i in J])

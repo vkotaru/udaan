@@ -265,12 +265,14 @@ time-scale design
 ({py:func}`~udaan.control.multi_quad_cspayload.multi_cable_cascade_gains`),
 the one the single-quadrotor cascade uses, computed from the model's
 parameters and recomputed when they change. Every loop has damping
-$\zeta = 0.7$ and the loops are separated by a ratio $r = 5$:
+$\zeta = 0.7$; the attitude, cable and vertical loops are separated by a
+ratio $r = 5$, and the payload's lateral loop sits a ratio $r_p = 3.5$
+(`MULTI_PAYLOAD_LOOP_RATIO`) below the slowest cable:
 
 $$
 \omega_a = 40\ \mathrm{rad/s}, \qquad
 \omega_{c,i} = \min\bigl(2\sqrt{g/\ell_i},\ \omega_a / r\bigr), \qquad
-\omega_p = \min_i \omega_{c,i} / r, \qquad
+\omega_p = \min_i \omega_{c,i} / r_p, \qquad
 \omega_z = \omega_a / r^2 .
 $$
 
