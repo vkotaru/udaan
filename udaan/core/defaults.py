@@ -231,11 +231,11 @@ MULTI_MIN_CABLE_TENSION_FRACTION = 0.1
 #: tension floor and its horizontal part scaled down, where needed, to this angle.
 MULTI_MAX_COMMANDED_TILT_DEG = 50.0
 
-#: Duration, in s, of the smooth rest-to-rest move (a quintic) that the M3
+#: Duration, in s, of the smooth rest-to-rest move (``SmoothMove``) that the M3
 #: hover scenario of ``udaan run multi-quad-payload`` and the MCP
 #: ``multi-quad-payload`` system fly from the payload's start to the payload
 #: controller's setpoint, instead of stepping the setpoint there.
-MULTI_QUAD_START_BLEND_TIME = 3.5
+MULTI_QUAD_START_BLEND_TIME = 2.5
 
 # =============================================================================
 # Default control gains

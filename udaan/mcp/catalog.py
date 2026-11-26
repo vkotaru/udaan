@@ -231,7 +231,7 @@ SYSTEMS: dict[str, System] = {
             ),
             notes=(
                 "'hover' flies the payload from its start to the controller's own setpoint "
-                f"[0, 0, 1] along a {D.MULTI_QUAD_START_BLEND_TIME:g} s rest-to-rest quintic, "
+                f"[0, 0, 1] along a straight line, a {D.MULTI_QUAD_START_BLEND_TIME:g} s smooth step in time, "
                 "then holds it.",
             ),
         ),
