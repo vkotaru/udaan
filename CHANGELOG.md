@@ -1,6 +1,95 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 — 2026-11-25
+
+udaan 2.0.0 adds systems M3–M8. Each has an analytical model, a MuJoCo
+backend, a controller, a differential-flatness map, a `udaan run` command, an
+example and theory pages:
+
+- **M3**: `nQ` quadrotors, one point-mass payload; geometric cascade with a
+  tension split.
+- **M4**: `nQ` quadrotors, one rigid-body payload; geometric cascade with
+  wrench allocation.
+- **M5**: one quadrotor, a payload on an `n`-link cable; LQR.
+- **M6**: `nQ` quadrotors in series on an `n`-link hose; LQR.
+- **M7**: one quadrotor on a tether pinned to a ground anchor; LQR.
+- **M8**: `nQ` quadrotors on a hose pinned to a ground anchor; LQR.
+
+Across the package:
+
+- **Flatness feed-forward.** `udaan.flatness` maps a smooth reference to the
+  reference states and inputs of every system; `simulate()` feeds them to the
+  controller when the trajectory exposes its derivatives (`get_full` or
+  `get_jet`).
+- **Reference feasibility.** On M2–M8, reference samples whose thrust axis
+  `b₃` has `b₃·e₃ ≤ MIN_UPRIGHT_THRUST_Z`, or that the flat map rejects, get
+  no new feed-forward, are counted in `feedforward_drops` and are reported when
+  the run ends.
+- **M2 rebuilt.** M2 uses the M1 airframe, M1's loop rates (200 Hz payload
+  loop, 800 Hz attitude, 1600 Hz physics) and M1's three input paths, with
+  time-scale gain design and a minimum cable tension.
+- **Generated MJCF cache.** The M3–M8 generators write to a per-user cache
+  (`$UDAAN_ASSET_DIR` or the platform cache), not into the installed package.
+- **Front rotors.** The front (+x) rotors of every quadrotor are red, so
+  heading is visible in renders.
+- **MCP server and Agent Skill.** `udaan-mcp` (the `mcp` extra) and
+  `skills/udaan/SKILL.md` let Claude list, fly, record and export the systems
+  headless.
+
+### Breaking changes since 1.4.1
+
+- The composite cable is removed: `QuadrotorCsPayloadMujoco(cable_model="cable")`
+  raises `ValueError` and `udaan run quad-payload -c cable` exits with an
+  error; both list `tendon` and `links`. `quad_cable_mj.xml` is removed.
+- `QuadrotorCsPayloadBase(inner_loop_steps=...)` and
+  `QuadrotorCsPayloadMujoco(attitude_zoh=...)` raise `TypeError`; use
+  `physics_rate_hz` and `attitude_rate_hz`.
+- `QuadrotorCsPayloadBase.reset()` raises `ValueError` on an unrecognised
+  keyword.
+- M2 has new defaults: a 0.75 kg airframe, a 0.15 kg payload on a 1 m cable,
+  gains from the time-scale design and a link chain of ten 0.1 m links.
+  Simulations with default arguments do not reproduce 1.4.1 results.
+- `udaan run quadrotor --traj circle` flies `CircularTraj(ramp_time=2.0)`: the
+  circle starts from rest and reaches 1 m/s over 2 s, as on
+  `udaan run quad-payload`.
+
+### CLI and demos
+
+#### Added
+
+- `udaan.cli.demos.lane_setpoints(fleet, target)`: one constant setpoint per
+  vehicle, `target + (offset_i, 0, 0)`, in the vehicle's own x-lane.
+- `scripts/record_gallery.py` records the README gallery headless: it logs the
+  MuJoCo configuration during `simulate()` and replays it into an offscreen
+  `mujoco.Renderer`.
+
+#### Changed
+
+- `udaan run fleet` (both demos and the default run) and
+  `udaan run cspayload-fleet` (the default run) fly each vehicle to the shared
+  target in its own x-lane.
+- `udaan run fleet --demo gain-sweep` scales `DEFAULT_POS_KP` and
+  `DEFAULT_POS_KD` by 0.25, 0.5, 1 and 2.
+- `udaan run cspayload-fleet --demo gain-sweep` gives each agent a
+  `QuadCSPayloadController` whose fixed cable gains are its design gains
+  scaled by 0.5, 1, 1.5 and 2.
+
+#### Fixed
+
+- `QuadrotorCsPayloadFleet` gives each agent the airframe mass and inertia of
+  its MJCF and a payload mass equal to the payload body plus the cable links,
+  then rebuilds the agent's default controllers, so each payload holds its
+  target height.
+
+### Docs
+
+- README: a captioned gallery of M1–M8 and both fleets, a table of the
+  systems, and quick-start commands for every system.
+- Guides cover M1–M8, the fleets and the other MuJoCo models; the controller
+  guide lists each system's controller and sets gains through constructor
+  keywords.
+- Sphinx: `napoleon_use_ivar = True`, and reST fixes in the `manif`,
+  `models.base` and `resize_gif` docstrings; the build emits no warnings.
 
 ### MCP server and Agent Skill
 
