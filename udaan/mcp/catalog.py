@@ -153,6 +153,7 @@ SYSTEMS: dict[str, System] = {
             ),
             notes=(
                 "flip, spiral, mission and figure8 set their own duration.",
+                "circle is 1 m radius at 1 m/s after a 2 s ramp from rest.",
                 "Every trajectory but hover and step carries jerk and snap, so the "
                 "flatness attitude feed-forward engages.",
             ),
@@ -548,7 +549,8 @@ SYSTEMS: dict[str, System] = {
                     "demo",
                     "choice",
                     "Preset: 'l1-comparison' (PD clean / PD disturbed / L1 disturbed) or "
-                    "'gain-sweep' (PD from soft to aggressive). Default: all fly to [0, 0, 2].",
+                    "'gain-sweep' (default PD gains x 0.25..2). Default: each holds [0, 0, 2] "
+                    "translated into its own x-lane.",
                     choices=tuple(DEMOS),
                 ),
                 _position("First quadrotor's start, [x, y, z] in m; default [0, 0, 1]."),
@@ -576,7 +578,8 @@ SYSTEMS: dict[str, System] = {
                     "demo",
                     "choice",
                     "Preset: 'same-gains' or 'gain-sweep' (cable kp/kd x 0.5..2). "
-                    "Default: payloads from [+-1, +-1, 0.5] to [0, 0, 1.5].",
+                    "Default: each payload flies to [0, 0, 1.5] translated into its own x-lane, "
+                    "from half a metre off it.",
                     choices=tuple(CSPAYLOAD_DEMOS),
                 ),
                 Param(

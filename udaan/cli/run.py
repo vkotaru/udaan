@@ -74,7 +74,8 @@ def quadrotor(
         "hover",
         "--trajectory",
         "--traj",
-        help="Trajectory: hover, step, mission, flip, spiral, circle, lissajous, figure8.",
+        help="Trajectory: hover, step, mission, flip, spiral, circle (1 m radius, 1 m/s after a "
+        "2 s ramp from rest), lissajous, figure8.",
     ),
     trail: bool = typer.Option(True, "--trail/--no-trail", help="Show trajectory trail."),
     verbose: int = typer.Option(0, "--verbose", "-v", help="Verbosity level (0-2)."),

@@ -87,6 +87,7 @@ class QuadrotorCsPayloadFleet(base.BaseModel):
         self._offsets = _agent_offsets(self.nQ)
 
         self._resolve_mj_indices()
+        self._sync_agents_from_mjcf()
 
     def __getitem__(self, i):
         return self.agents[i]
@@ -178,6 +179,31 @@ class QuadrotorCsPayloadFleet(base.BaseModel):
         # Per-agent payload velocity is derived via finite difference on world xpos
         self._payload_pos_prev = np.zeros((self.nQ, 3))
         self._payload_vel_initialized = False
+
+    def _sync_agents_from_mjcf(self):
+        """Give each agent the machine its MJCF bodies describe, and rebuild its controllers.
+
+        The agent's ``mass`` and ``inertia`` are the airframe body's (principal
+        moments rotated by ``body_iquat``); its ``payload_mass`` is the payload
+        body plus every cable link, the whole mass hanging from the airframe.
+        The default controllers are then rebuilt for that machine, so the hover
+        feed-forward carries the simulated weight.
+        """
+        m = self._mjMdl.model
+        for i, agent in enumerate(self.agents):
+            qb, pb = self._quad_body_id[i], self._payload_body_id[i]
+            flat = np.zeros(9)
+            mujoco.mju_quat2Mat(flat, m.body_iquat[qb])
+            R = flat.reshape(3, 3)
+            links = [
+                mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f"agent{i}_cbl_link{k}")
+                for k in range(self._cable_links)
+            ]
+            agent.mass = float(m.body_mass[qb])
+            agent.inertia = R @ np.diag(m.body_inertia[qb]) @ R.T
+            agent.payload_mass = float(m.body_mass[pb] + sum(m.body_mass[b] for b in links))
+            agent.cable_length = self._cable_length
+            agent._init_default_controllers()
 
     # ─── Reset / state sync ───────────────────────────────────────────
 
