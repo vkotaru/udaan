@@ -107,14 +107,12 @@ packaged file) and, with `include_text`, `xml` and `truncated`.
 |---|---|---|---|---|
 | `quadrotor` | M1 | base, mujoco | hover, step, mission, flip, spiral, circle, lissajous, figure8 | airframe |
 | `quad-payload` | M2 | base, mujoco (`cable_model` tendon or links) | hover, circle, spiral | payload |
-| `multi-quad-payload` | M3 | base, mujoco | hover | payload |
-| `multi-quad-rigidbody` | M4 | base, mujoco | hover | payload |
+| `multi-quad-payload`, `multi-quad` | M3 | base, mujoco | hover | payload |
+| `multi-quad-rigidbody`, `multi-quad-rigid` | M4 | base, mujoco | hover | payload |
 | `quad-flexcable` | M5 | base, mujoco | hover, lissajous | payload |
 | `hose` | M6 | base, mujoco; `controller` lqr or station on either | hover, lissajous | hose root, or each vehicle with `station` |
 | `tethered-quad` | M7 | base, mujoco | hold, circle, climb | top vehicle |
 | `tethered-hose` | M8 | base, mujoco | hold, circle, climb | top vehicle |
-| `multi-quad` | | mujoco | hover | each quadrotor |
-| `multi-quad-rigid` | | mujoco | hover | each quadrotor |
 | `fleet` | | mujoco (`demo` l1-comparison or gain-sweep) | hover | each quadrotor |
 | `cspayload-fleet` | | mujoco (`demo` same-gains or gain-sweep) | hover | each payload |
 | `comparison` | | MJCF only (`generate_xml`) | | |

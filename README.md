@@ -50,8 +50,8 @@
 |---|---|---|---|---|
 | M1 | one quadrotor | rigid-body flight, trajectory tracking | geometric PD on SE(3), L1 adaptive | `udaan run quadrotor` (yes) |
 | M2 | one quadrotor, payload on a taut cable | a point-mass payload swinging below one vehicle | geometric cascade: payload, cable, attitude | `udaan run quad-payload` (yes) |
-| M3 | `nQ` quadrotors, one point-mass payload | cooperative transport of a small load | M2's cascade with a tension split across cables | `udaan run multi-quad-payload` (no) |
-| M4 | `nQ` quadrotors, one rigid-body payload | carrying a load whose attitude matters | cascade with wrench allocation to cables | `udaan run multi-quad-rigidbody` (no) |
+| M3 | `nQ` quadrotors, one point-mass payload | cooperative transport of a small load | M2's cascade with a tension split across cables | `udaan run multi-quad-payload` or `multi-quad` (no) |
+| M4 | `nQ` quadrotors, one rigid-body payload | carrying a load whose attitude matters | cascade with wrench allocation to cables | `udaan run multi-quad-rigidbody` or `multi-quad-rigid` (no) |
 | M5 | one quadrotor, payload on an `n`-link cable | a cable that bends | LQR (linear-quadratic regulator) | `udaan run quad-flexcable` (yes) |
 | M6 | `nQ` quadrotors in series on an `n`-link hose | a hose carried by several vehicles | LQR | `udaan run hose` (yes) |
 | M7 | one quadrotor on a tether pinned to the ground | a tethered vehicle | LQR | `udaan run tethered-quad` (yes) |
@@ -72,9 +72,9 @@ Also provided, all on MuJoCo:
   its own lane with its own controller, for comparing controllers and gains.
 - `QuadrotorComparison`: a plant and a reference quadrotor in one scene, stepped
   from Python.
-- `MultiQuadrotorCSPointmass` (`udaan run multi-quad`) and `MultiQuadRigidbody`
-  (`udaan run multi-quad-rigid`): quadrotors that hold a fixed formation under a
-  shared payload, with no payload trajectory.
+- `MultiQuadrotorCSPointmass` and `MultiQuadRigidbody` in `udaan.models.mujoco`:
+  quadrotors that hold a fixed formation under a shared payload, with no
+  payload trajectory, stepped from Python.
 - The point-mass models in `udaan.models.base`, stepped from Python.
 
 ## Installation

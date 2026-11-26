@@ -9,19 +9,6 @@ from . import _ctx
 generate_app = typer.Typer(help="Generate MuJoCo XML model files.", context_settings=_ctx)
 
 
-@generate_app.command("multi-quad")
-def multi_quad(
-    num_quads: int = typer.Option(3, "--num-quads", "-n", help="Number of quadrotors."),
-    output: str = typer.Option("multi_quad_pointmass.xml", "--output", "-o", help="Output file."),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-):
-    """Generate MJCF XML for multi-quadrotor pointmass payload."""
-    import udaan as U
-
-    U.utils.xml_model_generator.multi_quad_pointmass(nQ=num_quads, filename=output, verbose=verbose)
-    typer.echo(f"Written to {output}")
-
-
 @generate_app.command("multi-quad-payload")
 def multi_quad_payload(
     num_quads: int = typer.Option(3, "--num-quads", "-n", help="Number of quadrotors."),
@@ -63,6 +50,13 @@ def multi_quad_payload(
         typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(1) from err
     typer.echo(f"Written to {output}")
+
+
+generate_app.command(
+    "multi-quad",
+    help="Same as multi-quad-payload: MJCF XML for the M3 multi-quadrotor point-mass "
+    "payload model.",
+)(multi_quad_payload)
 
 
 @generate_app.command("multi-quad-rigidbody")

@@ -296,10 +296,8 @@ def _rotations(model: Any) -> np.ndarray:
         Rs = [a.state.orientation for a in model.agents]
     elif hasattr(state, "orientations"):  # M3, M4, M6-M8
         Rs = list(state.orientations)
-    elif hasattr(state, "orientation"):  # M1, M2, M5
+    else:  # M1, M2, M5
         Rs = [state.orientation]
-    else:  # the MuJoCo-only multi-quad models
-        Rs = [q.rotation for q in state.quads]
     return np.array([np.asarray(R, dtype=float) for R in Rs])
 
 

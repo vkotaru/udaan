@@ -430,30 +430,6 @@ def tethered_hose(
     _fly_tethered(scn, "tethered-hose", record)
 
 
-@run_app.command("multi-quad")
-def multi_quad(
-    time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
-    render: bool = typer.Option(True, help="Enable visualization."),
-    num_quads: int = typer.Option(3, "--num-quads", "-n", help="Number of quadrotors."),
-    record: str | None = _record_option,
-    position: str | None = typer.Option(
-        None, "--position", "-p", help="Initial payload position as 'x,y,z'."
-    ),
-):
-    """Simulate multiple quadrotors with cable-suspended pointmass payload."""
-    scn = _build(
-        sc.multi_quad,
-        duration=time,
-        num_quadrotors=num_quads,
-        position=_position(position),
-        render=render,
-    )
-    _setup_viewer(scn.model, record)
-    typer.echo(f"Running multi-quad ({scn.label}) for {scn.tf}s ...")
-    scn.run()
-    _hold_viewer(scn.model)
-
-
 @run_app.command("multi-quad-payload")
 def multi_quad_payload(
     time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
@@ -489,21 +465,11 @@ def multi_quad_payload(
     _hold_viewer(scn.model)
 
 
-@run_app.command("multi-quad-rigid")
-def multi_quad_rigid(
-    time: float = typer.Option(10.0, "--time", "-t", help="Simulation duration in seconds."),
-    render: bool = typer.Option(True, help="Enable visualization."),
-    record: str | None = _record_option,
-    position: str | None = typer.Option(
-        None, "--position", "-p", help="Initial payload position as 'x,y,z'."
-    ),
-):
-    """Simulate multiple quadrotors with cable-suspended rigid-body payload."""
-    scn = _build(sc.multi_quad_rigid, duration=time, position=_position(position), render=render)
-    _setup_viewer(scn.model, record)
-    typer.echo(f"Running multi-quad rigid ({scn.label}) for {scn.tf}s ...")
-    scn.run()
-    _hold_viewer(scn.model)
+run_app.command(
+    "multi-quad",
+    help="Same as multi-quad-payload: nQ quadrotors carrying one cable-suspended "
+    "point-mass payload (M3).",
+)(multi_quad_payload)
 
 
 @run_app.command("multi-quad-rigidbody")
@@ -560,6 +526,12 @@ def multi_quad_rigidbody(
     )
     scn.run()
     _hold_viewer(scn.model)
+
+
+run_app.command(
+    "multi-quad-rigid",
+    help="Same as multi-quad-rigidbody: nQ quadrotors carrying one rigid-body payload (M4).",
+)(multi_quad_rigidbody)
 
 
 @run_app.command("cspayload-fleet")

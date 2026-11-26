@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import inspect
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from udaan.cli import scenarios as sc
@@ -490,44 +490,6 @@ SYSTEMS: dict[str, System] = {
             ),
         ),
         System(
-            id="multi-quad",
-            label="multi-quad",
-            description="MultiQuadrotorCSPointmass: quadrotors station-keeping a "
-            "cable-suspended point-mass payload (MuJoCo-only, PD per vehicle).",
-            backends=("mujoco",),
-            trajectories=("hover",),
-            builder="multi_quad",
-            tracked="every quadrotor (each holds its spawn)",
-            params=(
-                Param(
-                    "num_quadrotors",
-                    "int",
-                    "Quadrotors.",
-                    default=3,
-                    low=1,
-                    high=MAX_VEHICLES,
-                ),
-                _position(
-                    "Offset added to every body's spawn, [x, y, z] in m; default [-1, 2, 0.5]."
-                ),
-            ),
-        ),
-        System(
-            id="multi-quad-rigid",
-            label="multi-quad-rigid",
-            description="MultiQuadRigidbody: four quadrotors station-keeping a rigid-body "
-            "payload (MuJoCo-only, PD per vehicle).",
-            backends=("mujoco",),
-            trajectories=("hover",),
-            builder="multi_quad_rigid",
-            tracked="every quadrotor (each holds its constructed position)",
-            params=(
-                _position(
-                    "Offset added to every body's spawn, [x, y, z] in m; default [0, 0, 0.5]."
-                ),
-            ),
-        ),
-        System(
             id="fleet",
             label="fleet",
             description="QuadrotorFleet: independent quadrotors side by side, each with "
@@ -610,6 +572,26 @@ SYSTEMS: dict[str, System] = {
         ),
     )
 }
+
+#: Systems listed under a second id, the ``udaan run`` alias that flies them:
+#: ``multi-quad`` is M3 and ``multi-quad-rigid`` is M4.
+ALIASES = {"multi-quad": "multi-quad-payload", "multi-quad-rigid": "multi-quad-rigidbody"}
+
+
+def _with_aliases(systems: dict[str, System], aliases: dict[str, str]) -> dict[str, System]:
+    """``systems`` with each alias inserted after its target, as a copy under the alias id."""
+    out: dict[str, System] = {}
+    for sid, spec in systems.items():
+        out[sid] = spec
+        for alias, target in aliases.items():
+            if target == sid:
+                out[alias] = replace(
+                    spec, id=alias, description=f"Same as {sid}: {spec.description}"
+                )
+    return out
+
+
+SYSTEMS = _with_aliases(SYSTEMS, ALIASES)
 
 
 def get_system(system: str) -> System:
