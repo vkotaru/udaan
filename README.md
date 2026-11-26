@@ -40,7 +40,7 @@
 ---
 
 > Developed as part of the thesis: _Dynamics and Control for Collaborative Aerial Manipulation_ ([Kotaru, 2022](https://github.com/vkotaru)).
-> Original research code: [vkotaru/floating_models](https://github.com/vkotaru/floating_models). This package is the public release of that code, refactored with [Claude](https://claude.ai).
+> Original research code: [vkotaru/floating_models](https://github.com/vkotaru/floating_models). This package is the public release of that code.
 
 &#x1F681; Quadrotor dynamics &nbsp;&bull;&nbsp; &#x1F39B; Geometric control on SE(3)/SO(3) &nbsp;&bull;&nbsp; &#x26D3; Cable-suspended payloads &nbsp;&bull;&nbsp; &#x1F91D; Multi-quadrotor cooperative transport &nbsp;&bull;&nbsp; &#x1F9F5; Flexible cables and hoses &nbsp;&bull;&nbsp; &#x1F4D0; Differential-flatness feed-forward &nbsp;&bull;&nbsp; &#x1F579; MuJoCo simulation &nbsp;&bull;&nbsp; &#x1F5A5; CLI
 
