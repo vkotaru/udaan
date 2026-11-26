@@ -9,7 +9,8 @@ class TSO3:
     """Element of the Lie algebra so(3) — tangent vector to SO(3).
 
     Wraps a 3-vector representing angular velocity or rotation error.
-    Supports:
+    Supports::
+
         w1 - w2  -> TSO3   (tangent vector difference)
         w1 + w2  -> TSO3   (tangent vector sum)
         w * s    -> TSO3   (scalar multiplication)

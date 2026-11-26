@@ -9,7 +9,8 @@ class TS2:
     """Tangent vector to the 2-sphere S2.
 
     Wraps a 3-vector representing angular velocity or configuration error
-    on the sphere. Supports:
+    on the sphere. Supports::
+
         v1 - v2  -> TS2   (tangent vector difference)
         v1 + v2  -> TS2   (tangent vector sum)
         v * s    -> TS2   (scalar multiplication)

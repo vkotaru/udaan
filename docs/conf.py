@@ -86,6 +86,9 @@ autodoc_mock_imports = [
 ]
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
+# Render ``Attributes:`` sections as ``:ivar:`` fields, so they do not collide
+# with the attribute entries autodoc emits for dataclass fields and enum members.
+napoleon_use_ivar = True
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),

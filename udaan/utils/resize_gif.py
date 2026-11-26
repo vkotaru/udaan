@@ -1,6 +1,7 @@
 """Resize GIF files — reduce resolution and frame count for README/docs.
 
-Usage:
+Usage::
+
     python -m udaan.utils.resize_gif .media/quadrotor.gif --width 480 --max-frames 50
     python -m udaan.utils.resize_gif .media/*.gif --width 480 --fps 15
 """

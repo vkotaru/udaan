@@ -34,11 +34,20 @@ pre-commit install
 
 ## Adding Models
 
-- Base models go in `udaan/models/base/`
-- MuJoCo models go in `udaan/models/mujoco/`
-- Add MJCF files to `udaan/models/assets/mjcf/`, include `scene.xml` for consistent visuals
-- Add a CLI command in `udaan/cli/run.py`
-- Add tests in `tests/`
+Each system is a package `udaan/models/<system>/`:
+
+- Analytical dynamics in `base.py` (`<System>Base`), and the MuJoCo backend in
+  `mujoco.py` (`<System>Mujoco`), which subclasses it and overrides `step()`,
+  `reset()` and the state query
+- Hand-written MJCF in `udaan/models/assets/mjcf/` (include `scene.xml` for
+  consistent visuals), or a generator in `udaan/utils/assets/` whose output is
+  cached per user
+- A controller in `udaan/control/<system>/` and a flat map in
+  `udaan/flatness/<system>.py`
+- A CLI command in `udaan/cli/run.py` and an example in `examples/`
+- An autodoc stub in `docs/` with a toctree entry, and theory pages under
+  `docs/theory/`
+- Tests in `tests/`, including one that the analytical and MuJoCo backends agree
 
 ## Adding Controllers
 
