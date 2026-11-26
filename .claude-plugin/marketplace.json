@@ -1,0 +1,11 @@
+{
+  "name": "udaan",
+  "owner": { "name": "Prasanth Kotaru" },
+  "plugins": [
+    {
+      "name": "udaan",
+      "source": "./",
+      "description": "udaan MCP server and skill for quadrotor and payload simulation."
+    }
+  ]
+}

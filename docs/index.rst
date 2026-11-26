@@ -28,6 +28,7 @@ Udaan — Aerial robotics framework
    guides/getting-started
    guides/running-simulations
    guides/controllers
+   guides/mcp
 
 .. toctree::
    :maxdepth: 3

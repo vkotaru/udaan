@@ -1,0 +1,12 @@
+{
+  "name": "udaan",
+  "description": "Simulate quadrotors and cable-suspended payloads with udaan: an MCP server (udaan-mcp) and a skill that teaches its tools.",
+  "author": { "name": "Prasanth Kotaru" },
+  "homepage": "https://udaan.readthedocs.io",
+  "repository": "https://github.com/vkotaru/udaan",
+  "license": "BSD-3-Clause",
+  "keywords": ["robotics", "quadrotor", "mujoco", "simulation", "mcp"],
+  "mcpServers": {
+    "udaan": { "command": "udaan-mcp" }
+  }
+}
