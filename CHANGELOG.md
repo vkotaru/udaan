@@ -192,6 +192,8 @@ Across the package:
   read and makes the step the degree-11 smoothstep. A chain or hose flat map
   (M5–M8) needs the trajectory built with its own `jet_order`.
   `SpiralTrajectory` and `HelixTrajectory` take the same `smoothness`.
+  At that order the ramp time grows with the link count (M6, 1 m circle at
+  1 m/s: 2 s for four links on 2 m, 3 s for eight, 8 s for six links on 20 m).
 - `udaan.utils.trajectory.ramp`: the step `I_u(m + 1, m + 1)` with its
   derivatives to any order (`smooth_step_derivatives`, `step_jet`), its
   closed-form integral, and the phase of a rate ramped through it
