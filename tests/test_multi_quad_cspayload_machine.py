@@ -608,7 +608,11 @@ class TestTimeScaleGains:
             if mdl.t > 9.0:
                 late.append(float(np.linalg.norm(mdl.state.payload_position - target)))
         assert max(late) < 0.01
-        assert tilt < 30.0
+        # A 0.5 m setpoint step tilts the airframes by up to about 36° on 0.75 m
+        # cables (the payload loop at the slowest cable loop / 3.5); the bound
+        # sits below the cascade's 50° commanded-tilt cap, so a step that needs
+        # the cap fails here.
+        assert tilt < 40.0
 
 
 # ─── Reference feasibility ───────────────────────────────────────────────

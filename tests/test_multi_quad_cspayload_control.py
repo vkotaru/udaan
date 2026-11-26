@@ -504,18 +504,34 @@ class TestThrustLawTerms:
 
 class TestGainsFollowTheDesign:
     def test_gains_are_the_time_scale_design(self):
-        """ω_c = min(2√(g/ℓ), ω_a/5), ω_p = ω_c/5, ω_z = ω_a/25, ζ = 0.7, acceleration units."""
+        """ω_c = min(2√(g/ℓ), ω_a/5), ω_p = ω_c/3.5, ω_z = ω_a/25, ζ = 0.7, acceleration units."""
         for length in (0.5, 1.0, 2.0):
             ctrl = MultiQuadCsPayloadController(
                 num_quadrotors=3, cable_lengths=length, formation_radius=0.4 * length
             )
             w_a = CABLE_CASCADE_ATTITUDE_BANDWIDTH
             w_c = min(2.0 * np.sqrt(GRAVITY / length), w_a / 5.0)
-            w = np.array([w_c / 5.0, w_c / 5.0, w_a / 25.0])
+            w = np.array([w_c / 3.5, w_c / 3.5, w_a / 25.0])
             np.testing.assert_allclose(ctrl.position_gains.kp, w**2)
             np.testing.assert_allclose(ctrl.position_gains.kd, 2 * 0.7 * w)
             np.testing.assert_allclose(ctrl.cable_gains.kp, np.full((3, 3), w_c**2))
             np.testing.assert_allclose(ctrl.cable_gains.kd, np.full((3, 3), 1.4 * w_c))
+
+    def test_payload_ratio_sets_only_the_lateral_loop(self):
+        """``payload_ratio`` moves ω_p on x, y; ω_z and the cable loops keep the design."""
+        from udaan.control.multi_quad_cspayload import multi_cable_cascade_gains
+
+        J = np.tile(np.diag([0.004, 0.006, 0.01]), (3, 1, 1))
+        a = multi_cable_cascade_gains([1.0, 1.5, 2.0], J, payload_ratio=2.0)
+        b = multi_cable_cascade_gains([1.0, 1.5, 2.0], J, payload_ratio=4.0)
+        w_slow = 2.0 * np.sqrt(GRAVITY / 2.0)
+        np.testing.assert_allclose(a.position_kp[:2], (w_slow / 2.0) ** 2)
+        np.testing.assert_allclose(b.position_kp[:2], (w_slow / 4.0) ** 2)
+        assert a.position_kp[2] == b.position_kp[2]
+        np.testing.assert_allclose(a.cable_kp, b.cable_kp)
+        assert all(f.payload == w_slow / 2.0 for f in a.frequencies)
+        with pytest.raises(ValueError):
+            multi_cable_cascade_gains([1.0], J[:1], payload_ratio=0.0)
 
     def test_attitude_design_uses_each_airframe_inertia(self):
         J = np.diag([0.004, 0.006, 0.01])
@@ -546,7 +562,12 @@ class TestGainsFollowTheDesign:
 
     @pytest.mark.parametrize(
         "name",
-        ["CABLE_CASCADE_ATTITUDE_BANDWIDTH", "CABLE_CASCADE_LOOP_RATIO", "CABLE_CASCADE_DAMPING"],
+        [
+            "CABLE_CASCADE_ATTITUDE_BANDWIDTH",
+            "CABLE_CASCADE_LOOP_RATIO",
+            "CABLE_CASCADE_DAMPING",
+            "MULTI_PAYLOAD_LOOP_RATIO",
+        ],
     )
     def test_changing_a_design_constant_moves_the_command(self, monkeypatch, name):
         """No gain is inlined: perturbing a design constant must change the output.
@@ -574,10 +595,11 @@ class TestGainsFollowTheDesign:
             return mdl
 
         base = commanded(perturbed_model())
-        if name == "CABLE_CASCADE_DAMPING":
-            original = mq_gains.multi_cable_cascade_gains.__kwdefaults__["damping"]
+        mq_kw = {"CABLE_CASCADE_DAMPING": "damping", "MULTI_PAYLOAD_LOOP_RATIO": "payload_ratio"}
+        if name in mq_kw:
+            original = mq_gains.multi_cable_cascade_gains.__kwdefaults__[mq_kw[name]]
             monkeypatch.setitem(
-                mq_gains.multi_cable_cascade_gains.__kwdefaults__, "damping", original * 1.5
+                mq_gains.multi_cable_cascade_gains.__kwdefaults__, mq_kw[name], original * 1.5
             )
         else:
             kw = {
@@ -681,7 +703,7 @@ class TestFlatnessFeedforward:
         # Discriminating in both directions: the feedback-only run has to be
         # bad enough that there is something to improve, and the feedforward
         # run has to be substantially better rather than merely not worse.
-        assert without["rms"] > 0.1, "trajectory too easy — the comparison proves nothing"
+        assert without["rms"] > 0.05, "trajectory too easy — the comparison proves nothing"
         assert with_ff["rms"] < 0.8 * without["rms"]
         assert with_ff["max"] < without["max"]
 
@@ -697,7 +719,7 @@ class TestFlatnessFeedforward:
         than the same trajectory flown feedback-only.
         """
         # `brisk_spiral()`, 1.5 m/s: every reference sample keeps the airframes
-        # upright at nQ = 3, and feedback alone finishes 7 cm off, against
+        # upright at nQ = 3, and feedback alone finishes about 3 cm off, against
         # 0.3 mm with the feedforward.
         traj = brisk_spiral()
         applied: list[int] = []
@@ -728,7 +750,7 @@ class TestFlatnessFeedforward:
         _, err_fb = run(False)
         assert not applied, "the plain-closure setpoint must not unlock the feedforward"
 
-        assert err_fb > 0.05, "trajectory too easy — the comparison proves nothing"
+        assert err_fb > 0.02, "trajectory too easy — the comparison proves nothing"
         assert err_ff < 0.8 * err_fb
 
     def test_feedforward_is_skipped_when_the_policy_is_not_published(self, caplog):

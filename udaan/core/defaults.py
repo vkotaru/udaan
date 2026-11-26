@@ -231,6 +231,12 @@ MULTI_MIN_CABLE_TENSION_FRACTION = 0.1
 #: tension floor and its horizontal part scaled down, where needed, to this angle.
 MULTI_MAX_COMMANDED_TILT_DEG = 50.0
 
+#: Duration, in s, of the smooth rest-to-rest move (a quintic) that the M3
+#: hover scenario of ``udaan run multi-quad-payload`` and the MCP
+#: ``multi-quad-payload`` system fly from the payload's start to the payload
+#: controller's setpoint, instead of stepping the setpoint there.
+MULTI_QUAD_START_BLEND_TIME = 3.5
+
 # =============================================================================
 # Default control gains
 # =============================================================================
@@ -319,9 +325,19 @@ MIN_UPRIGHT_THRUST_Z = 0.0
 # commands an acceleration (``k_p = ω²``, ``k_d = 2ζω``) and the cable PD carries
 # its own ``m_i l_i`` (``k_q = ω_c,i²``, ``k_ω = 2ζ ω_c,i``), so no mass enters
 # them and they mean the same thing at every ``nQ``. Each cable's ``ω_c,i``
-# follows its own length, and the payload loop sits a ratio ``r`` below the
-# slowest cable. `udaan.control.multi_quad_cspayload.multi_cable_cascade_gains`
-# computes them from the model's cable lengths and airframe inertias.
+# follows its own length, and the payload's lateral loop sits a ratio
+# MULTI_PAYLOAD_LOOP_RATIO below the slowest cable,
+#
+#   ω_p = min_i ω_c,i / MULTI_PAYLOAD_LOOP_RATIO,
+#
+# while the vertical loop keeps ω_z = ω_a / r². The cable and attitude loops are
+# the CABLE_CASCADE_* design unchanged.
+# `udaan.control.multi_quad_cspayload.multi_cable_cascade_gains` computes them
+# from the model's cable lengths and airframe inertias.
+
+#: Ratio between the slowest cable loop and the payload's lateral (x, y)
+#: position loop of the M3 cascade, ``ω_p = min_i ω_c,i / ratio``.
+MULTI_PAYLOAD_LOOP_RATIO = 3.5
 
 # Rigid-body payload attitude loop (M4).
 #
