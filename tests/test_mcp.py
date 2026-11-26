@@ -8,6 +8,7 @@ from __future__ import annotations
 import csv
 import inspect
 import json
+import os
 import sys
 import time
 
@@ -279,12 +280,25 @@ class TestCheckReference:
             runner.check_reference("quadrotor")
 
 
+def _rendering_required() -> bool:
+    """Whether a missing offscreen backend is a failure rather than a skip.
+
+    The CI test job installs OSMesa and sets ``MUJOCO_GL=osmesa``, so on CI
+    (``CI`` set) or wherever OSMesa is asked for explicitly, a video test that
+    cannot render reports a broken setup. Elsewhere it skips.
+    """
+    return bool(os.environ.get("CI")) or os.environ.get("MUJOCO_GL", "").lower() == "osmesa"
+
+
 @pytest.fixture(scope="module")
 def offscreen_rendering():
-    """Skip unless MuJoCo can render offscreen here (CI runners often have no EGL)."""
+    """Skip unless MuJoCo can render offscreen here; fail instead where it must."""
     error = runner.check_offscreen_rendering()
-    if error is not None:
-        pytest.skip(f"offscreen rendering unavailable on this machine: {error}")
+    if error is None:
+        return
+    if _rendering_required():
+        pytest.fail(f"offscreen rendering is required here but unavailable: {error}")
+    pytest.skip(f"offscreen rendering unavailable on this machine: {error}")
 
 
 @pytest.mark.mujoco
@@ -294,6 +308,8 @@ def test_render_video(tmp_path, offscreen_rendering):
     assert r["frames"] == 6  # one per 0.1 s, from the first step at 5 ms to 0.5 s
     assert path.stat().st_size > 0
     assert r["gl"] in ("egl", "osmesa", "cgl")  # never glfw, which opens a window
+    if os.environ.get("MUJOCO_GL", "").lower() == "osmesa":
+        assert r["gl"] == "osmesa"
 
 
 class TestOffscreenUnavailable:
