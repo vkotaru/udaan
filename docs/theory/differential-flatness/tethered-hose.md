@@ -47,7 +47,9 @@ vehicle.
 
 The smooth step is $s = I_u(m+1, m+1)$, the regularised incomplete beta
 function with $m$ the map's jet order, so it is continuous through every
-derivative the map reads. Its derivatives are evaluated from $w = u(1-u)$,
+derivative the map reads. It is the step every circle reference ramps with
+({py:mod}`udaan.utils.trajectory.ramp`); a {py:class}`~udaan.utils.trajectory.CircularTraj`
+flown on a chain or hose takes the map's jet order as its `smoothness`. Its derivatives are evaluated from $w = u(1-u)$,
 not from the monomial form, whose alternating coefficients lose every digit
 near the ends at the degrees a long hose needs.
 

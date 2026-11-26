@@ -9,6 +9,7 @@ Submodules
 
    udaan.utils.trajectory.figure8
    udaan.utils.trajectory.flip
+   udaan.utils.trajectory.ramp
    udaan.utils.trajectory.trajectory
    udaan.utils.trajectory.waypoint
 

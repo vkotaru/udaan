@@ -16,34 +16,22 @@ from math import comb, factorial
 
 import numpy as np
 
+from .ramp import DEFAULT_RAMP_SMOOTHNESS, check_smoothness, ramp_phase_jet
 from .trajectory import Trajectory
 
 _g = 9.81
 
 
-#: Degree-11 smoothstep ``S(u) = 462u⁶ − 1980u⁷ + 3465u⁸ − 3080u⁹ + 1386u¹⁰ − 252u¹¹``:
-#: ``S(0) = 0``, ``S(1) = 1``, and its first five derivatives vanish at both
-#: ends. Coefficients lowest power first.
-_SMOOTHSTEP = np.polynomial.Polynomial([0, 0, 0, 0, 0, 0, 462, -1980, 3465, -3080, 1386, -252])
-_SMOOTHSTEP_INTEGRAL = _SMOOTHSTEP.integ()
-
-
-def _ramp_up(u, w, duration, order=4):
+def _ramp_up(u, w, duration, order=4, smoothness=DEFAULT_RAMP_SMOOTHNESS):
     """``φ`` and its first ``order`` time derivatives for ``φ̇ = w·S(u)``,
     ``u = t/duration`` in ``[0, 1]``.
 
-    With :data:`_SMOOTHSTEP` the rate's first five derivatives vanish where the
-    ramp meets rest and where it meets the cruise, so ``φ`` is continuous
-    through its sixth derivative there — what a payload flat map of order six
-    (M3, M4) needs. Over a full ramp ``φ`` advances ``w·duration/2``.
+    ``S`` is :mod:`udaan.utils.trajectory.ramp`'s step, continuous through order
+    ``smoothness - 1``, so ``φ`` is continuous through order ``smoothness``
+    where the ramp meets rest and where it meets the cruise. Over a full ramp
+    ``φ`` advances ``w·duration/2``.
     """
-    out = np.empty(order + 1)
-    out[0] = w * duration * _SMOOTHSTEP_INTEGRAL(u)
-    poly = _SMOOTHSTEP
-    for k in range(1, order + 1):
-        out[k] = w / duration ** (k - 1) * poly(u)
-        poly = poly.deriv()
-    return out
+    return ramp_phase_jet(u * duration, w, duration, order, smoothness)
 
 
 #: Gauss–Legendre nodes and weights on [−1, 1], and the longest panel the
@@ -374,12 +362,14 @@ class SpiralTrajectory(Trajectory):
             r\sin\varphi,\; r(1 - \cos\varphi)\Bigr]
 
     whose rate :math:`\dot\varphi` ramps from 0 to :math:`\omega = s/r` over
-    ``ramp_time`` :math:`T_r` through the degree-11 smoothstep
-    :math:`S(u) = 462u^6 - 1980u^7 + 3465u^8 - 3080u^9 + 1386u^{10} - 252u^{11}`,
-    holds :math:`\omega`, and ramps back down the same way. :math:`S` has
-    zero first to fifth derivatives at both ends, so :math:`\varphi` is
-    continuous through its sixth derivative, and so is the reference at every
-    phase boundary — the depth M3's and M4's flat maps read. The time
+    ``ramp_time`` :math:`T_r` through the smooth step
+    :math:`S(u) = I_u(k, k)` (:mod:`udaan.utils.trajectory.ramp`), ``k`` =
+    ``smoothness``, holds :math:`\omega`, and ramps back down the same way.
+    :math:`S` has zero first to :math:`(k-1)`-th derivatives at both ends, so
+    :math:`\varphi` and the reference are continuous through order ``k`` at
+    every phase boundary. The default, 6, is the depth M1–M4's flat maps read
+    (at 6 :math:`S` is the degree-11 smoothstep); bind a deeper map with its
+    own jet order. The time
     derivatives of :math:`p(\varphi(t))` follow by Faà di Bruno, to any order
     (see :meth:`_spiral_jet` and :meth:`get_jet`). The ramps together cover
     :math:`\omega T_r` of the :math:`2\pi n` total, so the cruise lasts
@@ -398,10 +388,13 @@ class SpiralTrajectory(Trajectory):
         advance: total x-distance traveled over all loops (meters).
         hold_time: hover duration before and after the maneuver.
         ramp_time: duration of each of the ramp-in and ramp-out (seconds).
+        smoothness: order through which the reference is continuous at the
+            ramps' ends, ``>= 1``.
 
     Raises:
         ValueError: if ``ramp_time`` is negative, or longer than the loops take
-            at full speed (``2π n_loops / ω``), which leaves no cruise.
+            at full speed (``2π n_loops / ω``), which leaves no cruise; or if
+            ``smoothness`` is not an integer ``>= 1``.
     """
 
     def __init__(
@@ -413,8 +406,10 @@ class SpiralTrajectory(Trajectory):
         advance=3.0,
         hold_time=1.0,
         ramp_time=2.0,
+        smoothness=DEFAULT_RAMP_SMOOTHNESS,
     ):
         super().__init__()
+        self._smoothness = check_smoothness(smoothness)
         self._start = np.array(start, dtype=float)
         self._r = radius
         self._n_loops = n_loops
@@ -446,7 +441,7 @@ class SpiralTrajectory(Trajectory):
         """``φ`` and its first ``order`` derivatives at ``tp`` into the helix phase."""
         w, Tr = self._w, self._t_ramp
         if Tr > 0 and tp < Tr:
-            return _ramp_up(tp / Tr, w, Tr, order)
+            return _ramp_up(tp / Tr, w, Tr, order, self._smoothness)
         if tp <= Tr + self._t_cruise or Tr == 0:
             # In the cruise (and, with no ramps, at the end: `tp` can pass it by
             # round-off, so hold the final phase).
@@ -457,7 +452,7 @@ class SpiralTrajectory(Trajectory):
             return out
         # The ramp-out is the ramp-in reflected in time about the phase's end:
         # odd derivatives keep their sign, even ones flip.
-        out = _ramp_up(max(self._t_spiral - tp, 0.0) / Tr, w, Tr, order)
+        out = _ramp_up(max(self._t_spiral - tp, 0.0) / Tr, w, Tr, order, self._smoothness)
         out[0] = self._phi_total - out[0]
         out[2::2] *= -1
         return out
@@ -544,8 +539,8 @@ class HelixTrajectory(SpiralTrajectory):
 
     a circle of radius :math:`r` centred at :math:`x_0 + (0, r, 0)`, traversed
     counter-clockwise seen from above, climbing :math:`c` over :math:`n`
-    loops. The phase :math:`\varphi(t)`, its holds and its degree-11
-    smoothstep ramps are :class:`SpiralTrajectory`'s, unchanged, so the
+    loops. The phase :math:`\varphi(t)`, its holds and its smooth-step
+    ramps are :class:`SpiralTrajectory`'s, unchanged, so the
     horizontal speed ramps from rest to ``speed`` and back, and every row of
     the jet is exact to any order. :meth:`get`, :meth:`get_full` and
     :meth:`get_jet` are inherited, so flatness feed-forward engages.
@@ -563,6 +558,7 @@ class HelixTrajectory(SpiralTrajectory):
             descends.
         hold_time: hover duration before and after the manoeuvre (seconds).
         ramp_time: duration of each of the ramp-in and ramp-out (seconds).
+        smoothness: as :class:`SpiralTrajectory`'s.
 
     Raises:
         ValueError: if ``ramp_time`` is negative, or longer than the loops take
@@ -578,6 +574,7 @@ class HelixTrajectory(SpiralTrajectory):
         climb=1.0,
         hold_time=1.0,
         ramp_time=2.0,
+        smoothness=DEFAULT_RAMP_SMOOTHNESS,
     ):
         super().__init__(
             start=start,
@@ -587,6 +584,7 @@ class HelixTrajectory(SpiralTrajectory):
             advance=climb,
             hold_time=hold_time,
             ramp_time=ramp_time,
+            smoothness=smoothness,
         )
         self._end_pos = self._start + np.array([0.0, 0.0, climb])
 

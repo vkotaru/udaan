@@ -865,3 +865,18 @@ class TestReferenceSmoothness:
         steps = ctrl.flat_map.reference_steps(ctrl.build_flats, self._circle(6.0).get_jet, 6.5)
         assert [round(s.t, 3) for s in steps] == [0.0, 6.0]
         assert max(s.acceleration for s in steps) < 0.01 * MAX_HOSE_REFERENCE_ACCEL_STEP
+
+    @pytest.mark.parametrize("ramp", [2.0, 6.0])
+    def test_a_circle_built_with_the_maps_order_has_no_joints(self, ramp):
+        from udaan.utils.trajectory import CircularTraj
+
+        ctrl = MultiQuadHoseBase(input="wrench").hose_controller
+        circle = CircularTraj(
+            center=np.array([0.0, 0.0, 2.0]),
+            radius=1.0,
+            speed=1.0,
+            th0=-np.pi / 2,
+            ramp_time=ramp,
+            smoothness=ctrl.flat_map.jet_order,
+        )
+        assert ctrl.flat_map.reference_steps(ctrl.build_flats, circle.get_jet, ramp + 0.5) == []

@@ -3,6 +3,8 @@ import warnings
 
 import numpy as np
 
+from .ramp import DEFAULT_RAMP_SMOOTHNESS, check_smoothness
+
 PI = math.pi
 
 
@@ -224,11 +226,17 @@ class CircularTraj(Trajectory):
 
     With ``ramp_time`` :math:`T_r > 0` the circle starts from rest: the rate
     :math:`\dot\varphi = \omega S(t/T_r)` ramps from 0 to :math:`\omega` over
-    :math:`T_r` through :class:`~udaan.utils.trajectory.SpiralTrajectory`'s
-    degree-11 smoothstep :math:`S`, whose first five derivatives vanish at both
-    ends, and holds :math:`\omega` after it. The ramp covers
-    :math:`\omega T_r/2` of phase. For ``t <= 0`` the reference is at rest at
-    ``θ = th0``. Every row of :meth:`get_jet` is exact.
+    :math:`T_r` through the smooth step :math:`S(u) = I_u(k, k)`
+    (:mod:`udaan.utils.trajectory.ramp`, shared with
+    :class:`~udaan.utils.trajectory.SpiralTrajectory`), ``k`` = ``smoothness``,
+    and holds :math:`\omega` after it. :math:`S`'s first :math:`k - 1`
+    derivatives vanish at both ends, so the reference is continuous through
+    order ``k`` where the ramp starts and ends. The default, 6, is the depth
+    M1–M4's flat maps read (at 6 :math:`S` is the degree-11 smoothstep); a
+    deeper map (M5–M8, order ``2n + 4`` or ``2n + 2``) needs the trajectory
+    built with its own jet order. The ramp covers :math:`\omega T_r/2` of
+    phase. For ``t <= 0`` the reference is at rest at ``θ = th0``. Every row of
+    :meth:`get_jet` is exact.
 
     Args:
         center: circle centre [x, y, z] (metres).
@@ -237,12 +245,25 @@ class CircularTraj(Trajectory):
         th0: initial angle (radians).
         tf: nominal duration (seconds).
         ramp_time: duration of the speed ramp from rest (seconds); 0 for none.
+        smoothness: order through which the reference is continuous where the
+            ramp starts and ends, ``>= 1``.
 
     Raises:
-        ValueError: if ``ramp_time`` is negative.
+        ValueError: if ``ramp_time`` is negative, or ``smoothness`` is not an
+            integer ``>= 1``.
     """
 
-    def __init__(self, center=np.zeros(3), radius=1, speed=1, th0=0, tf=10.0, ramp_time=0.0):
+    def __init__(
+        self,
+        center=np.zeros(3),
+        radius=1,
+        speed=1,
+        th0=0,
+        tf=10.0,
+        ramp_time=0.0,
+        smoothness=DEFAULT_RAMP_SMOOTHNESS,
+    ):
+        self._smoothness = check_smoothness(smoothness)
         self._center = center
         self._radius = radius
         self._speed = speed
@@ -297,7 +318,7 @@ class CircularTraj(Trajectory):
         if t <= 0:
             phi = np.zeros(order + 1)
         elif t < Tr:
-            phi = _ramp_up(t / Tr, self._w, Tr, order)
+            phi = _ramp_up(t / Tr, self._w, Tr, order, self._smoothness)
         else:
             phi = np.zeros(order + 1)
             phi[0] = 0.5 * self._w * Tr + self._w * (t - Tr)

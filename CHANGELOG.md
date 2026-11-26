@@ -183,10 +183,20 @@ Across the package:
   xy-plane and the advance is a climb along z (defaults: start `(0, 0, 1.5)`,
   radius 0.8 m, 2 m/s, two loops, 1 m climb, 1 s holds, 2 s ramps). It has
   `get`, `get_full` and `get_jet`, so flatness feed-forward engages.
-- `CircularTraj(ramp_time=...)`: with `ramp_time > 0` the circle starts from
-  rest and its angular rate ramps to `speed/radius` through the degree-11
-  smoothstep `SpiralTrajectory` uses; `get_jet` stays exact. The default, 0,
-  is the unramped circle.
+- `CircularTraj(ramp_time=..., smoothness=...)`: with `ramp_time > 0` the
+  circle starts from rest and its angular rate ramps to `speed/radius`
+  through the smooth step `I_u(k, k)`, `k = smoothness`, so the reference is
+  continuous through order `k` where the ramp starts and ends; `get_jet`
+  stays exact. The default ramp, 0, is the unramped circle; the default
+  `smoothness`, 6 (`DEFAULT_RAMP_SMOOTHNESS`), is the depth M1–M4's flat maps
+  read and makes the step the degree-11 smoothstep. A chain or hose flat map
+  (M5–M8) needs the trajectory built with its own `jet_order`.
+  `SpiralTrajectory` and `HelixTrajectory` take the same `smoothness`.
+- `udaan.utils.trajectory.ramp`: the step `I_u(m + 1, m + 1)` with its
+  derivatives to any order (`smooth_step_derivatives`, `step_jet`), its
+  closed-form integral, and the phase of a rate ramped through it
+  (`ramp_phase_jet`); the circle-type references and `TetherCircle` all ramp
+  through it. M5's and M6's smoothness warning names `smoothness=` as the fix.
 - `udaan run quad-payload --traj {hover,circle,spiral}` (default `hover`):
   `circle` is a 1 m circle centred on `-p` that starts from rest and reaches
   1 m/s over a 2 s ramp, `spiral` the default
@@ -591,8 +601,8 @@ Across the package:
   with the anchor as a vehicle at vertex 0 and a constant root jet; the
   references `TetherHold`, `TetherBlend` (flat tensions blended between two
   static trims) and `TetherCircle` (a circle about the anchor from rest, ending
-  on the steady whirl); `smoothstep_jet` (a `C^m` step evaluated without its
-  monomial form) and `circle_rate_bound` (the rate whose steady circle asks
+  on the steady whirl); `smoothstep_jet` (the `C^m` step of
+  `udaan.utils.trajectory.ramp`, evaluated without its monomial form) and `circle_rate_bound` (the rate whose steady circle asks
   at most `TETHER_CIRCLE_THRUST_FRACTION` = 0.95 of the thrust limit).
 - `udaan.utils.hose.tethered_trim` (the pinned-pinned segment solve, static or
   whirling) and `tethered_vehicle_positions`.

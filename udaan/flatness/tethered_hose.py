@@ -64,7 +64,7 @@ vehicle.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import comb, factorial
+from math import comb
 
 import numpy as np
 
@@ -81,6 +81,7 @@ from ..core.defaults import (
     TETHER_CIRCLE_THRUST_FRACTION,
 )
 from ..utils.hose import TetheredTrim, tethered_trim, tethered_vehicle_positions
+from ..utils.trajectory.ramp import ramp_phase_jet, step_jet
 from .base import Flat2State
 from .jet import Jet
 from .multi_quad_hose import MultiQuadHose, MultiQuadHoseFlats, MultiQuadHoseRefState
@@ -361,52 +362,15 @@ class TetheredHose(Flat2State):
 def smoothstep_jet(t: float, duration: float, order: int, smoothness: int) -> np.ndarray:
     r"""Time jet of the smooth step from 0 at ``t = 0`` to 1 at ``t = duration``.
 
-    ``s(u) = I_u(m + 1, m + 1)`` with ``u = t/T`` and ``m`` = ``smoothness``:
-    the regularised incomplete beta function, the polynomial of degree
-    ``2m + 1`` whose first ``m`` derivatives vanish at both ends, so the step
-    is ``C^m`` where it meets the constants on either side.  Its derivatives
-    are ``s^{(r+1)}(u) = (w^m)^{(r)} / B(m+1, m+1)`` with ``w = u(1 − u)``, and
-    since ``w`` is quadratic
-
-    .. math::
-
-        (w^m)^{(r)} = \sum_{j=0}^{\lfloor r/2 \rfloor}
-            \frac{r!}{j!\,(r-2j)!\,2^j}\,
-            \frac{m!}{(m-r+j)!}\, w^{m-r+j}\, (1-2u)^{r-2j}\, (-2)^j ,
-
-    each term zero where ``r − j > m``.  This avoids the monomial form, whose
-    coefficients alternate in sign and lose every digit near the ends at the
-    degrees a long hose needs.
+    ``s(u) = I_u(m + 1, m + 1)`` with ``u = t/T`` and ``m`` = ``smoothness``,
+    continuous through order ``m`` where it meets the constants on either
+    side: :func:`udaan.utils.trajectory.ramp.step_jet`, the step every circle
+    reference ramps with.
 
     Returns:
         ``(order + 1,)``: ``s`` and its first ``order`` time derivatives.
     """
-    from scipy.special import betainc, betaln
-
-    m = int(smoothness)
-    T = float(duration)
-    out = np.zeros(order + 1)
-    u = float(t) / T
-    if u <= 0.0:
-        return out
-    if u >= 1.0:
-        out[0] = 1.0
-        return out
-    out[0] = float(betainc(m + 1, m + 1, u))
-    w = u * (1.0 - u)
-    w1 = 1.0 - 2.0 * u
-    inv_beta = float(np.exp(-betaln(m + 1, m + 1)))
-    for r in range(order):
-        total = 0.0
-        for j in range(r // 2 + 1):
-            k = r - j  # derivative order of f(w) = w^m in this term
-            if k > m:
-                continue
-            coefficient = factorial(r) / (factorial(j) * factorial(r - 2 * j) * 2**j)
-            falling = factorial(m) / factorial(m - k)
-            total += coefficient * falling * w ** (m - k) * w1 ** (r - 2 * j) * (-2.0) ** j
-        out[r + 1] = inv_beta * total / T ** (r + 1)
-    return out
+    return step_jet(t, duration, order, smoothness)
 
 
 # ─── References ───────────────────────────────────────────────────────
@@ -517,8 +481,8 @@ class TetherCircle(TetherReference):
 
     The top vehicle starts at ``top_position`` in the static trim; the
     formation's azimuth about the anchor's vertical axis then turns at
-    ``Ω(t) = rate · s(t/ramp_time)`` (:func:`smoothstep_jet`, continuous
-    through the map's jet order), and every flat tension blends, in the
+    ``Ω(t) = rate · s(t/ramp_time)`` (:func:`smoothstep_jet`, the circles'
+    shared step, continuous through the map's jet order), and every flat tension blends, in the
     turning frame, from the static trim to the whirl trim at ``rate`` through
     the same vehicle positions:
 
@@ -549,18 +513,8 @@ class TetherCircle(TetherReference):
 
     def azimuth(self, t: float) -> float:
         """``φ(t)``, the formation's turn about the anchor since ``t = 0``, in rad."""
-        if t <= 0.0:
-            return 0.0
-        T = self.ramp_time
-        if t >= T:
-            return self.rate * (0.5 * T + (t - T))
-        from scipy.special import betainc
-
-        m = max(self.flat_map.tension_jet_orders)
-        u = t / T
-        s = float(betainc(m + 1, m + 1, u))
-        # ∫_0^u I_x(a, a) dx = u I_u(a, a) - ½ I_u(a + 1, a)
-        return self.rate * T * (u * s - 0.5 * float(betainc(m + 2, m + 1, u)))
+        K = max(self.flat_map.tension_jet_orders)
+        return float(ramp_phase_jet(t, self.rate, self.ramp_time, 0, K + 1)[0])
 
     def tension_jets(self, t: float) -> list[np.ndarray]:
         orders = self.flat_map.tension_jet_orders

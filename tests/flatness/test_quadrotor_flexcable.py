@@ -924,3 +924,17 @@ class TestReferenceSmoothness:
         largest = max(s.acceleration for s in steps)
         assert (largest > MAX_FLEXCABLE_REFERENCE_ACCEL_STEP) is warns
         assert any("not smooth enough" in r.getMessage() for r in caplog.records) is warns
+
+    def test_a_circle_built_with_the_maps_order_has_no_joints(self, caplog):
+        """The same 2 s circle on 5 m, continuous through the map's jet order: no step, no warning."""
+        from udaan.models.quadrotor_flexcable import QuadrotorFlexCableBase
+        from udaan.utils.trajectory import CircularTraj
+
+        model = QuadrotorFlexCableBase(cable_length=5.0)
+        order = model.payload_controller.flat_map.jet_order
+        traj = CircularTraj(center=np.array([0.0, 0.0, 1.5]), ramp_time=2.0, smoothness=order)
+        model.payload_controller.setpoint = traj.get
+        with caplog.at_level(logging.WARNING, logger="udaan"):
+            model.simulate(2.5, payload_position=traj.get(0.0)[0])
+        assert model.reference_steps == []
+        assert not any("not smooth enough" in r.getMessage() for r in caplog.records)

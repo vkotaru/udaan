@@ -138,6 +138,19 @@ class TestCircularTraj:
             CircularTraj().get_jet(0.0, -1)
 
 
+def _jump_rows(traj, boundary, order):
+    """Rows of ``traj.get_jet`` that jump across ``boundary``, beyond a 2e-9 s window's drift."""
+    before, after = traj.get_jet(boundary - 1e-9, order), traj.get_jet(boundary + 1e-9, order)
+    near = [np.abs(traj.get_jet(boundary + d, order + 1)).max(axis=1) for d in (-1e-3, 1e-3)]
+    scale = np.maximum(1.0, np.maximum(*near))
+    # Row k changes by at most row k+1 times the 2e-9 window.
+    return [
+        row
+        for row in range(order + 1)
+        if np.abs(before[row] - after[row]).max() > 1e-8 * scale[min(row + 1, order + 1)]
+    ]
+
+
 class TestCircularTrajRamp:
     """``ramp_time > 0``: the circle starts from rest and its rate ramps to ω."""
 
@@ -183,6 +196,29 @@ class TestCircularTrajRamp:
             for row in range(7):
                 # Row k changes by at most row k+1 times the 2e-9 window.
                 assert np.abs(before[row] - after[row]).max() <= 1e-8 * scale[min(row + 1, 7)]
+
+    @pytest.mark.parametrize("smoothness", [6, 11, 20])
+    def test_continuous_exactly_through_its_smoothness(self, smoothness):
+        """Rows 0…k are continuous at both ends of the ramp and row k + 1 is not."""
+        traj = CircularTraj(
+            center=np.array([0.5, -1.0, 2.0]),
+            radius=1.5,
+            speed=2.0,
+            th0=0.3,
+            ramp_time=2.0,
+            smoothness=smoothness,
+        )
+        for b in (0.0, 2.0):
+            assert _jump_rows(traj, b, smoothness + 1) == [smoothness + 1]
+
+    def test_default_smoothness_is_six(self):
+        traj = self._traj()
+        assert _jump_rows(traj, 2.0, 8) == [7, 8]
+
+    @pytest.mark.parametrize("bad", [0, -2, 2.5])
+    def test_rejects_a_bad_smoothness(self, bad):
+        with pytest.raises(ValueError, match="smoothness"):
+            CircularTraj(ramp_time=1.0, smoothness=bad)
 
     def test_zero_ramp_is_the_unramped_circle(self):
         a = CircularTraj(center=np.array([1.0, 2.0, 3.0]), radius=0.7, speed=1.3, th0=0.4)
@@ -509,6 +545,14 @@ class TestSpiralTrajectory:
             for row in range(7):
                 # Row k changes by at most row k+1 times the 2e-9 window.
                 assert np.abs(before[row] - after[row]).max() <= 1e-8 * scale[min(row + 1, 7)]
+
+    def test_a_deeper_smoothness_is_continuous_to_that_order_at_every_boundary(self):
+        from udaan.utils.trajectory import HelixTrajectory, SpiralTrajectory
+
+        for cls in (SpiralTrajectory, HelixTrajectory):
+            traj = cls(smoothness=20)
+            for boundary in self._boundaries(traj):
+                assert _jump_rows(traj, boundary, 21) == [21]
 
     def test_get_jet_agrees_with_get_full_and_with_itself(self):
         from udaan.utils.trajectory import SpiralTrajectory
