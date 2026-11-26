@@ -52,10 +52,10 @@ class TestCacheLocation:
     def test_the_packaged_directory_holds_only_hand_written_assets(self):
         """No asset generated through the user cache is left inside the package.
 
-        ``MultiQuadrotorCSPointmass`` and the fleet models write their generated
-        MJCF (``multi_quad_pointmass_*q``, ``fleet_*``, ``cspayload_fleet_*``)
-        into the packaged directory, where ``.gitignore`` covers it; those
-        prefixes are therefore not checked here.
+        A generated file in the packaged directory would also be collected by
+        the per-asset parametrisations in ``test_rotor_colours.py``, so the
+        suite would collect a different number of tests on a checkout that has
+        been used than on a fresh one.
         """
         stale = [
             p.name
@@ -67,6 +67,9 @@ class TestCacheLocation:
                     "multi_quad_hose_",
                     "quad_flexcable_",
                     "tethered_hose_",
+                    "multi_quad_pointmass_",
+                    "fleet_",
+                    "cspayload_fleet_",
                 )
             )
         ]
@@ -222,6 +225,29 @@ class TestReadOnlyInstall:
             from udaan.models.multi_quad_rigidbody import MultiQuadRigidbodyMujoco
 
             model = MultiQuadRigidbodyMujoco(num_quadrotors=3)
+            assert str(tmp_path) in model._mjMdl.full_path
+        finally:
+            PACKAGED_MJCF_DIR.chmod(mode)
+
+    @pytest.mark.skipif(_IS_ROOT, reason="root ignores directory permissions")
+    @pytest.mark.parametrize(
+        ("name", "kwargs"),
+        [
+            ("MultiQuadrotorCSPointmass", {"num_quadrotors": 4}),
+            ("QuadrotorFleet", {"num_quadrotors": 2}),
+            ("QuadrotorCsPayloadFleet", {"num_agents": 2}),
+        ],
+    )
+    def test_fleet_and_pointmass_generation_survives_an_unwritable_package_directory(
+        self, name, kwargs, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("UDAAN_ASSET_DIR", str(tmp_path))
+        mode = PACKAGED_MJCF_DIR.stat().st_mode
+        PACKAGED_MJCF_DIR.chmod(0o555)
+        try:
+            from udaan.models import mujoco as backends
+
+            model = getattr(backends, name)(render=False, **kwargs)
             assert str(tmp_path) in model._mjMdl.full_path
         finally:
             PACKAGED_MJCF_DIR.chmod(mode)

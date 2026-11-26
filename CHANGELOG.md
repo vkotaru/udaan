@@ -28,7 +28,8 @@ Across the package:
 - **M2 rebuilt.** M2 uses the M1 airframe, M1's loop rates (200 Hz payload
   loop, 800 Hz attitude, 1600 Hz physics) and M1's three input paths, with
   time-scale gain design and a minimum cable tension.
-- **Generated MJCF cache.** The M3–M8 generators write to a per-user cache
+- **Generated MJCF cache.** Every MJCF generator (M3–M8, the fleets and
+  `MultiQuadrotorCSPointmass`) writes to a per-user cache
   (`$UDAAN_ASSET_DIR` or the platform cache), not into the installed package.
 - **Front rotors.** The front (+x) rotors of every quadrotor are red, so
   heading is visible in renders.
@@ -153,10 +154,13 @@ Across the package:
   default); the generator's unmodelled-mass box is yellow and its
   `cylinder` default is grey. The fleet palette is blue, green, orange,
   purple (`0.5 0.25 0.85`), cyan, white, olive, navy.
-- Generated fleet and multi-quad MJCF is cached under a name that does not
-  encode colours: delete cached `fleet_*`, `cspayload_fleet_*` and
-  `multi_quad_pointmass_*q` files in `udaan/models/assets/mjcf/` to pick up
-  the colours.
+- `QuadrotorFleet`, `QuadrotorCsPayloadFleet` and
+  `MultiQuadrotorCSPointmass` write their generated MJCF to the per-user cache
+  (`$UDAAN_ASSET_DIR` or the platform cache), under a config-hash name that
+  includes `MJCF_GENERATOR_VERSION`, not into `udaan/models/assets/mjcf/`.
+  `fleet_*`, `cspayload_fleet_*` and `multi_quad_pointmass_*q` files left in
+  `udaan/models/assets/mjcf/` by earlier versions are unused and can be
+  deleted; the test suite fails while they are there.
 
 ### Quadrotor with cable-suspended payload (M2)
 

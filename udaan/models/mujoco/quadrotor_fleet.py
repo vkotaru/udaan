@@ -3,21 +3,19 @@
 import copy
 import hashlib
 import json
-import os
 
 import numpy as np
 from scipy.spatial.transform import Rotation as sp_rot
 
-from ... import _FOLDER_PATH
 from ...manif import SO3, TSO3
+from ...utils.assets.cache import ensure_generated, generated_mjcf_dir
+from ...utils.assets.mujoco_asset_creator import MJCF_GENERATOR_VERSION
 from ...utils.logging import get_logger
 from .. import base
 from ..quadrotor import QuadrotorBase
 from . import MujocoModel
 
 _logger = get_logger(__name__)
-
-_MJCF_DIR = os.path.join(_FOLDER_PATH, "udaan", "models", "assets", "mjcf")
 
 # Distinct colors for up to 8 quadrotors (ADHD-friendly, high contrast)
 _FLEET_COLORS = [
@@ -116,12 +114,14 @@ class QuadrotorFleet(base.BaseModel):
         from ...utils.assets.mujoco_asset_creator import MujocoAssetCreator
 
         # Deterministic filename based on config
-        config_key = json.dumps({"nQ": nQ, "d": disturbances}, sort_keys=True)
+        config_key = json.dumps(
+            {"v": MJCF_GENERATOR_VERSION, "nQ": nQ, "d": disturbances}, sort_keys=True
+        )
         config_hash = hashlib.md5(config_key.encode()).hexdigest()[:8]
         filename = f"fleet_{nQ}q_{config_hash}.xml"
-        filepath = os.path.join(_MJCF_DIR, filename)
-        if os.path.exists(filepath):
-            return filename
+        cached = generated_mjcf_dir() / filename
+        if cached.exists():
+            return str(cached)
 
         _logger.info("Generating fleet MJCF for %d quadrotors", nQ)
         writer = MujocoAssetCreator(f"Fleet{nQ}")
@@ -151,8 +151,7 @@ class QuadrotorFleet(base.BaseModel):
             for j in range(i + 1, nQ):
                 writer.exclude_contact(f"quad{i}", f"quad{j}")
 
-        writer.save_to(filepath, verbose=False)
-        return filename
+        return ensure_generated(filename, lambda path: writer.save_to(path, verbose=False))
 
     def reset(self, **kwargs):
         self.t = 0.0
