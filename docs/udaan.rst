@@ -12,6 +12,7 @@ Subpackages
    udaan.core
    udaan.flatness
    udaan.manif
+   udaan.mcp
    udaan.models
    udaan.utils
 

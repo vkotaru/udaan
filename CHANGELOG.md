@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+### MCP server and Agent Skill
+
+#### Added
+
+- `udaan.mcp`: an MCP server over stdio, installed with the `mcp` extra
+  (`pip install "udaan[mcp]"`, MCP Python SDK 2.x) and run with the `udaan-mcp`
+  console script or `python -m udaan.mcp`. Its tools are `list_systems`,
+  `describe_system`, `simulate`, `render_video`, `generate_xml` and
+  `check_reference`. They cover M1 to M8, `multi-quad`, `multi-quad-rigid`,
+  `fleet`, `cspayload-fleet` and the `comparison` MJCF.
+- `simulate` returns the tracking error (RMS, max and final, in m), the
+  largest tilt, the smallest cable tension on M3, the model's counters, its
+  logged warnings and the wall time. It can also write the per-step series to
+  CSV or JSON.
+- `render_video` records MP4 or GIF through `mujoco.Renderer` on an offscreen
+  context: EGL or OSMesa on Linux, CGL on macOS. `check_offscreen_rendering`
+  draws one test frame per backend before the first video; when that fails,
+  `render_video` fails with the cause and the packages to install.
+- Each run executes in a child Python process, at most two at a time. Its
+  output is captured, and a child that dies, even while importing, is reported
+  with the last line of its traceback. The
+  limits are 60 s of simulated time, a wall-clock budget (`timeout_s`, default
+  120 s, slot wait and model construction included) and a range on every
+  parameter. A run that reaches its budget returns partial metrics with
+  `stop_reason: wall_budget`; a child still running 30 s later is killed. No
+  window is opened, and the VPython backend is not offered.
+- `udaan.mcp.catalog` and `udaan.mcp.runner` import without the MCP SDK.
+  `udaan.mcp.MCP_AVAILABLE` says whether the server can start.
+- `skills/udaan/SKILL.md`: an Agent Skill covering installation, server
+  registration, the tools, the systems, headless pitfalls and CLI fallbacks.
+- `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` make the
+  repository a Claude Code plugin. The plugin provides the skill and registers
+  `udaan-mcp`.
+- `udaan.cli.scenarios`: one builder per `udaan run` command. Each builder
+  constructs the model, binds its trajectory and start, and returns a
+  `Scenario`. The CLI and the MCP server both build through these functions.
+  `udaan run` keeps its options. Its output changes in these ways:
+  - An unknown backend, trajectory, controller or demo is reported in red as
+    `Unknown <kind> '<value>'. Expected one of: ...`.
+  - `fleet --demo` prints `Running fleet (demo '<name>', <n> quads)`.
+  - A parameter that `quad-flexcable`, `multi-quad` or `multi-quad-rigid`
+    refuses exits 1 with `Error: <reason>` instead of a traceback.
+  - A `--position` without exactly three finite components exits 1.
+
 ### MuJoCo assets
 
 #### Changed

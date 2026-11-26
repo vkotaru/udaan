@@ -10,6 +10,7 @@ Submodules
    udaan.cli.demos
    udaan.cli.generate
    udaan.cli.run
+   udaan.cli.scenarios
 
 Module contents
 ---------------

@@ -1,10 +1,17 @@
-"""Simulation run commands."""
+"""Simulation run commands.
 
+Each command parses its options, builds its model through
+:mod:`udaan.cli.scenarios` (shared with the MCP server), sets up the viewer and
+any recording, and flies it.
+"""
+
+from collections.abc import Callable
 from typing import Any
 
 import typer
 
 from . import _ctx
+from . import scenarios as sc
 
 run_app = typer.Typer(help="Run a simulation.", context_settings=_ctx)
 
@@ -12,33 +19,24 @@ run_app = typer.Typer(help="Run a simulation.", context_settings=_ctx)
 _record_option = typer.Option(None, "--record", "-r", help="Save recording to file (.gif or .mp4).")
 
 
-#: The backends ``--model`` offers.  ``vfx`` is deliberately absent even though
-#: :class:`~udaan.models.quadrotor.QuadrotorVfx` and
-#: :class:`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadVfx` exist and are
-#: importable: driven from the CLI, both block inside VPython and do not return,
-#: ``--no-render`` included, because the VPython backend opens its
-#: browser-served scene at construction rather than at render time.  Advertising
-#: a hanging option is worse than not offering it, so the CLI refuses ``-m vfx``
-#: by name.
-_CLI_MODELS = ("base", "mujoco")
-#: ``quad-payload --cable-model`` choices: the cable models of ``QuadrotorCsPayloadMujoco``.
-_CABLE_MODELS = ("tendon", "links")
+def _build(builder: Callable[..., sc.Scenario], **kwargs: Any) -> sc.Scenario:
+    """Call a scenario builder, turning its refusal into a red message and exit code 1."""
+    try:
+        return builder(**kwargs)
+    except sc.ScenarioError as err:
+        typer.secho(str(err), fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from err
 
 
-def _check_model(model: str, allowed: tuple[str, ...]) -> None:
-    """Reject an unrecognised ``--model`` instead of silently picking a backend.
-
-    Every routing block it guards is a chain of ``if``/``elif`` with a final
-    ``else``, so without this guard a typo lands on whichever backend sits in
-    the ``else``, and the run reports a backend the caller never asked for.
-    """
-    if model not in allowed:
-        typer.secho(
-            f"Unknown model '{model}'. Expected one of: {', '.join(allowed)}.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(1)
+def _parse_ints(value: str | None, example: str) -> tuple[int, ...] | None:
+    """``'0,2,4'`` as ``(0, 2, 4)``; exits 1 on anything else."""
+    if value is None:
+        return None
+    try:
+        return tuple(int(v) for v in value.split(","))
+    except ValueError:
+        typer.echo(f"Invalid attachments: '{value}'. Expected e.g. '{example}'.", err=True)
+        raise typer.Exit(1) from None
 
 
 def _hold_viewer(mdl):
@@ -47,27 +45,24 @@ def _hold_viewer(mdl):
         mdl._mjMdl.wait_for_close()
 
 
-def _setup_recording(mdl, record_path):
-    """Enable recording on a model's viewer."""
-    if record_path is None:
+def _setup_viewer(mdl, record_path, trail=None):
+    """Set trails and enable recording on a model's viewer, if it has one."""
+    mj = getattr(mdl, "_mjMdl", None)
+    viewer = mj._viewer if mj is not None else None
+    if viewer is None:
         return
-    mj = mdl._mjMdl if hasattr(mdl, "_mjMdl") else None
-    if mj and mj._viewer:
-        mj._viewer._record_path = record_path
-        mj._viewer._frames = []
+    if trail is not None:
+        viewer.show_trails = trail
+    if record_path is not None:
+        viewer._record_path = record_path
+        viewer._frames = []
 
 
-#: ``udaan run quadrotor --traj`` choices.
-_QUADROTOR_TRAJECTORIES = (
-    "hover",
-    "step",
-    "mission",
-    "flip",
-    "spiral",
-    "circle",
-    "lissajous",
-    "figure8",
-)
+def _position(position: str | None):
+    """Parse ``--position``; ``None`` lets the scenario pick its own default."""
+    from . import parse_vec
+
+    return parse_vec(position, default=None)
 
 
 @run_app.command("quadrotor")
@@ -96,120 +91,22 @@ def quadrotor(
     """Simulate a quadrotor with geometric SE(3) control."""
     import logging
 
-    import numpy as np
-
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-    from udaan.models.quadrotor import QuadrotorBase
-
-    from . import parse_vec
-
-    _check_model(model, _CLI_MODELS)
-    if trajectory not in _QUADROTOR_TRAJECTORIES:
-        typer.secho(
-            f"Unknown trajectory '{trajectory}'. "
-            f"Expected one of: {', '.join(_QUADROTOR_TRAJECTORIES)}.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    # Hover and the mission take off from the ground. The step, circle, spiral,
-    # flip and figure-8 are flown *at* `x0` (the circle's and figure-8's centre,
-    # the others' start), so their default sits 2 m up, clear of the floor. An
-    # explicit `-p` is taken as given.
-    on_ground = trajectory in ("hover", "lissajous", "mission")
-    default_start = [1.0, 1.0, 0.0] if on_ground else [1.0, 1.0, 2.0]
-    x0 = parse_vec(position, default=np.array(default_start))
-
-    mdl: QuadrotorBase
-    if model == "mujoco":
-        from udaan.models.quadrotor import QuadrotorMujoco
-
-        mdl = QuadrotorMujoco(render=render, verbose=verbose)
-    else:
-        mdl = QuadrotorBase(verbose=verbose)
-
-    # Set trajectory.  Each branch binds its own name: the four classes share
-    # only `Trajectory`, and `duration` lives on two of them, so a single
-    # `traj` would be typed as the base and lose it. Each also starts the
-    # vehicle on its own reference, so the run opens on the manoeuvre rather
-    # than on a jump to it.
-    if trajectory == "flip":
-        from udaan.utils.trajectory import FlipTrajectory
-
-        flip = FlipTrajectory(start=x0)
-        mdl._pos_controller.setpoint = flip.get
-        time = flip.duration
-        x0 = flip.get(0.0)[0]
-    elif trajectory == "spiral":
-        from udaan.utils.trajectory import SpiralTrajectory
-
-        spiral = SpiralTrajectory(start=x0)
-        mdl._pos_controller.setpoint = spiral.get
-        time = spiral.duration
-        x0 = spiral.get(0.0)[0]
-    elif trajectory == "circle":
-        from udaan.utils.trajectory import CircularTraj
-
-        circle = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time)
-        mdl._pos_controller.setpoint = circle.get
-        x0 = circle.get(0.0)[0]
-    elif trajectory == "lissajous":
-        from udaan.utils.trajectory import CrazyTrajectory
-
-        # Lift the trajectory center so the z-oscillation (±1.5 m) stays above ground.
-        center = x0 + np.array([0.0, 0.0, 2.0])
-        lissajous = CrazyTrajectory(tf=time, center=center)
-        mdl._pos_controller.setpoint = lissajous.get
-        x0 = lissajous.get(0.0)[0]
-    elif trajectory == "step":
-        from udaan.utils.trajectory import StepSetpoint
-
-        # Hold x0, then a true step of (1, 1, 0.5) m at t = 2 s (no feedforward).
-        step = StepSetpoint(x0, x0 + np.array([1.0, 1.0, 0.5]), step_time=2.0)
-        mdl._pos_controller.setpoint = step.get
-    elif trajectory == "mission":
-        from udaan.utils.trajectory import WaypointTrajectory
-
-        # Take off from x0, five waypoints (stopping at each), land back on x0.
-        offsets = [
-            (0, 0, 0),
-            (0, 0, 1.5),
-            (2, 0, 1.5),
-            (2, 2, 2.5),
-            (0, 2, 1.5),
-            (0, 0, 1.5),
-            (0, 0, 0),
-        ]
-        mission = WaypointTrajectory([x0 + np.array(o, dtype=float) for o in offsets])
-        mdl._pos_controller.setpoint = mission.get
-        time = mission.duration
-    elif trajectory == "figure8":
-        from udaan.utils.trajectory import Figure8Trajectory
-
-        # Two figure-8s about x0 with the heading swinging ±90°.
-        figure8 = Figure8Trajectory(center=x0)
-        mdl._pos_controller.setpoint = figure8.get
-        mdl.yaw_setpoint = figure8.yaw
-        time = figure8.duration
-        x0 = figure8.get(0.0)[0]
-    else:
-        # Hover: default setpoint is [0,0,1], start from x0
-        pass
-
-    mj = getattr(mdl, "_mjMdl", None)
-    if mj is not None and mj._viewer is not None:
-        mj._viewer.show_trails = trail
-    _setup_recording(mdl, record)
-    typer.echo(f"Running quadrotor ({model}, {trajectory}) for {time:.1f}s ...")
-    mdl.simulate(tf=time, position=x0)
-    _hold_viewer(mdl)
-
-
-#: ``udaan run quad-payload --traj`` choices.
-_QUAD_PAYLOAD_TRAJECTORIES = ("hover", "circle", "spiral")
+    scn = _build(
+        sc.quadrotor,
+        backend=model,
+        trajectory=trajectory,
+        duration=time,
+        position=_position(position),
+        render=render,
+        verbose=verbose,
+    )
+    _setup_viewer(scn.model, record, trail=trail)
+    typer.echo(f"Running quadrotor ({scn.label}) for {scn.tf:.1f}s ...")
+    scn.run()
+    _hold_viewer(scn.model)
 
 
 @run_app.command("quad-payload")
@@ -245,83 +142,20 @@ def quad_payload(
     ),
 ):
     """Simulate a quadrotor with cable-suspended payload."""
-    import numpy as np
-
-    from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadBase
-
-    from . import parse_vec
-
-    _check_model(model, _CLI_MODELS)
-    if cable_model not in _CABLE_MODELS:
-        typer.secho(
-            f"Unknown cable model '{cable_model}'. Expected one of: {', '.join(_CABLE_MODELS)}.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(1)
-    if trajectory not in _QUAD_PAYLOAD_TRAJECTORIES:
-        typer.secho(
-            f"Unknown trajectory '{trajectory}'. "
-            f"Expected one of: {', '.join(_QUAD_PAYLOAD_TRAJECTORIES)}.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    # Hover starts the payload at `x0` and flies it to the payload
-    # controller's own setpoint. The circle and the helix are flown *at* `x0` (the circle's centre, the
-    # helix's start), so their default sits 1.5 m up, with the airframe a
-    # cable length above it. An explicit `-p` is taken as given.
-    default_start = [-1.0, 2.0, 0.5] if trajectory == "hover" else [0.0, 0.0, 1.5]
-    x0 = parse_vec(position, default=np.array(default_start))
-
-    mdl: QuadrotorCsPayloadBase
-    if model == "mujoco":
-        from udaan.models.quadrotor_cspayload import QuadrotorCsPayloadMujoco
-
-        mdl = QuadrotorCsPayloadMujoco(render=render, cable_model=cable_model)
-    else:
-        mdl = QuadrotorCsPayloadBase()
-
-    # The model refuses a non-positive or non-finite length, and the link chain
-    # any length but its MJCF's.
-    if cable_length is not None:
-        try:
-            mdl.cable_length = cable_length
-        except ValueError as err:
-            typer.secho(f"--cable-length: {err}.", fg=typer.colors.RED, err=True)
-            raise typer.Exit(1) from err
-        # The default controllers' gains and feed-forward are designed for ℓ.
-        mdl._init_default_controllers()
-
-    # Each trajectory binds `get_full`, whose owner also has `get_jet`, so the
-    # cable and airframe feed-forwards both engage. The payload starts at rest
-    # on its reference's initial position.
-    if trajectory == "circle":
-        from udaan.utils.trajectory import CircularTraj
-
-        # From rest, the speed ramping up over 2 s (SpiralTrajectory's ramp).
-        circle = CircularTraj(center=x0, radius=1.0, speed=1.0, tf=time, ramp_time=2.0)
-        mdl.payload_controller.setpoint = circle.get_full
-        x0 = circle.get(0.0)[0]
-    elif trajectory == "spiral":
-        from udaan.utils.trajectory import HelixTrajectory
-
-        helix = HelixTrajectory(start=x0)
-        mdl.payload_controller.setpoint = helix.get_full
-        time = helix.duration
-        x0 = helix.get(0.0)[0]
-
-    _setup_recording(mdl, record)
-    # `--cable-model` is a MuJoCo cable discretisation; the analytical backend
-    # has a single taut cable, so naming one there would misreport the run.
-    detail = f"{model}, {cable_model}" if model == "mujoco" else model
-    typer.echo(
-        f"Running quad-payload ({detail}, {trajectory}, cable {mdl.cable_length:g} m) "
-        f"for {time:.1f}s ..."
+    scn = _build(
+        sc.quad_payload,
+        backend=model,
+        cable_model=cable_model,
+        trajectory=trajectory,
+        duration=time,
+        cable_length=cable_length,
+        position=_position(position),
+        render=render,
     )
-    mdl.simulate(tf=time, payload_position=x0)
-    _hold_viewer(mdl)
+    _setup_viewer(scn.model, record)
+    typer.echo(f"Running quad-payload ({scn.label}) for {scn.tf:.1f}s ...")
+    scn.run()
+    _hold_viewer(scn.model)
 
 
 @run_app.command("quad-flexcable")
@@ -356,68 +190,30 @@ def quad_flexcable(
     """
     import logging
 
-    import numpy as np
-
-    from udaan.models.quadrotor_flexcable import QuadrotorFlexCableBase
-
-    from . import parse_vec
-
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-    _check_model(model, ("base", "mujoco"))
-    if trajectory not in ("hover", "lissajous"):
-        typer.secho(
-            f"Unknown trajectory '{trajectory}'. Expected 'hover' or 'lissajous'.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    opts: dict[str, Any] = {
-        "num_links": links,
-        "cable_length": cable_length,
-        "cable_mass": cable_mass,
-        "payload_mass": payload_mass,
-    }
-    opts = {k: v for k, v in opts.items() if v is not None}
-
-    mdl: QuadrotorFlexCableBase
-    if model == "mujoco":
-        from udaan.models.quadrotor_flexcable import QuadrotorFlexCableMujoco
-
-        mdl = QuadrotorFlexCableMujoco(render=render, verbose=verbose, **opts)
-    else:
-        mdl = QuadrotorFlexCableBase(verbose=verbose, **opts)
-
-    x0 = parse_vec(position, default=np.array([0.0, 0.0, 1.0]))
-    if trajectory == "lissajous":
-        from udaan.utils.trajectory import CrazyTrajectory
-
-        # Gentle enough that no link leaves the hanging branch, which is what
-        # the flat map refuses; the chain then feeds forward on every sample.
-        traj = CrazyTrajectory(center=x0, ax=0.4, ay=0.35, az=0.25, f1=0.18, f2=0.13, f3=0.09)
-        mdl.payload_controller.setpoint = traj.get
-        x0 = traj.get(0.0)[0]
-    else:
-        # A step, not a fixed point at the spawn.  Commanding the payload to
-        # exactly where reset() puts it — hanging straight down, at rest — is
-        # already the closed-loop equilibrium, so the run measures nothing and
-        # reports 0.0000 m however good or bad the gain is.  Offsetting the
-        # target makes the demo a step response the printed error can score.
-        target = x0 + np.array([0.5, 0.3, 0.2])
-        mdl.payload_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
-
-    _setup_recording(mdl, record)
-    typer.echo(
-        f"Running quad-flexcable ({model}, {mdl.num_links} links, {trajectory}) for {time}s ..."
+    scn = _build(
+        sc.quad_flexcable,
+        backend=model,
+        trajectory=trajectory,
+        duration=time,
+        num_links=links,
+        cable_length=cable_length,
+        cable_mass=cable_mass,
+        payload_mass=payload_mass,
+        position=_position(position),
+        render=render,
+        verbose=verbose,
     )
-    mdl.simulate(tf=time, payload_position=x0)
+    _setup_viewer(scn.model, record)
+    typer.echo(f"Running quad-flexcable ({scn.label}) for {scn.tf}s ...")
+    scn.run()
     typer.echo(
-        f"  payload error {np.linalg.norm(mdl.state.payload_position - mdl.payload_controller.setpoint(mdl.t)[0]):.4f} m"
-        f"  (feedforward drops: {mdl.feedforward_drops})"
+        f"  payload error {scn.tracking_error():.4f} m"
+        f"  (feedforward drops: {scn.model.feedforward_drops})"
     )
-    _hold_viewer(mdl)
+    _hold_viewer(scn.model)
 
 
 @run_app.command("hose")
@@ -483,202 +279,49 @@ def hose(
     attachment patterns and it will say so; the MuJoCo backend has no such
     limit.
     """
-    import numpy as np
-
-    from udaan.models.multi_quad_hose import MultiQuadHoseBase
-
-    from . import parse_vec
-
-    _check_model(model, ("base", "mujoco"))
-    if controller not in ("lqr", "station"):
-        typer.echo(f"Unknown controller '{controller}'. Expected 'lqr' or 'station'.", err=True)
-        raise typer.Exit(1)
-    # Validated up front: otherwise a misspelt --traj falls through to the hover
-    # branch and prints a plausible-looking tracking error for a run that is not
-    # the one asked for.
-    if trajectory not in ("hover", "lissajous"):
-        typer.echo(f"Unknown trajectory '{trajectory}'. Expected 'hover' or 'lissajous'.", err=True)
-        raise typer.Exit(1)
-
-    opts: dict[str, Any] = {
-        "hose_length": hose_length,
-        "hose_mass": hose_mass,
-        "masses": quad_mass,
-        "sag_ratio": sag_ratio,
-        "spawn_height": spawn_height,
-    }
-    opts = {k: v for k, v in opts.items() if v is not None}
-    if attachments is not None:
-        try:
-            opts["attachments"] = tuple(int(v) for v in attachments.split(","))
-        except ValueError:
-            typer.echo(f"Invalid attachments: '{attachments}'. Expected e.g. '0,2,4'.", err=True)
-            raise typer.Exit(1) from None
-    if controller == "lqr":
-        # The LQR emits a per-vehicle wrench; the station-keeping PDs emit
-        # thrust vectors. The two pipelines take incompatible shapes, so the
-        # choice has to be made at construction.
-        opts["input"] = "wrench"
-
-    Model: type[MultiQuadHoseBase]
-    if model == "mujoco":
-        from udaan.models.multi_quad_hose import MultiQuadHoseMujoco
-
-        Model = MultiQuadHoseMujoco
-    else:
-        Model = MultiQuadHoseBase
-
-        opts.pop("spawn_height", None)
-        render = False
-
-    try:
-        mdl = Model(render=render, num_links=num_links, **opts)
-    # ValueError covers the spawn geometry the generator refuses to build and
-    # the parameter guards; RuntimeError covers the load-time checks that exist
-    # for a stale cached or hand-edited asset. Both are user-facing conditions
-    # with a stated remedy, not tracebacks.
-    except (ValueError, RuntimeError) as err:
-        typer.echo(f"Error: {err}", err=True)
-        raise typer.Exit(1) from err
-
-    default_root = np.asarray(mdl.state.root_position).copy()
-    if model != "mujoco" and position is None:
-        default_root = np.array([0.0, 0.0, 2.0])
-    x0 = parse_vec(position, default=default_root)
-
-    if controller == "lqr":
-        if mdl.hose_controller is None:
-            typer.echo(
-                f"Error: attachments {mdl.attachments} put no vehicle at the last vertex "
-                f"({mdl.num_links}), so the hose is not differentially flat in the "
-                "coordinates the LQR's reference is built in. Add that vertex, or run "
-                "--controller station.",
-                err=True,
-            )
-            raise typer.Exit(1)
-        if trajectory == "lissajous":
-            from udaan.utils.trajectory import CrazyTrajectory
-
-            # Gentle: the constant gain is solved at the static trim and the
-            # linearisation moves ~2 % over a reference this size. See the
-            # drift table in udaan.control.multi_quad_hose.hose_controller.
-            traj = CrazyTrajectory(center=x0, ax=0.3, ay=0.24, az=0.15, f1=0.2, f2=0.16, f3=0.12)
-            mdl.hose_controller.setpoint = traj.get
-            x0 = traj.get(0.0)[0]
-        else:
-            # A step, not a fixed point at the spawn: commanding the root to
-            # where reset() puts it would score 0.0000 m however good or bad
-            # the gain is.
-            target = x0 + np.array([0.3, 0.2, 0.2])
-            mdl.hose_controller.setpoint = lambda t: (target, np.zeros(3), np.zeros(3))
-
-    _setup_recording(mdl, record)
-    typer.echo(
-        f"Running hose ({model}, {mdl.num_links} links, "
-        f"{mdl.num_quadrotors} quads at {mdl.attachments}, {controller}) for {time}s ..."
+    scn = _build(
+        sc.hose,
+        backend=model,
+        duration=time,
+        num_links=num_links,
+        attachments=_parse_ints(attachments, "0,2,4"),
+        hose_length=hose_length,
+        hose_mass=hose_mass,
+        quad_mass=quad_mass,
+        sag_ratio=sag_ratio,
+        spawn_height=spawn_height,
+        controller=controller,
+        trajectory=trajectory,
+        position=_position(position),
+        render=render,
     )
-    mdl.simulate(tf=time, root_position=x0)
+    _setup_viewer(scn.model, record)
+    typer.echo(f"Running hose ({scn.label}) for {scn.tf}s ...")
+    scn.run()
     if controller == "lqr":
         typer.echo(
-            f"  root error "
-            f"{np.linalg.norm(np.asarray(mdl.state.root_position) - mdl.hose_controller.setpoint(mdl.t)[0]):.4f} m"
-            f"  (feedforward drops: {mdl.feedforward_drops})"
+            f"  root error {scn.tracking_error():.4f} m"
+            f"  (feedforward drops: {scn.model.feedforward_drops})"
         )
-    _hold_viewer(mdl)
+    _hold_viewer(scn.model)
 
 
-def _tethered(
-    *,
-    system: str,
-    time: float,
-    model: str,
-    render: bool,
-    opts: dict[str, Any],
-    standoff: float | None,
-    height: float | None,
-    trajectory: str,
-    rate: float | None,
-    ramp: float | None,
-    record: str | None,
-) -> None:
-    """Shared body of ``tethered-quad`` (M7) and ``tethered-hose`` (M8)."""
-    import numpy as np
-
-    from udaan.flatness.tethered_hose import (
-        TetherBlend,
-        TetherCircle,
-        TetherHold,
-        TetherReference,
-        circle_rate_bound,
-    )
-    from udaan.models.tethered_hose import TetheredHoseBase, TetheredQuadrotorBase
-
-    _check_model(model, ("base", "mujoco"))
-    if trajectory not in ("hold", "circle", "climb"):
-        typer.echo(
-            f"Unknown trajectory '{trajectory}'. Expected 'hold', 'circle' or 'climb'.", err=True
-        )
-        raise typer.Exit(1)
-    opts = {k: v for k, v in opts.items() if v is not None}
-    Model: type[TetheredHoseBase]
-    if model == "mujoco":
-        from udaan.models.tethered_hose import TetheredHoseMujoco, TetheredQuadrotorMujoco
-
-        Model = TetheredQuadrotorMujoco if system == "m7" else TetheredHoseMujoco
-    else:
-        Model = TetheredQuadrotorBase if system == "m7" else TetheredHoseBase
-        render = False
+def _fly_tethered(scn: sc.Scenario, command: str, record: str | None) -> None:
+    """Shared tail of ``tethered-quad`` (M7) and ``tethered-hose`` (M8)."""
+    for note in scn.notes:
+        typer.echo(f"  {note}")
+    _setup_viewer(scn.model, record)
+    typer.echo(f"Running {command} ({scn.label}) for {scn.tf}s ...")
     try:
-        mdl = Model(render=render, **opts)
-    except (ValueError, RuntimeError) as err:
-        typer.echo(f"Error: {err}", err=True)
-        raise typer.Exit(1) from err
-
-    from udaan.control.tethered_hose import default_top_position
-
-    L = mdl.hose_length
-    top = default_top_position(L, mdl.anchor_height)
-    if standoff is not None:
-        top[0] = standoff * L
-    if height is not None:
-        top[2] = mdl.anchor_height + height * L
-    from udaan.core.defaults import DEFAULT_TETHER_RAMP_TIME
-
-    ramp = DEFAULT_TETHER_RAMP_TIME if ramp is None else ramp
-    fm = mdl.hose_controller.flat_map
-    ref: TetherReference
-    try:
-        if trajectory == "hold":
-            ref = TetherHold(fm, top)
-        elif trajectory == "circle":
-            w = circle_rate_bound(fm, top) if rate is None else rate
-            ref = TetherCircle(fm, top, rate=w, ramp_time=ramp)
-            typer.echo(f"  circle about the anchor at {w:.3f} rad/s, {ramp:g} s ramp from rest")
-        else:
-            # to 0.1 L closer and 0.08 L higher, starting at 1 s
-            ref = TetherBlend(fm, top, top + np.array([-0.1 * L, 0.0, 0.08 * L]), ramp, 1.0)
-    except ValueError as err:
-        typer.echo(f"Error: {err}", err=True)
-        raise typer.Exit(1) from err
-    mdl.hose_controller.setpoint = ref.get
-
-    _setup_recording(mdl, record)
-    typer.echo(
-        f"Running {'tethered-quad' if system == 'm7' else 'tethered-hose'} ({model}, "
-        f"{mdl.num_links} links, {mdl.num_quadrotors} quads at {mdl.attachments}, "
-        f"{trajectory}) for {time}s ..."
-    )
-    try:
-        mdl.simulate(tf=time)
+        scn.run()
     except RuntimeError as err:
         typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(1) from err
-    target = ref.get(mdl.t)[0]
     typer.echo(
-        f"  top vehicle error {np.linalg.norm(np.asarray(mdl.state.positions[-1]) - target):.4f} m"
-        f"  (lowest reference vertex {mdl.reference_ground_clearance:.3f} m above the ground)"
+        f"  top vehicle error {scn.tracking_error():.4f} m"
+        f"  (lowest reference vertex {scn.model.reference_ground_clearance:.3f} m above the ground)"
     )
-    _hold_viewer(mdl)
+    _hold_viewer(scn.model)
 
 
 @run_app.command("tethered-quad")
@@ -714,24 +357,22 @@ def tethered_quad(
     anchor started from rest by a 6 s ramp ('circle'), or blends to a higher,
     closer station over 6 s ('climb'), with the flat map's feed-forward.
     """
-    _tethered(
-        system="m7",
-        time=time,
-        model=model,
-        render=render,
-        opts={
-            "num_links": num_links,
-            "hose_length": length,
-            "hose_mass": tether_mass,
-            "anchor_height": anchor_height,
-        },
+    scn = _build(
+        sc.tethered_quad,
+        backend=model,
+        duration=time,
+        num_links=num_links,
+        length=length,
+        tether_mass=tether_mass,
+        anchor_height=anchor_height,
         standoff=standoff,
         height=height,
         trajectory=trajectory,
         rate=rate,
         ramp=ramp,
-        record=record,
+        render=render,
     )
+    _fly_tethered(scn, "tethered-quad", record)
 
 
 @run_app.command("tethered-hose")
@@ -769,25 +410,23 @@ def tethered_hose(
     hose LQR holds them there ('hold'), flies the formation round the anchor
     ('circle') or blends it to a higher, closer station ('climb').
     """
-    _tethered(
-        system="m8",
-        time=time,
-        model=model,
-        render=render,
-        opts={
-            "num_quadrotors": num_quadrotors,
-            "num_links": num_links,
-            "hose_length": length,
-            "hose_mass": hose_mass,
-            "anchor_height": anchor_height,
-        },
+    scn = _build(
+        sc.tethered_hose,
+        backend=model,
+        duration=time,
+        num_quadrotors=num_quadrotors,
+        num_links=num_links,
+        length=length,
+        hose_mass=hose_mass,
+        anchor_height=anchor_height,
         standoff=standoff,
         height=height,
         trajectory=trajectory,
         rate=rate,
         ramp=ramp,
-        record=record,
+        render=render,
     )
+    _fly_tethered(scn, "tethered-hose", record)
 
 
 @run_app.command("multi-quad")
@@ -801,18 +440,17 @@ def multi_quad(
     ),
 ):
     """Simulate multiple quadrotors with cable-suspended pointmass payload."""
-    import numpy as np
-
-    import udaan as U
-
-    from . import parse_vec
-
-    x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
-    mdl = U.models.mujoco.MultiQuadrotorCSPointmass(render=render, num_quadrotors=num_quads)
-    _setup_recording(mdl, record)
-    typer.echo(f"Running multi-quad ({num_quads} quads) for {time}s ...")
-    mdl.simulate(tf=time, xL=x0)
-    _hold_viewer(mdl)
+    scn = _build(
+        sc.multi_quad,
+        duration=time,
+        num_quadrotors=num_quads,
+        position=_position(position),
+        render=render,
+    )
+    _setup_viewer(scn.model, record)
+    typer.echo(f"Running multi-quad ({scn.label}) for {scn.tf}s ...")
+    scn.run()
+    _hold_viewer(scn.model)
 
 
 @run_app.command("multi-quad-payload")
@@ -833,28 +471,21 @@ def multi_quad_payload(
     ),
 ):
     """Simulate nQ quadrotors carrying one cable-suspended point-mass payload (M3)."""
-    import numpy as np
-
-    from udaan.models.multi_quad_cspayload import MultiQuadCsPayloadMujoco
-
-    from . import parse_vec
-
-    x0 = parse_vec(position, default=np.array([-1.0, 2.0, 0.5]))
-    opts = {
-        "cable_lengths": cable_length,
-        "payload_mass": payload_mass,
-        "formation_radius": formation_radius,
-    }
-    opts = {k: v for k, v in opts.items() if v is not None}
-    try:
-        mdl = MultiQuadCsPayloadMujoco(render=render, num_quadrotors=num_quads, **opts)
-    except ValueError as err:
-        typer.echo(f"Error: {err}", err=True)
-        raise typer.Exit(1) from err
-    _setup_recording(mdl, record)
-    typer.echo(f"Running multi-quad-payload ({num_quads} quads) for {time}s ...")
-    mdl.simulate(tf=time, payload_position=x0)
-    _hold_viewer(mdl)
+    scn = _build(
+        sc.multi_quad_payload,
+        backend="mujoco",
+        duration=time,
+        num_quadrotors=num_quads,
+        cable_length=cable_length,
+        payload_mass=payload_mass,
+        formation_radius=formation_radius,
+        position=_position(position),
+        render=render,
+    )
+    _setup_viewer(scn.model, record)
+    typer.echo(f"Running multi-quad-payload ({num_quads} quads) for {scn.tf}s ...")
+    scn.run()
+    _hold_viewer(scn.model)
 
 
 @run_app.command("multi-quad-rigid")
@@ -867,18 +498,11 @@ def multi_quad_rigid(
     ),
 ):
     """Simulate multiple quadrotors with cable-suspended rigid-body payload."""
-    import numpy as np
-
-    import udaan as U
-
-    from . import parse_vec
-
-    x0 = parse_vec(position, default=np.array([0.0, 0.0, 0.5]))
-    mdl = U.models.mujoco.MultiQuadRigidbody(render=render)
-    _setup_recording(mdl, record)
-    typer.echo(f"Running multi-quad rigid ({mdl.nQ} quads) for {time}s ...")
-    mdl.simulate(tf=time, xL=x0)
-    _hold_viewer(mdl)
+    scn = _build(sc.multi_quad_rigid, duration=time, position=_position(position), render=render)
+    _setup_viewer(scn.model, record)
+    typer.echo(f"Running multi-quad rigid ({scn.label}) for {scn.tf}s ...")
+    scn.run()
+    _hold_viewer(scn.model)
 
 
 @run_app.command("multi-quad-rigidbody")
@@ -916,35 +540,25 @@ def multi_quad_rigidbody(
     The MJCF is generated from these knobs and cached, so the formation starts
     taut whatever they are set to.
     """
-
-    from udaan.models.multi_quad_rigidbody import MultiQuadRigidbodyMujoco
-
-    from . import parse_vec
-
-    opts = {
-        "cable_lengths": cable_length,
-        "payload_mass": payload_mass,
-        "attachment_radius": attachment_radius,
-        "formation_radius": formation_radius,
-        "spawn_height": spawn_height,
-    }
-    opts = {k: v for k, v in opts.items() if v is not None}
-    try:
-        mdl = MultiQuadRigidbodyMujoco(render=render, num_quadrotors=num_quads, **opts)
-    # ValueError covers the geometry the generator refuses to build; RuntimeError
-    # covers the load-time checks (`_read_params_from_mjcf`, `_check_spawn_is_taut`)
-    # that exist precisely for a stale cached or hand-edited asset — which is a
-    # user-facing condition with a stated remedy, not a traceback.
-    except (ValueError, RuntimeError) as err:
-        typer.echo(f"Error: {err}", err=True)
-        raise typer.Exit(1) from err
-    # Absolute, exactly as `multi-quad` reads it. Defaulting to the MJCF's own
-    # spawn keeps the formation taut at t=0.
-    x0 = parse_vec(position, default=mdl.state.payload_position.copy())
-    _setup_recording(mdl, record)
-    typer.echo(f"Running multi-quad rigid body ({mdl.num_quadrotors} quads) for {time}s ...")
-    mdl.simulate(tf=time, payload_position=x0)
-    _hold_viewer(mdl)
+    scn = _build(
+        sc.multi_quad_rigidbody,
+        backend="mujoco",
+        duration=time,
+        num_quadrotors=num_quads,
+        cable_length=cable_length,
+        payload_mass=payload_mass,
+        attachment_radius=attachment_radius,
+        formation_radius=formation_radius,
+        spawn_height=spawn_height,
+        position=_position(position),
+        render=render,
+    )
+    _setup_viewer(scn.model, record)
+    typer.echo(
+        f"Running multi-quad rigid body ({scn.model.num_quadrotors} quads) for {scn.tf}s ..."
+    )
+    scn.run()
+    _hold_viewer(scn.model)
 
 
 @run_app.command("cspayload-fleet")
@@ -966,47 +580,18 @@ def cspayload_fleet(
 
     Available demos: same-gains, gain-sweep
     """
-    import udaan as U
-
-    from .demos import CSPAYLOAD_DEMOS
-
-    if demo is not None:
-        if demo not in CSPAYLOAD_DEMOS:
-            typer.echo(
-                f"Unknown demo: '{demo}'. Available: {', '.join(CSPAYLOAD_DEMOS.keys())}",
-                err=True,
-            )
-            raise typer.Exit(1)
-        entry = CSPAYLOAD_DEMOS[demo]
-        params = entry["config"]()
-        nQ = params["num_agents"]
-
-        f = U.models.mujoco.QuadrotorCsPayloadFleet(
-            num_agents=nQ, render=render, cable_links=cable_links
-        )
-        starts = entry["configure"](f, same_start=same_start)
-    else:
-        nQ = num_agents
-        import numpy as np
-
-        target = np.array([0.0, 0.0, 1.5])
-        starts = [np.array([(-1.0) ** i * 1.0, (-1.0) ** i * 1.0, 0.5]) for i in range(nQ)]
-        f = U.models.mujoco.QuadrotorCsPayloadFleet(
-            num_agents=nQ, render=render, cable_links=cable_links
-        )
-        traj = lambda t: (target, np.zeros(3), np.zeros(3))
-        for i in range(nQ):
-            f[i]._payload_controller.setpoint = traj
-
-    if f._mjMdl._viewer is not None:
-        f._mjMdl._viewer.show_trails = trail
-    if record and f._mjMdl._viewer:
-        f._mjMdl._viewer._record_path = record
-        f._mjMdl._viewer._frames = []
-
-    label = demo or f"{nQ} agents"
-    typer.echo(f"Running cspayload-fleet ({label}) for {time}s ...")
-    f.simulate(tf=time, payload_positions=starts)
+    scn = _build(
+        sc.cspayload_fleet,
+        duration=time,
+        num_agents=num_agents,
+        demo=demo,
+        cable_links=cable_links,
+        same_start=same_start,
+        render=render,
+    )
+    _setup_viewer(scn.model, record, trail=trail)
+    typer.echo(f"Running cspayload-fleet ({scn.label}) for {scn.tf}s ...")
+    scn.run()
 
 
 @run_app.command("fleet")
@@ -1028,49 +613,17 @@ def fleet(
     """
     import logging
 
-    import numpy as np
-
-    import udaan as U
-
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 
-    from . import parse_vec
-    from .demos import DEMOS
-
-    x0 = parse_vec(position, default=np.array([0.0, 0.0, 1.0]))
-
-    if demo is not None:
-        if demo not in DEMOS:
-            typer.echo(f"Unknown demo: '{demo}'. Available: {', '.join(DEMOS.keys())}", err=True)
-            raise typer.Exit(1)
-
-        entry = DEMOS[demo]
-        params = entry["config"]()
-        nQ = params["num_quadrotors"]
-
-        f = U.models.mujoco.QuadrotorFleet(
-            num_quadrotors=nQ, render=render, disturbances=params["disturbances"]
-        )
-        entry["configure"](f)
-        if f._mjMdl._viewer is not None:
-            f._mjMdl._viewer.show_trails = trail
-        if record and f._mjMdl._viewer:
-            f._mjMdl._viewer._record_path = record
-            f._mjMdl._viewer._frames = []
-        typer.echo(f"Running demo '{demo}' ({nQ} quads) for {time}s ...")
-        f.simulate(tf=time, position=x0)
-    else:
-        f = U.models.mujoco.QuadrotorFleet(num_quadrotors=num_quads, render=render)
-        if f._mjMdl._viewer is not None:
-            f._mjMdl._viewer.show_trails = trail
-
-        traj = lambda t: (np.array([0.0, 0.0, 2.0]), np.zeros(3), np.zeros(3))
-        for q in f.quadrotors:
-            q.position_controller.setpoint = traj
-
-        if record and f._mjMdl._viewer:
-            f._mjMdl._viewer._record_path = record
-            f._mjMdl._viewer._frames = []
-        typer.echo(f"Running fleet ({num_quads} quads) for {time}s ...")
-        f.simulate(tf=time, position=x0)
+    scn = _build(
+        sc.fleet,
+        duration=time,
+        num_quadrotors=num_quads,
+        demo=demo,
+        position=_position(position),
+        render=render,
+    )
+    _setup_viewer(scn.model, record, trail=trail)
+    typer.echo(f"Running fleet ({scn.label}) for {scn.tf}s ...")
+    scn.run()

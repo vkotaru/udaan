@@ -111,6 +111,23 @@ mdl = QuadrotorMujoco(render=True)
 mdl.simulate(tf=10, position=[1., 1., 0.])
 ```
 
+## Use with Claude (MCP / skill)
+
+udaan ships an MCP server, `udaan-mcp`, and an Agent Skill, `skills/udaan/SKILL.md`.
+With them Claude can list the systems, fly any of them headless, record an
+offscreen MP4 or GIF, export MJCF and check a payload reference. Every run is
+bounded in simulated time and wall time.
+
+```bash
+pip install "udaan[mcp]"
+claude mcp add udaan -- udaan-mcp        # Claude Code; other clients: {"command": "udaan-mcp"}
+```
+
+The repository is also a Claude Code plugin with the skill and the server:
+`/plugin marketplace add vkotaru/udaan`, then `/plugin install udaan@udaan`. See the
+[MCP guide](https://udaan.readthedocs.io/en/latest/guides/mcp.html) for the
+tools and the systems.
+
 ## Documentation
 
 Full API reference, controller roadmap, and tutorials coming soon at [udaan.readthedocs.io](https://udaan.readthedocs.io).

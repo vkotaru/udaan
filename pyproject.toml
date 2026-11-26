@@ -68,6 +68,7 @@ docs = [
     "myst-parser>=2.0",
     "sphinx-proof>=0.1.3",
     "sphinxcontrib-bibtex>=2.6",
+    "mcp>=2.0,<3",  # autodoc imports udaan.mcp.server
 ]
 rl = [
     "gymnasium>=0.29",
@@ -76,10 +77,14 @@ rl = [
 plot = [
     "bokeh>=3.0",
 ]
-all = ["udaan[mujoco,dev,docs,rl,plot]"]
+mcp = [
+    "mcp>=2.0,<3",
+]
+all = ["udaan[mujoco,dev,docs,rl,plot,mcp]"]
 
 [project.scripts]
 udaan = "udaan.cli:app"
+udaan-mcp = "udaan.mcp:main"
 
 [project.urls]
 Homepage = "https://github.com/vkotaru/udaan"
