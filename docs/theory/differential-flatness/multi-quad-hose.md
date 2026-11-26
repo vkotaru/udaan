@@ -445,6 +445,16 @@ vehicle*, and a trajectory generator that has to produce a $C^{2n+4}$ reference
 may care.
 :::
 
+A trajectory flown on the hose is therefore built continuous through the map's
+jet order: a {py:class}`~udaan.utils.trajectory.CircularTraj` takes
+`smoothness=flat_map.jet_order`, so its start ramp is the smooth step
+$I_u(K, K)$ with $K = 2n + 4$. That step narrows as $K$ grows (its standard
+deviation is $T/(2\sqrt{2K+1})$), and the map reads it through row $K$, so the
+ramp time has to grow with the link count. For a 1 m circle at 1 m/s, four
+links on 2 m fly a 2 s ramp; eight links on 2 m need 3 s (2 s asks 63 N of
+thrust); six links on 20 m need 8 s (6 s asks 27 N and tilts the reference
+airframe 138°). Check a reference with the flat map before flying it.
+
 :::{admonition} Are the deep rungs more observable than M5's?
 :class: tip
 
