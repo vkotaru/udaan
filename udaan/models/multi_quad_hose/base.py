@@ -1802,7 +1802,8 @@ class MultiQuadHoseBase:
                     "reference acceleration steps by up to %.2f m/s² (velocity %.3f m/s, at "
                     "t = %.3f s), more than %.2f m/s². Expect the hose to be kicked off its "
                     "reference there; a trajectory continuous through order %d avoids it "
-                    "(see reference_steps).",
+                    "(CircularTraj, SpiralTrajectory and HelixTrajectory take it as "
+                    "smoothness=; see reference_steps).",
                     self._num_links,
                     flat_map.jet_order,
                     len(steps),

@@ -120,6 +120,21 @@ class TestReferences:
             )
             assert np.linalg.norm(ref.velocities[-1]) == pytest.approx(1.5, rel=1e-9)
 
+    def test_the_turn_follows_the_circles_ramp_at_the_maps_order(self):
+        """The azimuth is a :class:`CircularTraj` phase ramped through the same step,
+        continuous one order past the map's tension jets."""
+        from udaan.utils.trajectory import CircularTraj
+
+        fm = TetheredHose()
+        circle = TetherCircle(fm, [1.0, 0.0, 1.6], rate=1.5, ramp_time=6.0)
+        planar = CircularTraj(
+            radius=1.0, speed=1.5, ramp_time=6.0, smoothness=max(fm.tension_jet_orders) + 1
+        )
+        for t in (0.7, 2.0, 3.0, 4.4, 5.9, 8.0):
+            p = planar.get(t)[0]
+            wrapped = np.angle(np.exp(1j * (circle.azimuth(t) - np.arctan2(p[1], p[0]))))
+            assert wrapped == pytest.approx(0.0, abs=1e-12)
+
     def test_every_jet_row_is_the_derivative_of_the_one_before(self):
         fm = TetheredHose()
         circle = TetherCircle(fm, [1.0, 0.0, 1.6], rate=1.5, ramp_time=6.0)
