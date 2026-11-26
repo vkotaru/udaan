@@ -771,60 +771,6 @@ def tethered_hose(
 # ─── MuJoCo-only multi-vehicle models ────────────────────────────────
 
 
-def multi_quad(
-    *,
-    duration: float = 10.0,
-    num_quadrotors: int = 3,
-    position: Sequence[float] | None = None,
-    render: bool = False,
-) -> Scenario:
-    """``MultiQuadrotorCSPointmass``: quadrotors station-keeping a point-mass payload.
-
-    Each quadrotor's PD holds its own spawn position, offset by ``position``
-    (default ``(-1, 2, 0.5)``); the tracked points are the quadrotors.
-    """
-    import udaan as U
-
-    x0 = _vec(position, [-1.0, 2.0, 0.5])
-    mdl: Any = _construct(
-        U.models.mujoco.MultiQuadrotorCSPointmass, render=render, num_quadrotors=num_quadrotors
-    )
-    return Scenario(
-        model=mdl,
-        tf=duration,
-        initial={"xL": x0},
-        label=f"{mdl.nQ} quads",
-        tracked=lambda: np.array([q.position for q in mdl.state.quads], dtype=float),
-        reference=lambda t: np.array([q.position for q in mdl._init_state.quads], dtype=float),
-    )
-
-
-def multi_quad_rigid(
-    *,
-    duration: float = 10.0,
-    position: Sequence[float] | None = None,
-    render: bool = False,
-) -> Scenario:
-    """``MultiQuadRigidbody``: four quadrotors station-keeping a rigid-body payload.
-
-    The formation is translated by ``position`` (default ``(0, 0, 0.5)``) and
-    each quadrotor's PD holds the position it had at construction; the
-    tracked points are the quadrotors.
-    """
-    import udaan as U
-
-    x0 = _vec(position, [0.0, 0.0, 0.5])
-    mdl = _construct(U.models.mujoco.MultiQuadRigidbody, render=render)
-    return Scenario(
-        model=mdl,
-        tf=duration,
-        initial={"xL": x0},
-        label=f"{mdl.nQ} quads",
-        tracked=lambda: np.array([q.position for q in mdl.state.quads], dtype=float),
-        reference=lambda t: np.array([q.position for q in mdl._init_state.quads], dtype=float),
-    )
-
-
 def fleet(
     *,
     duration: float = 10.0,

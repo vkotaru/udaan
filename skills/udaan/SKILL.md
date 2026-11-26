@@ -75,14 +75,12 @@ then read `completed`, `tracking_error_m.rms` and `max_tilt_deg`.
 |---|---|---|---|---|
 | `quadrotor` | M1 | one quadrotor, geometric SE(3) control | base, mujoco | hover, step, mission, flip, spiral, circle, lissajous, figure8 |
 | `quad-payload` | M2 | quadrotor + point-mass payload on one cable; `cable_model` `tendon` or `links` on MuJoCo | base, mujoco | hover, circle, spiral |
-| `multi-quad-payload` | M3 | nQ quadrotors, one point-mass payload | base, mujoco | hover |
-| `multi-quad-rigidbody` | M4 | nQ quadrotors, one rigid-body payload | base, mujoco | hover |
+| `multi-quad-payload` (alias `multi-quad`) | M3 | nQ quadrotors, one point-mass payload | base, mujoco | hover |
+| `multi-quad-rigidbody` (alias `multi-quad-rigid`) | M4 | nQ quadrotors, one rigid-body payload | base, mujoco | hover |
 | `quad-flexcable` | M5 | quadrotor + payload on an n-link cable, LQR | base, mujoco | hover, lissajous |
 | `hose` | M6 | quadrotors in series on one n-link hose; `controller` `lqr` or `station` | base, mujoco | hover, lissajous |
 | `tethered-quad` | M7 | one quadrotor tethered to a ground anchor | base, mujoco | hold, circle, climb |
 | `tethered-hose` | M8 | quadrotors on a hose pinned to a ground anchor | base, mujoco | hold, circle, climb |
-| `multi-quad` | | quadrotors station-keeping a point-mass payload (PD each) | mujoco | hover |
-| `multi-quad-rigid` | | four quadrotors station-keeping a rigid-body payload | mujoco | hover |
 | `fleet` | | independent quadrotors side by side; `demo` `l1-comparison` or `gain-sweep` | mujoco | hover |
 | `cspayload-fleet` | | quad-payload agents side by side; `demo` `same-gains` or `gain-sweep` | mujoco | hover |
 | `comparison` | | plant + reference quadrotor scene, MJCF only | `generate_xml` only | none |
@@ -91,9 +89,8 @@ Labels M1 to M8 are udaan's model numbers; nQ is the number of quadrotors
 (`num_quadrotors`). The tracking error is measured on the system's tracked
 point: the airframe on M1; the payload on M2 to M5; on M6 the hose root (vertex
 0, the first point of the hose) with `controller` `lqr`, and every vehicle with
-`station`; the top vehicle on M7 and M8. On `multi-quad`, `multi-quad-rigid`,
-`fleet`, `cspayload-fleet` and M6 `station`, each step's error is the worst
-vehicle's (or payload's). A `hover` on M5 and M6 is a step away from the spawn,
+`station`; the top vehicle on M7 and M8. On `fleet`, `cspayload-fleet` and M6
+`station`, each step's error is the worst vehicle's (or payload's). A `hover` on M5 and M6 is a step away from the spawn,
 so a large `max` error with a small `final` error is expected.
 
 ## Reading results
@@ -113,7 +110,8 @@ so a large `max` error with a small `final` error is expected.
 - The server never opens a window. Every `udaan run` command defaults to
   MuJoCo with a viewer window, so on the CLI always pass `--no-render` (or
   `-m base` where the command has `-m`). On the CLI, `multi-quad-payload` and
-  `multi-quad-rigidbody` have no `-m` and run MuJoCo only, although the server
+  `multi-quad-rigidbody` (and their aliases `multi-quad` and
+  `multi-quad-rigid`) have no `-m` and run MuJoCo only, although the server
   also offers `base` for them.
 - Never use the VPython backend (`vfx`). It blocks on a browser scene even with
   `--no-render`. The server and the CLI both refuse it.

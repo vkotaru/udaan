@@ -50,6 +50,14 @@ Across the package:
 - M2 has new defaults: a 0.75 kg airframe, a 0.15 kg payload on a 1 m cable,
   gains from the time-scale design and a link chain of ten 0.1 m links.
   Simulations with default arguments do not reproduce 1.4.1 results.
+- `udaan run multi-quad` and `udaan run multi-quad-rigid` run M3
+  (`MultiQuadCsPayloadMujoco`) and M4 (`MultiQuadRigidbodyMujoco`), as aliases
+  of `multi-quad-payload` and `multi-quad-rigidbody`: the payload flies to the
+  payload controller's setpoint, `--position` is the payload start, and
+  `multi-quad-rigid` takes `-n` (default 4). `udaan generate-xml multi-quad`
+  writes the M3 MJCF (default `-o multi_quad_cspayload.xml`). The MCP systems
+  `multi-quad` and `multi-quad-rigid` are M3 and M4. `MultiQuadrotorCSPointmass`
+  and `MultiQuadRigidbody` remain in `udaan.models.mujoco`, stepped from Python.
 - `udaan run quadrotor --traj circle` flies `CircularTraj(ramp_time=2.0)`: the
   circle starts from rest and reaches 1 m/s over 2 s, as on
   `udaan run quad-payload`.
@@ -100,8 +108,8 @@ Across the package:
   (`pip install "udaan[mcp]"`, MCP Python SDK 2.x) and run with the `udaan-mcp`
   console script or `python -m udaan.mcp`. Its tools are `list_systems`,
   `describe_system`, `simulate`, `render_video`, `generate_xml` and
-  `check_reference`. They cover M1 to M8, `multi-quad`, `multi-quad-rigid`,
-  `fleet`, `cspayload-fleet` and the `comparison` MJCF.
+  `check_reference`. They cover M1 to M8 (M3 and M4 also under the ids `multi-quad` and
+  `multi-quad-rigid`), `fleet`, `cspayload-fleet` and the `comparison` MJCF.
 - `simulate` returns the tracking error (RMS, max and final, in m), the
   largest tilt, the smallest cable tension on M3, the model's counters, its
   logged warnings and the wall time. It can also write the per-step series to
@@ -132,8 +140,8 @@ Across the package:
   - An unknown backend, trajectory, controller or demo is reported in red as
     `Unknown <kind> '<value>'. Expected one of: ...`.
   - `fleet --demo` prints `Running fleet (demo '<name>', <n> quads)`.
-  - A parameter that `quad-flexcable`, `multi-quad` or `multi-quad-rigid`
-    refuses exits 1 with `Error: <reason>` instead of a traceback.
+  - A parameter that `quad-flexcable`, `multi-quad-payload` or
+    `multi-quad-rigidbody` refuses exits 1 with `Error: <reason>` instead of a traceback.
   - A `--position` without exactly three finite components exits 1.
 
 ### MuJoCo assets
@@ -401,8 +409,8 @@ Across the package:
   `MujocoAssetCreator.spatial(solreflimit=)` and `MJCF_GENERATOR_VERSION`. `MujocoAssetCreator.save_to` writes `scene.xml`
   beside the asset when it is not already there.
 - CLI: `udaan run multi-quad-payload` and `udaan generate-xml multi-quad-payload`.
-  `udaan run multi-quad` and `udaan generate-xml multi-quad` keep running the
-  `MultiQuadrotorCSPointmass` model and its generator.
+  `udaan run multi-quad` and `udaan generate-xml multi-quad` are aliases of
+  them.
 - Docs: theory pages for the M3 dynamics, controller and flat map. Example:
   `examples/multi_quad_cspayload.py`.
 
@@ -450,7 +458,7 @@ Across the package:
 - `udaan run multi-quad-rigidbody`: runs `MultiQuadRigidbodyMujoco` (`-n`,
   `--cable-length`, `--payload-mass`, `--attachment-radius`, `--radius`,
   `--height`) and `udaan generate-xml multi-quad-rigidbody`.
-  `udaan run multi-quad-rigid` is unchanged.
+  `udaan run multi-quad-rigid` is an alias of it.
 - Docs: theory pages for the M4 dynamics and flat map. Example:
   `examples/multi_quad_rigidbody.py`.
 

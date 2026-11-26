@@ -12,8 +12,8 @@ what each supports — use it to pick the right entry point for your task.
 |---|---|:---:|:---:|:---:|---|
 | M1 | {py:class}`~udaan.models.quadrotor.QuadrotorBase` | ✓ | ✓ (library only) | ✓ | `quadrotor` |
 | M2 | {py:class}`~udaan.models.quadrotor_cspayload.QuadrotorCsPayloadBase` | ✓ | ✓ (library only) | ✓ (tendon / links) | `quad-payload` |
-| M3 | {py:class}`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase` | ✓ | — | ✓ | `multi-quad-payload` (MuJoCo) |
-| M4 | {py:class}`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase` | ✓ | — | ✓ | `multi-quad-rigidbody` (MuJoCo) |
+| M3 | {py:class}`~udaan.models.multi_quad_cspayload.MultiQuadCsPayloadBase` | ✓ | — | ✓ | `multi-quad-payload` or `multi-quad` (MuJoCo) |
+| M4 | {py:class}`~udaan.models.multi_quad_rigidbody.MultiQuadRigidbodyBase` | ✓ | — | ✓ | `multi-quad-rigidbody` or `multi-quad-rigid` (MuJoCo) |
 | M5 | {py:class}`~udaan.models.quadrotor_flexcable.QuadrotorFlexCableBase` | ✓ | — | ✓ | `quad-flexcable` |
 | M6 | {py:class}`~udaan.models.multi_quad_hose.MultiQuadHoseBase` | ✓ | — | ✓ | `hose` |
 | M7 | {py:class}`~udaan.models.tethered_hose.TetheredQuadrotorBase` | ✓ | — | ✓ | `tethered-quad` |
@@ -31,8 +31,8 @@ Comparison and earlier models, all MuJoCo:
 | {py:class}`~udaan.models.mujoco.QuadrotorFleet` | `N` M1 quadrotors side by side, each with its own controllers and optional unmodelled mass | `fleet` |
 | {py:class}`~udaan.models.mujoco.QuadrotorCsPayloadFleet` | `N` M2 quadrotor-payload agents side by side on link-chain cables | `cspayload-fleet` |
 | {py:class}`~udaan.models.mujoco.QuadrotorComparison` | a plant and a reference quadrotor in one scene, stepped by the caller | — |
-| {py:class}`~udaan.models.mujoco.MultiQuadrotorCSPointmass` | the earlier `nQ`-quadrotor point-mass payload model | `multi-quad` |
-| {py:class}`~udaan.models.mujoco.MultiQuadRigidbody` | the earlier four-quadrotor rigid-body payload model | `multi-quad-rigid` |
+| {py:class}`~udaan.models.mujoco.MultiQuadrotorCSPointmass` | the earlier `nQ`-quadrotor point-mass payload model, stepped from Python | — |
+| {py:class}`~udaan.models.mujoco.MultiQuadRigidbody` | the earlier four-quadrotor rigid-body payload model, stepped from Python | — |
 
 {py:mod}`udaan.models.base` holds analytical point-mass models
 (`FloatingPointmass`, `S2Pendulum`, `PointmassSuspendedPayload`,
