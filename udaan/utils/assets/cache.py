@@ -120,8 +120,12 @@ def resolve_mjcf(model_path: str | os.PathLike) -> str:
     )
 
 
-def ensure_scene_beside(target: str | os.PathLike) -> None:
+def ensure_scene_beside(target: str | os.PathLike, *, refresh: bool = False) -> None:
     """Put a copy of :data:`SCENE_XML` next to ``target``, if not already there.
+
+    With ``refresh=True`` a copy that differs from the packaged scene is
+    replaced. The generated cache uses this, so a scene change reaches assets
+    cached by an earlier version; a scene beside a user's own output is kept.
 
     Every generated asset opens with ``<include file="scene.xml"/>`` and MuJoCo
     resolves that relative to the including file, so an asset written anywhere
@@ -131,11 +135,11 @@ def ensure_scene_beside(target: str | os.PathLike) -> None:
     """
     directory = Path(target).resolve().parent
     destination = directory / SCENE_XML
-    if destination.exists():
-        return
     source = PACKAGED_MJCF_DIR / SCENE_XML
     if not source.exists():  # pragma: no cover - the packaged scene is always shipped
         _logger.warning("packaged %s is missing; %s will not load", SCENE_XML, target)
+        return
+    if destination.exists() and (not refresh or destination.read_bytes() == source.read_bytes()):
         return
     _atomic_copy(source, destination)
 
@@ -168,10 +172,10 @@ def ensure_generated(filename: str, generate: Callable[[str], object]) -> str:
     """
     directory = generated_mjcf_dir()
     destination = directory / filename
+    ensure_scene_beside(destination, refresh=True)
     if destination.exists():
         return str(destination)
 
-    ensure_scene_beside(destination)
     handle, staging = tempfile.mkstemp(prefix=f".{filename}.", suffix=".tmp", dir=directory)
     os.close(handle)
     try:

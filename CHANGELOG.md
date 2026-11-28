@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- The shared MuJoCo scene (`scene.xml`) has a white sky and a near-white floor, so the
+  vehicles stand out in the viewer and in recorded videos. The README gallery is re-recorded
+  with it.
+- The generated-asset cache replaces a `scene.xml` that differs from the packaged one, so a
+  scene change reaches assets cached by an earlier version. A `scene.xml` beside
+  `udaan generate-xml -o` output is still kept.
+
 ## 2.0.0 — 2026-11-25
 
 udaan 2.0.0 adds systems M3–M8. Each has an analytical model, a MuJoCo
