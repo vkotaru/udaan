@@ -5,6 +5,9 @@
 - The shared MuJoCo scene (`scene.xml`) has a white sky and a near-white floor, so the
   vehicles stand out in the viewer and in recorded videos. The README gallery is re-recorded
   with it.
+- The README gallery is a 4 × 3 grid. M6, M7 and M8 fly their cable over a box (8, 8 and 9
+  links), and a new tile flies two quadrotors on one 8-link tether over a box.
+  `scripts/record_gallery.py` draws the box in the video only and checks the flight clears it.
 - The generated-asset cache replaces a `scene.xml` that differs from the packaged one, so a
   scene change reaches assets cached by an earlier version. A `scene.xml` beside
   `udaan generate-xml -o` output is still kept.

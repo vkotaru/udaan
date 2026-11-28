@@ -17,23 +17,22 @@
 
 <table align="center">
   <tr>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/quadrotor.gif" width="260" alt="M1 quadrotor on a circle"/><br/><sub>M1 · quadrotor</sub></td>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/quad_payload_tendon.gif" width="260" alt="M2 quadrotor with a cable-suspended payload, tendon cable"/><br/><sub>M2 · cable-suspended payload (tendon)</sub></td>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/quad_payload_links.gif" width="260" alt="M2 quadrotor with a cable-suspended payload, link-chain cable"/><br/><sub>M2 · cable-suspended payload (link chain)</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/quadrotor.gif" width="200" alt="M1 quadrotor on a circle"/><br/><sub>M1 · quadrotor</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/quad_payload_tendon.gif" width="200" alt="M2 quadrotor with a cable-suspended payload, tendon cable"/><br/><sub>M2 · cable-suspended payload (tendon)</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/quad_payload_links.gif" width="200" alt="M2 quadrotor with a cable-suspended payload, link-chain cable"/><br/><sub>M2 · cable-suspended payload (link chain)</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/multi_quad_pointmass.gif" width="200" alt="M3 three quadrotors carrying a point-mass payload"/><br/><sub>M3 · three quadrotors, point-mass payload</sub></td>
   </tr>
   <tr>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/multi_quad_pointmass.gif" width="260" alt="M3 three quadrotors carrying a point-mass payload"/><br/><sub>M3 · three quadrotors, point-mass payload</sub></td>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/multi_quad_rigid.gif" width="260" alt="M4 four quadrotors carrying a rigid-body payload"/><br/><sub>M4 · four quadrotors, rigid-body payload</sub></td>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/quad_flexcable.gif" width="260" alt="M5 quadrotor with a payload on a flexible cable"/><br/><sub>M5 · payload on a flexible cable</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/multi_quad_rigid.gif" width="200" alt="M4 four quadrotors carrying a rigid-body payload"/><br/><sub>M4 · four quadrotors, rigid-body payload</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/quad_flexcable.gif" width="200" alt="M5 quadrotor with a payload on a flexible cable"/><br/><sub>M5 · payload on a flexible cable</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/multi_quad_hose.gif" width="200" alt="M6 two quadrotors carrying an 8-link hose over a box"/><br/><sub>M6 · two quadrotors carry a hose over a box</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/tethered_quad.gif" width="200" alt="M7 quadrotor on an 8-link ground tether flying over a box"/><br/><sub>M7 · tethered quadrotor over a box</sub></td>
   </tr>
   <tr>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/multi_quad_hose.gif" width="260" alt="M6 two quadrotors carrying a flexible hose"/><br/><sub>M6 · two quadrotors carrying a hose</sub></td>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/tethered_quad.gif" width="260" alt="M7 quadrotor on a tether pinned to the ground"/><br/><sub>M7 · tethered quadrotor</sub></td>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/tethered_hose.gif" width="260" alt="M8 three quadrotors on a hose pinned to the ground"/><br/><sub>M8 · three quadrotors on a tethered hose</sub></td>
-  </tr>
-  <tr>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/fleet_l1.gif" width="260" alt="Three quadrotors comparing PD and L1 adaptive control"/><br/><sub>Fleet · PD vs L1 under a disturbance</sub></td>
-    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/cspayload_fleet.gif" width="260" alt="Four quadrotor-payload agents with scaled cable gains"/><br/><sub>Payload fleet · cable-gain sweep</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/tethered_hose.gif" width="200" alt="M8 three quadrotors on a 9-link tethered hose flying over a box"/><br/><sub>M8 · three quadrotors on a tethered hose over a box</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/tethered_hose_pair.gif" width="200" alt="M8 two quadrotors on an 8-link tethered hose flying over a box"/><br/><sub>M8 · two quadrotors on one tether over a box</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/fleet_l1.gif" width="200" alt="Three quadrotors comparing PD and L1 adaptive control"/><br/><sub>Fleet · PD vs L1 under a disturbance</sub></td>
+    <td align="center" width="25%"><img src="https://raw.githubusercontent.com/vkotaru/udaan/main/.media/cspayload_fleet.gif" width="200" alt="Four quadrotor-payload agents with scaled cable gains"/><br/><sub>Payload fleet · cable-gain sweep</sub></td>
   </tr>
 </table>
 
