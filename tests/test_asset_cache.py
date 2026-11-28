@@ -145,6 +145,14 @@ class TestSceneTravelsWithTheAsset:
         ensure_scene_beside(tmp_path / "whatever.xml")
         assert "mine" in scene.read_text()
 
+    def test_the_cache_replaces_a_stale_scene(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("UDAAN_ASSET_DIR", str(tmp_path))
+        ensure_generated("stale_scene_check.xml", lambda path: Path(path).write_text("<mujoco/>"))
+        scene = tmp_path / SCENE_XML
+        scene.write_text("<mujoco><!-- old --></mujoco>")
+        ensure_generated("stale_scene_check.xml", lambda path: None)
+        assert scene.read_bytes() == (PACKAGED_MJCF_DIR / SCENE_XML).read_bytes()
+
 
 class TestAtomicGeneration:
     def test_the_file_appears_only_once_complete(self, tmp_path, monkeypatch):

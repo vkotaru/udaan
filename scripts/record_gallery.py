@@ -34,6 +34,8 @@ if TYPE_CHECKING:
 MEDIA_DIR = Path(__file__).resolve().parents[1] / ".media"
 WIDTH, HEIGHT, FPS = 400, 300, 12
 TRAIL_RGBA = (0.95, 0.45, 0.05, 0.9)
+OBSTACLE_RGBA = (0.18, 0.19, 0.21, 1.0)
+OBSTACLE_HALF_DEPTH = 0.4  # m, the box's half-size across the flight plane
 
 
 @dataclass
@@ -46,6 +48,39 @@ class Shot:
     azimuth: float = 135.0
     elevation: float = -22.0
     zoom: float = 1.0
+    obstacle: tuple[float, float, float] | None = None
+    """A box on the ground, ``(x_min, x_max, height)`` in m, drawn in the video only.
+
+    The models have contacts off, so the flight is planned to pass over it;
+    :func:`record` checks every frame keeps the cable and vehicles above it.
+    """
+
+
+class _StraightMove:
+    """Rest-to-rest straight line from ``start`` to ``end``, ``duration`` s from ``start_time``.
+
+    The progress is one smooth step continuous through ``smoothness``, and
+    ``get_jet`` gives every derivative the hose flat map reads.
+    """
+
+    def __init__(self, start, end, duration: float, start_time: float, smoothness: int):
+        self.start = np.asarray(start, dtype=float)
+        self.end = np.asarray(end, dtype=float)
+        self.duration = float(duration)
+        self.start_time = float(start_time)
+        self.smoothness = int(smoothness)
+
+    def get_jet(self, t: float, order: int) -> np.ndarray:
+        from udaan.utils.trajectory.ramp import step_jet
+
+        s = step_jet(t - self.start_time, self.duration, order, self.smoothness)
+        out = np.outer(s, self.end - self.start)
+        out[0] += self.start
+        return out
+
+    def get(self, t: float):
+        pos, vel, acc = self.get_jet(t, 2)
+        return pos, vel, acc
 
 
 # ── builders: each returns (model, tf, simulate kwargs) ───────────────────
@@ -116,29 +151,37 @@ def _m5():
 
 
 def _m6():
+    from udaan.flatness.chain import chain_jet_order
     from udaan.models.multi_quad_hose import MultiQuadHoseMujoco
-    from udaan.utils.trajectory import CrazyTrajectory
 
-    mdl = MultiQuadHoseMujoco(render=False, num_links=4, input="wrench")
-    x0 = np.asarray(mdl.state.root_position, dtype=float).copy()
-    traj = CrazyTrajectory(center=x0, ax=0.3, ay=0.24, az=0.15, f1=0.2, f2=0.16, f3=0.12)
-    mdl.hose_controller.setpoint = traj.get
-    return mdl, 12.0, {"root_position": traj.get(0.0)[0]}
+    n = 8
+    mdl = MultiQuadHoseMujoco(render=False, num_links=n, input="wrench")
+    move = _StraightMove(
+        [-1.0, 0.0, 1.6], [2.0, 0.0, 1.6], 8.0, start_time=1.5, smoothness=chain_jet_order(n)
+    )
+    mdl.hose_controller.setpoint = move.get
+    return mdl, 12.5, {"root_position": move.start}
 
 
-def _tethered(system: str):
-    from udaan.control.tethered_hose import default_top_position
-    from udaan.core.defaults import DEFAULT_TETHER_RAMP_TIME
-    from udaan.flatness.tethered_hose import TetherCircle, circle_rate_bound
+def _tethered(system: str, num_links: int, num_quadrotors: int, duration: float, start, end):
+    """Fly the top vehicle from ``start`` to ``end`` (fractions of the hose length)."""
+    from udaan.flatness.tethered_hose import TetherBlend
     from udaan.models.tethered_hose import TetheredHoseMujoco, TetheredQuadrotorMujoco
 
-    model_cls = TetheredQuadrotorMujoco if system == "m7" else TetheredHoseMujoco
-    mdl = model_cls(render=False)
-    fm = mdl.hose_controller.flat_map
-    top = default_top_position(mdl.hose_length, mdl.anchor_height)
-    ref = TetherCircle(fm, top, rate=circle_rate_bound(fm, top), ramp_time=DEFAULT_TETHER_RAMP_TIME)
+    if system == "m7":
+        mdl = TetheredQuadrotorMujoco(render=False, num_links=num_links)
+    else:
+        mdl = TetheredHoseMujoco(render=False, num_links=num_links, num_quadrotors=num_quadrotors)
+    L = mdl.hose_length
+    ref = TetherBlend(
+        mdl.hose_controller.flat_map,
+        np.array([start[0] * L, 0.0, start[1] * L]),
+        np.array([end[0] * L, 0.0, end[1] * L]),
+        duration,
+        start_time=1.0,
+    )
     mdl.hose_controller.setpoint = ref.get
-    return mdl, 14.0, {}
+    return mdl, duration + 3.0, {}
 
 
 def _fleet():
@@ -172,9 +215,42 @@ SHOTS: dict[str, Shot] = {
     "m3": Shot("multi_quad_pointmass.gif", _m3, ("pyld",)),
     "m4": Shot("multi_quad_rigid.gif", _m4, ("pyld",)),
     "m5": Shot("quad_flexcable.gif", _m5, ("cable_payload",)),
-    "m6": Shot("multi_quad_hose.gif", _m6, ("hose_vertex0",)),
-    "m7": Shot("tethered_quad.gif", lambda: _tethered("m7"), ("quad0",), zoom=0.9),
-    "m8": Shot("tethered_hose.gif", lambda: _tethered("m8"), ("quad2",), zoom=0.9),
+    "m6": Shot(
+        "multi_quad_hose.gif",
+        _m6,
+        ("hose_vertex0",),
+        azimuth=90.0,
+        elevation=-12.0,
+        zoom=0.8,
+        obstacle=(0.85, 1.55, 0.95),
+    ),
+    "m7": Shot(
+        "tethered_quad.gif",
+        lambda: _tethered("m7", 8, 1, 8.0, (0.15, 0.94), (0.8, 0.58)),
+        ("quad0",),
+        azimuth=90.0,
+        elevation=-12.0,
+        zoom=0.85,
+        obstacle=(0.95, 1.35, 0.45),
+    ),
+    "m8": Shot(
+        "tethered_hose.gif",
+        lambda: _tethered("m8", 9, 3, 16.0, (0.15, 0.97), (0.78, 0.6)),
+        ("quad2",),
+        azimuth=90.0,
+        elevation=-12.0,
+        zoom=0.85,
+        obstacle=(1.25, 1.75, 0.6),
+    ),
+    "m8-pair": Shot(
+        "tethered_hose_pair.gif",
+        lambda: _tethered("m8", 8, 2, 10.0, (0.15, 0.97), (0.78, 0.6)),
+        ("quad1",),
+        azimuth=90.0,
+        elevation=-12.0,
+        zoom=0.85,
+        obstacle=(1.2, 1.7, 0.75),
+    ),
     "fleet": Shot(
         "fleet_l1.gif",
         _fleet,
@@ -230,8 +306,52 @@ def _body_paths(model, data, frames) -> np.ndarray:
     return np.asarray(out)
 
 
+def _obstacle_corners(shot: Shot) -> np.ndarray:
+    x0, x1, h = shot.obstacle
+    d = OBSTACLE_HALF_DEPTH
+    return np.array([[x, y, z] for x in (x0, x1) for y in (-d, d) for z in (0.0, h)])
+
+
+def _check_clearance(name: str, shot: Shot, paths: np.ndarray, links: np.ndarray) -> float:
+    """Smallest height of the cable and the bodies above the box top, over every frame.
+
+    ``links`` holds pairs of body indices (into ``paths``) joined by a straight
+    link; each is sampled along its length. Raises if anything is inside the box.
+    """
+    x0, x1, h = shot.obstacle
+    u = np.linspace(0.0, 1.0, 11)[None, :, None]
+    pts = [paths]
+    if len(links):
+        a, b = paths[:, links[:, 0]], paths[:, links[:, 1]]
+        pts.append((a[:, :, None] * (1 - u) + b[:, :, None] * u).reshape(len(paths), -1, 3))
+    p = np.concatenate([q.reshape(len(paths), -1, 3) for q in pts], axis=1).reshape(-1, 3)
+    over = (p[:, 0] >= x0) & (p[:, 0] <= x1) & (np.abs(p[:, 1]) <= OBSTACLE_HALF_DEPTH)
+    clearance = float(np.min(p[over, 2]) - h) if over.any() else float("inf")
+    if clearance <= 0.0:
+        raise RuntimeError(f"{name}: the flight enters the obstacle ({clearance:.3f} m)")
+    return clearance
+
+
+def _add_box(scene, shot: Shot) -> None:
+    if scene.ngeom >= scene.maxgeom:
+        return
+    x0, x1, h = shot.obstacle
+    g = scene.geoms[scene.ngeom]
+    mujoco.mjv_initGeom(
+        g,
+        mujoco.mjtGeom.mjGEOM_BOX,
+        np.array([(x1 - x0) / 2.0, OBSTACLE_HALF_DEPTH, h / 2.0]),
+        np.array([(x0 + x1) / 2.0, 0.0, h / 2.0]),
+        np.eye(3).ravel(),
+        np.asarray(OBSTACLE_RGBA, dtype=np.float32),
+    )
+    scene.ngeom += 1
+
+
 def _camera(paths: np.ndarray, shot: Shot) -> mujoco.MjvCamera:
     pts = paths.reshape(-1, 3)
+    if shot.obstacle is not None:
+        pts = np.vstack([pts, _obstacle_corners(shot)])
     lo, hi = pts.min(axis=0), pts.max(axis=0)
     cam = mujoco.MjvCamera()
     cam.type = mujoco.mjtCamera.mjCAMERA_FREE
@@ -266,6 +386,11 @@ def record(name: str) -> Path:
     model, data = mdl._mjMdl.model, mdl._mjMdl.data
     paths = _body_paths(model, data, frames)
     cam = _camera(paths, shot)
+    if shot.obstacle is not None:
+        parents = model.body_parentid[1:] - 1
+        links = np.array([(p, i) for i, p in enumerate(parents) if p >= 0], dtype=int)
+        clearance = _check_clearance(name, shot, paths, links)
+        print(f"{name}: clears the obstacle by {100 * clearance:.1f} cm")
     trail_ids = []
     for body in shot.trail_bodies:
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body)
@@ -280,6 +405,8 @@ def record(name: str) -> Path:
         data.qpos[:] = q
         mujoco.mj_forward(model, data)
         renderer.update_scene(data, cam)
+        if shot.obstacle is not None:
+            _add_box(renderer.scene, shot)
         for i in trail_ids:
             _add_trail(renderer.scene, paths[: k + 1, i], 0.006 * cam.distance / 3.0)
         img = Image.fromarray(renderer.render())
